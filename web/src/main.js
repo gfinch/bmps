@@ -92,9 +92,10 @@ function connectCoreWS(url = 'ws://localhost:9001') {
 
   const statusEl = document.getElementById('status');
   const startBtn = document.getElementById('startBtn');
-    const datePicker = document.getElementById('datePicker');
+  const datePicker = document.getElementById('datePicker');
     const speedSlider = document.getElementById('speedSlider');
     const speedValue = document.getElementById('speedValue');
+  const daysInput = document.getElementById('daysInput');
 
     // Initialize date picker to today
     try {
@@ -113,6 +114,13 @@ function connectCoreWS(url = 'ws://localhost:9001') {
         replaySpeed = ev.target.value;
         speedValue.textContent = `${replaySpeed}x`;
       });
+    }
+
+    // Initialize days input default
+    let days = 2;
+    if (daysInput) {
+      days = parseInt(daysInput.value || '2', 10) || 2;
+      daysInput.addEventListener('input', (e) => { days = parseInt(e.target.value || '2', 10) || 2; });
     }
 
   function flushBuffer() {
@@ -167,10 +175,11 @@ function connectCoreWS(url = 'ws://localhost:9001') {
     if (started) return;
     started = true;
     // signal core that client is ready
-    try { ws.send('READY'); } catch (e) { console.warn('failed send READY', e); }
+    const selectedDate = datePicker ? datePicker.value : '';
+  const connectMsg = { cmd: 'CONNECT', date: selectedDate, days };
+    try { ws.send(JSON.stringify(connectMsg)); } catch (e) { console.warn('failed send CONNECT', e); }
   // Show selected simulation parameters in status
-  const selectedDate = datePicker ? datePicker.value : '';
-  statusEl.textContent = `Running ${selectedDate || ''} @ ${replaySpeed}x`;
+  statusEl.textContent = `Running ${selectedDate || ''} days=${days} @ ${replaySpeed}x`;
     startBtn.disabled = true;
     // flush any buffered messages
     flushBuffer();
