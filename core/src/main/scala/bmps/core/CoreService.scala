@@ -168,15 +168,17 @@ class CoreService(params: InitParams, parquetPath: String = "core/src/main/resou
     val broadcasterIO: IO[Unit] = events.evalMap { event =>
       val json = event.asJson.noSpaces
       IO {
-        try {
+          try {
           val readyClients = conns.asScala.filter(c => Option(readyMap.get(c)).contains(java.lang.Boolean.TRUE))
           if (readyClients.nonEmpty) {
+            println(s"sending event to ${readyClients.size} clients: ${json.take(200)}")
             readyClients.foreach { c => try c.send(json) catch { case _: Throwable => () } }
           } else {
             // buffer for later
+            println(s"buffering event: ${json.take(200)}")
             eventBuffer.add(json)
           }
-        } catch { case _: Throwable => () }
+        } catch { case e: Throwable => println("broadcast error: " + e.toString) }
       }
     }.compile.drain
 

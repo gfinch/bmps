@@ -34,10 +34,30 @@ object ParquetSource {
         val tf = Option(rs.getString("timeframe")).getOrElse("1h")
         val tsObj = rs.getObject("timestamp")
         val epochMillis = tsObj match {
-          case t: java.sql.Timestamp => t.toInstant.toEpochMilli
-          case s: String => Instant.parse(s).toEpochMilli
-          case l: java.lang.Long => l.longValue()
-          case _ => 0L
+          case null =>
+            0L
+          case t: java.sql.Timestamp =>
+            t.toInstant.toEpochMilli
+          case s: String =>
+            Instant.parse(s).toEpochMilli
+          case l: java.lang.Long =>
+            l.longValue()
+          case i: java.lang.Integer =>
+            i.longValue()
+          case d: java.lang.Double =>
+            d.longValue()
+          case bd: java.math.BigDecimal =>
+            bd.longValue()
+          case inst: java.time.Instant =>
+            inst.toEpochMilli
+          case ldt: java.time.LocalDateTime =>
+            ldt.atZone(java.time.ZoneId.systemDefault()).toInstant.toEpochMilli
+          case odt: java.time.OffsetDateTime =>
+            odt.toInstant.toEpochMilli
+          case other =>
+            // Emit a debug line to help diagnose unexpected JDBC types coming from DuckDB
+            println(s"ParquetSource: unexpected timestamp object class=${other.getClass.getName} value=${other.toString}")
+            0L
         }
         val open = rs.getDouble("open").toFloat
         val high = rs.getDouble("high").toFloat
