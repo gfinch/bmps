@@ -12,6 +12,43 @@ const chart = LightweightCharts.createChart(chartContainer, {
 });
 
 const candleSeries = chart.addCandlestickSeries({ upColor: '#26a69a', downColor: '#ef5350', wickUpColor: '#26a69a', wickDownColor: '#ef5350' });
+// markers for swing points (rendered on the candle series)
+let swingMarkers = [];
+
+function safeNumber(v) {
+  if (v === undefined || v === null) return null;
+  if (typeof v === 'number') return v;
+  if (typeof v === 'string') return parseFloat(v);
+  if (typeof v === 'object') {
+    if ('value' in v) return safeNumber(v.value);
+    if ('level' in v) return safeNumber(v.level);
+  }
+  return null;
+}
+
+function handleSwingEvent(event) {
+  try {
+    const sp = (event && (event.swingPoint || event.swing || event.swing_point)) ? (event.swingPoint || event.swing || event.swing_point) : event;
+    if (!sp) return;
+    const tsMs = (event && event.timestamp) || sp.timestamp || sp.time;
+    const time = Math.floor(Number(tsMs) / 1000);
+    const level = safeNumber(sp.level || sp.value || sp.price);
+    if (level === null || Number.isNaN(level)) return;
+    const dirRaw = (sp.direction && (typeof sp.direction === 'string' ? sp.direction : Object.keys(sp.direction || {})[0])) || sp.dir || 'Up';
+    const isUp = String(dirRaw).toLowerCase().includes('up');
+    const marker = {
+      time,
+      position: isUp ? 'belowBar' : 'aboveBar',
+      color: isUp ? '#26a69a' : '#ef5350',
+      shape: isUp ? 'arrowUp' : 'arrowDown',
+      text: ''
+    };
+    swingMarkers.push(marker);
+    // keep marker list bounded to avoid memory growth
+    if (swingMarkers.length > 5000) swingMarkers = swingMarkers.slice(swingMarkers.length - 5000);
+    candleSeries.setMarkers(swingMarkers);
+  } catch (e) { console.error('failed handling swing event', e); }
+}
 
 window.addEventListener('resize', () => chart.applyOptions({ width: chartContainer.clientWidth }));
 
@@ -47,6 +84,10 @@ function connectCoreWS(url = 'ws://localhost:9001') {
           const bar = toBarFromCandle(event);
           if (bar) candleSeries.update(bar);
         }
+        const isSwing = Boolean(event && (event.swingPoint || (event.eventType && (String(event.eventType).toLowerCase().includes('swing') || String(event.eventType) === 'SwingPoint'))));
+        if (isSwing) {
+          handleSwingEvent(event);
+        }
       } catch (e) { console.error('failed parsing buffered core event', e); }
     }
   }
@@ -70,6 +111,10 @@ function connectCoreWS(url = 'ws://localhost:9001') {
       if (isCandle) {
         const bar = toBarFromCandle(event);
         if (bar) candleSeries.update(bar);
+        }
+        const isSwing = Boolean(event && (event.swingPoint || (event.eventType && (String(event.eventType).toLowerCase().includes('swing') || event.eventType === 'SwingPoint'))));
+        if (isSwing) {
+          handleSwingEvent(event);
       }
     } catch (e) { console.error('failed parsing core event', e); }
   });
