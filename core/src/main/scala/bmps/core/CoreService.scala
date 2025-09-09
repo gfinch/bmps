@@ -23,6 +23,8 @@ import java.nio.file.{Files, Paths}
 import java.nio.charset.StandardCharsets
 import com.sun.net.httpserver.HttpServer
 import java.io.File
+import java.time.LocalDate
+import java.time.format.DateTimeParseException
 
 /**
  * CoreService reads market data (currently from a Parquet file via DuckDB),
@@ -72,10 +74,13 @@ class CoreService(params: InitParams, parquetPath: String = "core/src/main/resou
     val cfg = ConfigFactory.load()
     val webPort = try { cfg.getInt("bmps.core.web-port") } catch { case _: Throwable => 9001 }
 
-    // readiness map and buffer: clients can send a "READY" message to start receiving
-    val readyMap = new java.util.concurrent.ConcurrentHashMap[org.java_websocket.WebSocket, java.lang.Boolean]()
-    val eventBuffer = new java.util.concurrent.ConcurrentLinkedQueue[String]()
-    val conns = java.util.Collections.newSetFromMap(new java.util.concurrent.ConcurrentHashMap[org.java_websocket.WebSocket, java.lang.Boolean]())
+  // readiness map and buffer: clients can send a "READY" message to start receiving
+  val readyMap = new java.util.concurrent.ConcurrentHashMap[org.java_websocket.WebSocket, java.lang.Boolean]()
+  val eventBuffer = new java.util.concurrent.ConcurrentLinkedQueue[String]()
+  val conns = java.util.Collections.newSetFromMap(new java.util.concurrent.ConcurrentHashMap[org.java_websocket.WebSocket, java.lang.Boolean]())
+  // queue to receive CONNECT commands (date) from clients; blocks the replay runner until a client requests a replay
+  // queue receives strings of the form "YYYY-MM-DD|N" where N is optional number of prior trading days
+  val connectQueue = new java.util.concurrent.LinkedBlockingQueue[String]()
 
     // Start a simple embedded WebSocket server
   val server: WebSocketServer = new WebSocketServer(new InetSocketAddress(webPort)) {
@@ -93,8 +98,8 @@ class CoreService(params: InitParams, parquetPath: String = "core/src/main/resou
         conns.remove(conn)
       }
 
-  override def onMessage(conn: org.java_websocket.WebSocket, message: String): Unit = {
-        // Control messages: expect a simple "READY" to start receiving events
+      override def onMessage(conn: org.java_websocket.WebSocket, message: String): Unit = {
+        // Control messages: expect either a simple "READY" or a JSON CONNECT command
         try {
           if (message != null && message.trim.equalsIgnoreCase("READY")) {
             readyMap.put(conn, java.lang.Boolean.TRUE)
@@ -105,6 +110,37 @@ class CoreService(params: InitParams, parquetPath: String = "core/src/main/resou
               readyConns.foreach { c => try c.send(m) catch { case _: Throwable => () } }
               m = eventBuffer.poll()
             }
+          } else {
+            // Try to parse a CONNECT JSON: { "cmd": "CONNECT", "date": "YYYY-MM-DD" }
+            try {
+              // Expect a simple JSON like {"cmd":"CONNECT","date":"YYYY-MM-DD"}
+              val msgLower = if (message != null) message.toUpperCase else ""
+              if (msgLower.contains("\"CMD\"") && msgLower.contains("CONNECT")) {
+                // crude date extraction
+                val DateRegex = (""".*\"date\"\s*:\s*\"(\d{4}-\d{2}-\d{2})\".*""").r
+                message match {
+                  case DateRegex(dateStr) => 
+                    // try to extract optional days value
+                    val DaysRegex = (""".*\"days\"\s*:\s*(\d+).*""").r
+                    val combined = message match {
+                      case DaysRegex(d) => s"${dateStr}|${d.toInt}"
+                      case _ => s"${dateStr}|2"
+                    }
+                    try connectQueue.put(combined) catch { case _: Throwable => () }
+                    // mark this connection ready and flush buffered events
+                    try {
+                      readyMap.put(conn, java.lang.Boolean.TRUE)
+                      var m = eventBuffer.poll()
+                      while (m != null) {
+                        val readyConns = conns.asScala.filter(c => Option(readyMap.get(c)).contains(java.lang.Boolean.TRUE))
+                        readyConns.foreach { c => try c.send(m) catch { case _: Throwable => () } }
+                        m = eventBuffer.poll()
+                      }
+                    } catch { case _: Throwable => () }
+                  case _ => ()
+                }
+              }
+            } catch { case _: Throwable => () }
           }
         } catch { case _: Throwable => () }
       }
@@ -164,23 +200,80 @@ class CoreService(params: InitParams, parquetPath: String = "core/src/main/resou
       println(s"Embedded HTTP server stopped on http://localhost:${httpPort}")
     }
 
-    // Prepare broadcaster as an IO that will run the event stream and send JSON payloads to ready clients.
-    val broadcasterIO: IO[Unit] = events.evalMap { event =>
-      val json = event.asJson.noSpaces
-      IO {
-          try {
-          val readyClients = conns.asScala.filter(c => Option(readyMap.get(c)).contains(java.lang.Boolean.TRUE))
-          if (readyClients.nonEmpty) {
-            println(s"sending event to ${readyClients.size} clients: ${json.take(200)}")
-            readyClients.foreach { c => try c.send(json) catch { case _: Throwable => () } }
-          } else {
-            // buffer for later
-            println(s"buffering event: ${json.take(200)}")
-            eventBuffer.add(json)
+    // Helper: compute the previous two trading dates (skip weekends)
+    def computePrevTradingDates(dateStr: String, days: Int): Set[LocalDate] = {
+      try {
+        val dt = LocalDate.parse(dateStr)
+        val buf = scala.collection.mutable.ListBuffer.empty[LocalDate]
+        var d = dt.minusDays(1)
+        while (buf.size < days) {
+          val dow = d.getDayOfWeek
+          if (dow != java.time.DayOfWeek.SATURDAY && dow != java.time.DayOfWeek.SUNDAY) buf += d
+          d = d.minusDays(1)
+        }
+        buf.toList.toSet
+      } catch { case _: DateTimeParseException => Set.empty[LocalDate] }
+    }
+
+    // Build events stream from an explicit list of candles (like the existing `events` but parameterized)
+    def eventsFromCandles(candles: List[Candle]): Stream[IO, Event] = {
+      val initialState = SystemState(Nil, Direction.Up, Nil)
+      for {
+        stateRef <- Stream.eval(Ref.of[IO, SystemState](initialState))
+        event <- Stream.emits(candles).covary[IO].evalMap { candle =>
+          stateRef.modify { state =>
+            val updatedCandles = state.candles :+ candle
+            val updatedState = swingService.computeSwings(state.copy(candles = updatedCandles))
+            val newSwingPoints = updatedState.swingPoints.drop(state.swingPoints.length)
+            (updatedState, (candle, newSwingPoints))
           }
-        } catch { case e: Throwable => println("broadcast error: " + e.toString) }
-      }
-    }.compile.drain
+        }.flatMap { case (candle, newSwings) =>
+          val candleEvent = Event(EventType.Candle, candle.timestamp, Some(candle), None)
+          val swingEvents = newSwings.map(sp => Event(EventType.SwingPoint, sp.timestamp, None, Some(sp)))
+          Stream.emit(candleEvent) ++ Stream.emits(swingEvents)
+        }
+      } yield event
+    }
+
+    // Prepare broadcaster as an IO that waits for CONNECT commands, then reads parquet and broadcasts filtered events.
+    val broadcasterIO: IO[Unit] = fs2.Stream
+      .repeatEval(IO.blocking(connectQueue.take()))
+      .evalMap { dateStr =>
+        IO.blocking(println(s"Received CONNECT for date=$dateStr")).flatMap { _ =>
+  val parts = dateStr.split("\\|")
+  val reqDate = parts.lift(0).getOrElse("")
+  val reqDays = parts.lift(1).flatMap(s => try Some(s.toInt) catch { case _: Throwable => None }).getOrElse(2)
+  val prevDates = computePrevTradingDates(reqDate, reqDays)
+  if (prevDates.isEmpty) IO.unit else {
+          // compute start (inclusive) and end (exclusive) epoch millis covering the two previous trading days
+          val sorted = prevDates.toList.sorted
+          val startDate = sorted.min
+          val endDate = sorted.max.plusDays(1)
+          val startMs = startDate.atStartOfDay(zoneId).toInstant.toEpochMilli
+          val endMs = endDate.atStartOfDay(zoneId).toInstant.toEpochMilli
+          ParquetSource.readParquetAsCandlesInRange(parquetPath, startMs, endMs, zoneId).flatMap { candlesInRange =>
+            println(s"Parquet read: candlesInRange=${candlesInRange.size} for dates=${prevDates}")
+            eventsFromCandles(candlesInRange).evalMap { event =>
+            val json = event.asJson.noSpaces
+            IO {
+              try {
+                val readyClients = conns.asScala.filter(c => Option(readyMap.get(c)).contains(java.lang.Boolean.TRUE))
+                if (readyClients.nonEmpty) {
+                  println(s"sending event to ${readyClients.size} clients: ${json.take(200)}")
+                  readyClients.foreach { c => try c.send(json) catch { case _: Throwable => () } }
+                } else {
+                  println(s"buffering event: ${json.take(200)}")
+                  eventBuffer.add(json)
+                }
+              } catch { case e: Throwable => println("broadcast error: " + e.toString) }
+            }
+          }.compile.drain
+          }
+        }
+  }
+  }
+  .compile
+  .drain
 
     // Start servers with a bracket so they are stopped when the stream is canceled (e.g., Ctrl+C).
     // Start the broadcaster as a background fiber and then keep the stream alive forever.
