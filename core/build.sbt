@@ -14,3 +14,6 @@ libraryDependencies ++= Seq(
   "org.scalanlp" %% "breeze" % "2.1.0",
   "org.scalanlp" %% "breeze-viz" % "2.1.0"
 )
+
+// Embedded websocket server for single-process frontend + core
+libraryDependencies += "org.java-websocket" % "Java-WebSocket" % "1.5.3"

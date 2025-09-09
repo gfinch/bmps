@@ -46,10 +46,12 @@ object ParquetSource {
         val duration = timeframeToDuration(tf)
         buf += Candle(Level(open), Level(high), Level(low), Level(close), epochMillis, duration)
       }
-      rs.close(); stmt.close()
+      rs.close()
+      stmt.close()
       buf.toList
-    } finally conn.close()
+    } finally {
+      conn.close()
+    }
   }
 }
-package bmps.core.io
 
