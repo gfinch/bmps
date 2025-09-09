@@ -1,0 +1,26 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>BMPS Chart Demo</title>
+  <link rel="stylesheet" href="./src/style.css">
+</head>
+<body>
+  <div id="app">
+    <h1>BMPS Chart Demo</h1>
+    <div id="chart" class="chart"></div>
+    <div class="controls">
+      <button id="start-btn">Start Sim</button>
+      <button id="stop-btn" disabled>Stop Sim</button>
+    </div>
+    <p class="note">This page uses TradingView lightweight-charts (via CDN) with generated sample data. Later we'll connect this UI to the core service.</p>
+  </div>
+
+  <!-- Load the standalone UMD bundle first (provides `LightweightCharts` global),
+    then load our module which will use that global. This avoids browser errors
+    for bare module specifiers inside the library. -->
+  <script src="https://unpkg.com/lightweight-charts@3.8.0/dist/lightweight-charts.standalone.production.js"></script>
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>

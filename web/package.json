@@ -1,0 +1,12 @@
+{
+  "name": "bmps-web-relay",
+  "version": "0.1.0",
+  "description": "WebSocket relay for BMPS core -> browser clients",
+  "main": "ws-relay.js",
+  "scripts": {
+    "start-relay": "node ws-relay.js"
+  },
+  "dependencies": {
+    "ws": "^8.13.0"
+  }
+}

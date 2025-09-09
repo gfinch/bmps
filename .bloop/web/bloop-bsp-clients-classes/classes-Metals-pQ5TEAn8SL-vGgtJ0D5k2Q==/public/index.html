@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BMPS - Live Chart</title>
+    <style>
+      html, body, #chart {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        background: #0b1220;
+      }
+      #status { position: absolute; left: 12px; top: 12px; background: rgba(255,255,255,0.92); padding:6px 10px; border-radius:6px; font-family: Inter, system-ui, -apple-system, Roboto, 'Helvetica Neue', Arial; z-index:1002 }
+      #events { font-family: monospace; font-size:12px; }
+    </style>
+  </head>
+  <body>
+    <div id="status">Connecting...</div>
+    <div id="chart"></div>
+    <div id="events" style="position:absolute; right:12px; top:12px; width:360px; max-height:80vh; overflow:auto; background:rgba(255,255,255,0.95); padding:8px; border-radius:8px; z-index:1001"></div>
+
+    <script src="https://unpkg.com/lightweight-charts@3.10.0/dist/lightweight-charts.standalone.production.js"></script>
+    <script>
+      (function(){
+        const status = document.getElementById('status');
+        const chartDiv = document.getElementById('chart');
+        const eventsDiv = document.getElementById('events');
+
+        const chart = window.LightweightCharts.createChart(chartDiv, {
+          layout: { backgroundColor: '#0b1220', textColor: '#d0d6df' },
+          grid: { vertLines: { color: '#16202b' }, horzLines: { color: '#16202b' } },
+          rightPriceScale: { borderColor: '#233145' },
+          timeScale: { borderColor: '#233145' },
+        });
+
+        const candleSeries = chart.addCandlestickSeries({ upColor: '#26a69a', downColor: '#ef5350', borderVisible: true, wickVisible: true });
+
+        let markers = [];
+
+        function safeNumber(v){ if (v == null) return null; if (typeof v === 'number') return v; if (typeof v === 'string') return parseFloat(v); if (typeof v === 'object'){ if ('value' in v) return safeNumber(v.value); if ('level' in v) return safeNumber(v.level);} return null; }
+
+        function onCandle(event){
+          const c = event.candle || event.candle || event;
+          if (!c) return;
+          const ts = event.timestamp || c.timestamp || c.time;
+          const time = Math.floor((ts || 0)/1000);
+          const o = safeNumber(c.open || c.o || c.openPrice);
+          const h = safeNumber(c.high || c.h);
+          const l = safeNumber(c.low || c.l);
+          const cl = safeNumber(c.close || c.c);
+          if ([o,h,l,cl].some(x=>x==null)) return;
+          candleSeries.update({ time, open: o, high: h, low: l, close: cl });
+        }
+
+        function onSwing(event){
+          const sp = event.swingPoint || event.swing || event;
+          if (!sp) return;
+          const ts = event.timestamp || sp.timestamp || sp.time;
+          const time = Math.floor((ts || 0)/1000);
+          const level = safeNumber(sp.level || sp.value || sp.price);
+          const dir = (sp.direction && (typeof sp.direction === 'string' ? sp.direction : Object.keys(sp.direction||{})[0])) || 'Up';
+          const isUp = String(dir).toLowerCase().includes('up');
+          const marker = { time, position: isUp ? 'belowBar' : 'aboveBar', color: isUp ? '#26a69a' : '#ef5350', shape: isUp ? 'arrowUp' : 'arrowDown', text: isUp ? 'Swing Up' : 'Swing Down' };
+          markers.push(marker);
+          if (markers.length > 5000) markers = markers.slice(markers.length-5000);
+          candleSeries.setMarkers(markers);
+        }
+
+        function pushEvent(obj){
+          const el = document.createElement('div'); el.style.borderTop='1px solid #eee'; el.style.padding='6px 0'; el.textContent = JSON.stringify(obj).slice(0,260); eventsDiv.prepend(el); while(eventsDiv.childElementCount>40) eventsDiv.removeChild(eventsDiv.lastChild);
+        }
+
+        function handleRaw(raw){
+          let obj; try{ obj = JSON.parse(raw); } catch(e){ console.warn('invalid json', e); return; }
+          if (Array.isArray(obj)){ obj.forEach(x=>handleRaw(JSON.stringify(x))); return; }
+          pushEvent(obj);
+          const et = (obj.eventType && (typeof obj.eventType === 'string' ? obj.eventType : Object.keys(obj.eventType||{})[0])) || obj.type || '';
+          if (String(et).toLowerCase().includes('candle') || obj.candle) onCandle(obj);
+          if (String(et).toLowerCase().includes('swing') || obj.swingPoint) onSwing(obj);
+        }
+
+        const WS_URL = (location.protocol==='https:' ? 'wss://' : 'ws://') + location.host + '/output';
+        let ws;
+        function connect(){
+          status.textContent = 'Connecting to ' + WS_URL + '...';
+          ws = new WebSocket(WS_URL);
+          ws.onopen = () => { status.textContent = 'Connected'; };
+          ws.onclose = () => { status.textContent = 'Disconnected — reconnecting in 2s'; setTimeout(connect,2000); };
+          ws.onerror = (e) => { console.warn('ws error', e); status.textContent = 'WebSocket error'; };
+          ws.onmessage = (m) => {
+            const data = m.data;
+            if (typeof data === 'string') data.split('\n').filter(s=>s.trim()).forEach(chunk=>handleRaw(chunk));
+            else try{ handleRaw(JSON.stringify(data)); } catch(e){ console.warn(e); }
+          };
+        }
+
+        connect();
+
+        window.addEventListener('resize', ()=> chart.applyOptions({ width: document.body.clientWidth, height: document.body.clientHeight }));
+
+      })();
+    </script>
+  </body>
+</html>
