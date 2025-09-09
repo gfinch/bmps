@@ -2,14 +2,21 @@
 // Uses the global `LightweightCharts` UMD bundle loaded by index.html.
 
 const chartContainer = document.getElementById('chart');
-const chart = LightweightCharts.createChart(chartContainer, {
-  width: chartContainer.clientWidth,
-  height: 520,
-  layout: { backgroundColor: '#ffffff', textColor: '#333' },
-  grid: { vertLines: { color: '#f0f3f7' }, horzLines: { color: '#f0f3f7' } },
-  rightPriceScale: { scaleMargins: { top: 0.1, bottom: 0.1 } },
-  timeScale: { timeVisible: true, secondsVisible: true }
-});
+
+function createChart() {
+  const width = chartContainer.clientWidth;
+  const height = Math.max(200, chartContainer.clientHeight);
+  return LightweightCharts.createChart(chartContainer, {
+    width,
+    height,
+    layout: { backgroundColor: '#ffffff', textColor: '#333' },
+    grid: { vertLines: { color: '#f0f3f7' }, horzLines: { color: '#f0f3f7' } },
+    rightPriceScale: { scaleMargins: { top: 0.1, bottom: 0.1 } },
+    timeScale: { timeVisible: true, secondsVisible: true }
+  });
+}
+
+let chart = createChart();
 
 const candleSeries = chart.addCandlestickSeries({ upColor: '#26a69a', downColor: '#ef5350', wickUpColor: '#26a69a', wickDownColor: '#ef5350' });
 // markers for swing points (rendered on the candle series)
@@ -50,7 +57,19 @@ function handleSwingEvent(event) {
   } catch (e) { console.error('failed handling swing event', e); }
 }
 
-window.addEventListener('resize', () => chart.applyOptions({ width: chartContainer.clientWidth }));
+function resizeChart() {
+  const width = chartContainer.clientWidth;
+  const height = Math.max(200, chartContainer.clientHeight);
+  try {
+    chart.resize(width, height);
+  } catch (e) {
+    // fallback: recreate chart if resize not supported
+    try { chart.remove(); } catch (_) {}
+    chart = createChart();
+  }
+}
+
+window.addEventListener('resize', () => resizeChart());
 
 function toBarFromCandle(obj) {
   const c = (obj && obj.candle) ? obj.candle : obj;
@@ -73,6 +92,28 @@ function connectCoreWS(url = 'ws://localhost:9001') {
 
   const statusEl = document.getElementById('status');
   const startBtn = document.getElementById('startBtn');
+    const datePicker = document.getElementById('datePicker');
+    const speedSlider = document.getElementById('speedSlider');
+    const speedValue = document.getElementById('speedValue');
+
+    // Initialize date picker to today
+    try {
+      const today = new Date();
+      const yyyy = today.getFullYear();
+      const mm = String(today.getMonth() + 1).padStart(2, '0');
+      const dd = String(today.getDate()).padStart(2, '0');
+      if (datePicker) datePicker.value = `${yyyy}-${mm}-${dd}`;
+    } catch (e) { /* ignore */ }
+
+    // Update displayed speed when slider moves
+    let replaySpeed = 1.0;
+    if (speedSlider && speedValue) {
+      speedValue.textContent = `${speedSlider.value}x`;
+      speedSlider.addEventListener('input', (ev) => {
+        replaySpeed = ev.target.value;
+        speedValue.textContent = `${replaySpeed}x`;
+      });
+    }
 
   function flushBuffer() {
     while (msgBuffer.length) {
@@ -127,7 +168,9 @@ function connectCoreWS(url = 'ws://localhost:9001') {
     started = true;
     // signal core that client is ready
     try { ws.send('READY'); } catch (e) { console.warn('failed send READY', e); }
-    statusEl.textContent = 'Running';
+  // Show selected simulation parameters in status
+  const selectedDate = datePicker ? datePicker.value : '';
+  statusEl.textContent = `Running ${selectedDate || ''} @ ${replaySpeed}x`;
     startBtn.disabled = true;
     // flush any buffered messages
     flushBuffer();

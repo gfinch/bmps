@@ -8,14 +8,22 @@
 </head>
 <body>
   <div id="app">
-    <h1>BMPS Chart Demo</h1>
     <div id="chart" class="chart"></div>
     <div class="controls">
-      <button id="startBtn">Start</button>
-      <span id="status" class="note">Disconnected</span>
+      <div class="control-group">
+        <label for="datePicker">Date</label>
+        <input type="date" id="datePicker" />
+      </div>
+      <div class="control-group">
+        <label for="speedSlider">Speed</label>
+        <input type="range" id="speedSlider" min="0.1" max="5" step="0.1" value="1" />
+        <span id="speedValue">1x</span>
+      </div>
+      <div class="control-group">
+        <button id="startBtn">Start</button>
+        <span id="status" class="note">Disconnected</span>
+      </div>
     </div>
-  <!-- Live data: click Start to begin receiving events from core via WebSocket -->
-    <p class="note">This page uses TradingView lightweight-charts (via CDN). Click Start when you're ready to receive live candles.</p>
   </div>
 
   <!-- Load the standalone UMD bundle first (provides `LightweightCharts` global),
