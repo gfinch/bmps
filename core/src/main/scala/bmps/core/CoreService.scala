@@ -72,18 +72,41 @@ class CoreService(params: InitParams, parquetPath: String = "core/src/main/resou
     val cfg = ConfigFactory.load()
     val webPort = try { cfg.getInt("bmps.core.web-port") } catch { case _: Throwable => 9001 }
 
-  // Start a simple embedded WebSocket server
-  val server = new WebSocketServer(new InetSocketAddress(webPort)) {
+    // readiness map and buffer: clients can send a "READY" message to start receiving
+    val readyMap = new java.util.concurrent.ConcurrentHashMap[org.java_websocket.WebSocket, java.lang.Boolean]()
+    val eventBuffer = new java.util.concurrent.ConcurrentLinkedQueue[String]()
+    val conns = java.util.Collections.newSetFromMap(new java.util.concurrent.ConcurrentHashMap[org.java_websocket.WebSocket, java.lang.Boolean]())
+
+    // Start a simple embedded WebSocket server
+  val server: WebSocketServer = new WebSocketServer(new InetSocketAddress(webPort)) {
       override def onOpen(conn: JWebSocket, handshake: ClientHandshake): Unit = {
         println(s"WS client connected: ${conn.getRemoteSocketAddress}")
+        // mark as not-ready until client signals READY
+        readyMap.put(conn, java.lang.Boolean.FALSE)
+        conns.add(conn)
       }
 
-      override def onClose(conn: JWebSocket, code: Int, reason: String, remote: Boolean): Unit = {
+      override def onClose(conn: org.java_websocket.WebSocket, code: Int, reason: String, remote: Boolean): Unit = {
         println(s"WS client disconnected: ${conn.getRemoteSocketAddress} code=$code reason=$reason")
+        // clean up readiness state
+        readyMap.remove(conn)
+        conns.remove(conn)
       }
 
-      override def onMessage(conn: JWebSocket, message: String): Unit = {
-        // No incoming messages expected; ignore or could be used for control messages
+  override def onMessage(conn: org.java_websocket.WebSocket, message: String): Unit = {
+        // Control messages: expect a simple "READY" to start receiving events
+        try {
+          if (message != null && message.trim.equalsIgnoreCase("READY")) {
+            readyMap.put(conn, java.lang.Boolean.TRUE)
+            // flush buffered events to all ready clients
+            var m = eventBuffer.poll()
+            while (m != null) {
+              val readyConns = conns.asScala.filter(c => Option(readyMap.get(c)).contains(java.lang.Boolean.TRUE))
+              readyConns.foreach { c => try c.send(m) catch { case _: Throwable => () } }
+              m = eventBuffer.poll()
+            }
+          }
+        } catch { case _: Throwable => () }
       }
 
       override def onError(conn: JWebSocket, ex: Exception): Unit = {
@@ -123,28 +146,45 @@ class CoreService(params: InitParams, parquetPath: String = "core/src/main/resou
     })
     httpServer.setExecutor(null)
 
-    val startServers = fs2.Stream.eval(IO {
+    val acquire: IO[Unit] = IO {
       server.start()
       httpServer.start()
       println(s"Embedded WS server started on port $webPort")
       println(s"Embedded HTTP server started on http://localhost:${httpPort}")
-      ()
-    })
+    }
 
-    // Start servers then continue with broadcasting events
-    startServers.flatMap(_ =>
+  def release(u: Unit): IO[Unit] = IO {
+      try {
+        server.stop()
+      } catch { case _: Throwable => () }
+      try {
+        httpServer.stop(0)
+      } catch { case _: Throwable => () }
+      println(s"Embedded WS server stopped on port $webPort")
+      println(s"Embedded HTTP server stopped on http://localhost:${httpPort}")
+    }
 
-      // Broadcast each event to all connected WS clients
-      events.evalMap { event =>
-        val json = event.asJson.noSpaces
-        IO {
-          // send to all connected clients
-          server.getConnections.asScala.foreach { c =>
-            try c.send(json) catch { case _: Throwable => () }
+    // Prepare broadcaster as an IO that will run the event stream and send JSON payloads to ready clients.
+    val broadcasterIO: IO[Unit] = events.evalMap { event =>
+      val json = event.asJson.noSpaces
+      IO {
+        try {
+          val readyClients = conns.asScala.filter(c => Option(readyMap.get(c)).contains(java.lang.Boolean.TRUE))
+          if (readyClients.nonEmpty) {
+            readyClients.foreach { c => try c.send(json) catch { case _: Throwable => () } }
+          } else {
+            // buffer for later
+            eventBuffer.add(json)
           }
-        }
+        } catch { case _: Throwable => () }
       }
-    ) ++ Stream.eval(IO.never)
+    }.compile.drain
+
+    // Start servers with a bracket so they are stopped when the stream is canceled (e.g., Ctrl+C).
+    // Start the broadcaster as a background fiber and then keep the stream alive forever.
+    fs2.Stream.bracket(acquire)(release).flatMap { _ =>
+      Stream.eval(broadcasterIO.start).flatMap(_ => Stream.eval(IO.never))
+    }
     
   }
 }

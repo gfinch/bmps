@@ -11,10 +11,11 @@
     <h1>BMPS Chart Demo</h1>
     <div id="chart" class="chart"></div>
     <div class="controls">
-      <button id="start-btn">Start Sim</button>
-      <button id="stop-btn" disabled>Stop Sim</button>
+      <button id="startBtn">Start</button>
+      <span id="status" class="note">Disconnected</span>
     </div>
-    <p class="note">This page uses TradingView lightweight-charts (via CDN) with generated sample data. Later we'll connect this UI to the core service.</p>
+  <!-- Live data: click Start to begin receiving events from core via WebSocket -->
+    <p class="note">This page uses TradingView lightweight-charts (via CDN). Click Start when you're ready to receive live candles.</p>
   </div>
 
   <!-- Load the standalone UMD bundle first (provides `LightweightCharts` global),
