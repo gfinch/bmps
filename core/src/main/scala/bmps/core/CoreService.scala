@@ -25,6 +25,8 @@ import com.sun.net.httpserver.HttpServer
 import java.io.File
 import java.time.LocalDate
 import java.time.format.DateTimeParseException
+import bmps.core.services.PlanZoneService
+import scala.collection.mutable.ListBuffer
 
 /**
  * CoreService reads market data (currently from a Parquet file via DuckDB),
@@ -215,6 +217,8 @@ class CoreService(params: InitParams, parquetPath: String = "core/src/main/resou
       } catch { case _: DateTimeParseException => Set.empty[LocalDate] }
     }
 
+    val zoneEventBuffer: ListBuffer[Event] = ListBuffer.empty[Event]
+
     // Build events stream from an explicit list of candles (like the existing `events` but parameterized)
     def eventsFromCandles(candles: List[Candle]): Stream[IO, Event] = {
       val initialState = SystemState(Nil, Direction.Up, Nil)
@@ -223,14 +227,20 @@ class CoreService(params: InitParams, parquetPath: String = "core/src/main/resou
         event <- Stream.emits(candles).covary[IO].evalMap { candle =>
           stateRef.modify { state =>
             val updatedCandles = state.candles :+ candle
-            val updatedState = swingService.computeSwings(state.copy(candles = updatedCandles))
+            val withSwings = swingService.computeSwings(state.copy(candles = updatedCandles))
+            val (updatedState, zoneEvents) = PlanZoneService.processPlanZones(withSwings)
+
+            zoneEventBuffer.appendAll(zoneEvents)
+            zoneEventBuffer.map(z => s"${z.planZone.get.planZoneType} ${z.planZone.get.startTime} ${z.planZone.get.endTime} .... ${z.planZone.get}").foreach(println)
+
             val newSwingPoints = updatedState.swingPoints.drop(state.swingPoints.length)
-            (updatedState, (candle, newSwingPoints))
+            (updatedState, (candle, newSwingPoints, zoneEvents))
           }
-        }.flatMap { case (candle, newSwings) =>
-          val candleEvent = Event(EventType.Candle, candle.timestamp, Some(candle), None)
-          val swingEvents = newSwings.map(sp => Event(EventType.SwingPoint, sp.timestamp, None, Some(sp)))
-          Stream.emit(candleEvent) ++ Stream.emits(swingEvents)
+        }.flatMap { case (candle, newSwings, zoneEvents) =>
+          val candleEvent = Event.fromCandle(candle)
+          val swingEvents = newSwings.map(sp => Event.fromSwingPoint(sp))
+
+          Stream.emit(candleEvent) ++ Stream.emits(swingEvents) ++ Stream.emits(zoneEvents)
         }
       } yield event
     }
@@ -240,34 +250,34 @@ class CoreService(params: InitParams, parquetPath: String = "core/src/main/resou
       .repeatEval(IO.blocking(connectQueue.take()))
       .evalMap { dateStr =>
         IO.blocking(println(s"Received CONNECT for date=$dateStr")).flatMap { _ =>
-  val parts = dateStr.split("\\|")
-  val reqDate = parts.lift(0).getOrElse("")
-  val reqDays = parts.lift(1).flatMap(s => try Some(s.toInt) catch { case _: Throwable => None }).getOrElse(2)
-  val prevDates = computePrevTradingDates(reqDate, reqDays)
-  if (prevDates.isEmpty) IO.unit else {
-          // compute start (inclusive) and end (exclusive) epoch millis covering the two previous trading days
-          val sorted = prevDates.toList.sorted
-          val startDate = sorted.min
-          val endDate = sorted.max.plusDays(1)
-          val startMs = startDate.atStartOfDay(zoneId).toInstant.toEpochMilli
-          val endMs = endDate.atStartOfDay(zoneId).toInstant.toEpochMilli
-          ParquetSource.readParquetAsCandlesInRange(parquetPath, startMs, endMs, zoneId).flatMap { candlesInRange =>
-            println(s"Parquet read: candlesInRange=${candlesInRange.size} for dates=${prevDates}")
-            eventsFromCandles(candlesInRange).evalMap { event =>
-            val json = event.asJson.noSpaces
-            IO {
-              try {
-                val readyClients = conns.asScala.filter(c => Option(readyMap.get(c)).contains(java.lang.Boolean.TRUE))
-                if (readyClients.nonEmpty) {
-                  println(s"sending event to ${readyClients.size} clients: ${json.take(200)}")
-                  readyClients.foreach { c => try c.send(json) catch { case _: Throwable => () } }
-                } else {
-                  println(s"buffering event: ${json.take(200)}")
-                  eventBuffer.add(json)
-                }
-              } catch { case e: Throwable => println("broadcast error: " + e.toString) }
-            }
-          }.compile.drain
+        val parts = dateStr.split("\\|")
+        val reqDate = parts.lift(0).getOrElse("")
+        val reqDays = parts.lift(1).flatMap(s => try Some(s.toInt) catch { case _: Throwable => None }).getOrElse(2)
+        val prevDates = computePrevTradingDates(reqDate, reqDays)
+        if (prevDates.isEmpty) IO.unit else {
+                // compute start (inclusive) and end (exclusive) epoch millis covering the two previous trading days
+                val sorted = prevDates.toList.sorted
+                val startDate = sorted.min
+                val endDate = sorted.max.plusDays(1)
+                val startMs = startDate.atStartOfDay(zoneId).toInstant.toEpochMilli
+                val endMs = endDate.atStartOfDay(zoneId).toInstant.toEpochMilli
+                ParquetSource.readParquetAsCandlesInRange(parquetPath, startMs, endMs, zoneId).flatMap { candlesInRange =>
+                  println(s"Parquet read: candlesInRange=${candlesInRange.size} for dates=${prevDates}")
+                  eventsFromCandles(candlesInRange).evalMap { event =>
+                  val json = event.asJson.noSpaces
+                  IO {
+                    try {
+                      val readyClients = conns.asScala.filter(c => Option(readyMap.get(c)).contains(java.lang.Boolean.TRUE))
+                      if (readyClients.nonEmpty) {
+                        println(s"sending event to ${readyClients.size} clients: ${json.take(200)}")
+                        readyClients.foreach { c => try c.send(json) catch { case _: Throwable => () } }
+                      } else {
+                        println(s"buffering event: ${json.take(200)}")
+                        eventBuffer.add(json)
+                      }
+                    } catch { case e: Throwable => println("broadcast error: " + e.toString) }
+                  }
+                }.compile.drain
           }
         }
   }
