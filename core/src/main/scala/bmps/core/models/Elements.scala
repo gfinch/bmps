@@ -1,6 +1,13 @@
 package bmps.core.models
 
-case class Level(value: Float)
+case class Level(value: Float) {
+    def <(other: Level): Boolean = this.value < other.value
+    def <=(other: Level): Boolean = this.value <= other.value
+    def >(other: Level): Boolean = this.value > other.value
+    def >=(other: Level): Boolean = this.value >= other.value
+    def ==(other: Level): Boolean = this.value == other.value
+    def !=(other: Level): Boolean = this.value != other.value
+}
 
 case class Line(level: Float, startTime: Long, endTime: Option[Long])
 
@@ -46,7 +53,40 @@ object PlanZoneType {
     case object Demand extends PlanZoneType
 }
 
-case class PlanZone(low: Level, high: Level, startTime: Long, endTime: Option[Long], planZoneType: PlanZoneType)
+case class PlanZone(planZoneType: PlanZoneType, low: Level, high: Level, startTime: Long, endTime: Option[Long] = None) {
+    def closedOut(candle: Candle): PlanZone = {
+        if (planZoneType == PlanZoneType.Supply && candle.close < this.low) {
+            this.copy(endTime = Some(candle.timestamp))
+        } else this
+    }
+
+    def mergeWith(other: PlanZone): PlanZone = {
+        val newStartTime = Seq(this.startTime, other.startTime).max
+        val newLow = Seq(this.low.value, other.low.value).min
+        val newHigh = Seq(this.high.value, other.high.value).max
+        PlanZone(planZoneType, Level(newLow), Level(newHigh), newStartTime)
+    }
+
+    def engulfs(other: PlanZone): Boolean = {
+        if (planZoneType == other.planZoneType && endTime.isEmpty && other.endTime.isEmpty) {
+            if (high >= other.high && low <= other.low) true else false
+        } else false
+    }
+
+    def overlaps(other: PlanZone): Boolean = {
+        if (planZoneType == other.planZoneType && endTime.isEmpty && other.endTime.isEmpty) {
+            if (high >= other.high && other.high >= low ||
+                high >= other.low && other.low >= low) true else false
+        } else false
+    }
+}
+
+object PlanZone {
+    def apply(low: SwingPoint, high: SwingPoint, zoneType: PlanZoneType): PlanZone = {
+        val minTimestamp = Math.min(low.timestamp, high.timestamp)
+        PlanZone(zoneType, low.level, high.level, minTimestamp)
+    }
+}
 
 sealed trait MaxType
 object MaxType {

@@ -18,9 +18,20 @@ function createChart() {
 
 let chart = createChart();
 
+// redraw overlay when visible time range changes (user scroll/zoom)
+try {
+  const ts = chart.timeScale();
+  if (ts && typeof ts.subscribeVisibleTimeRangeChange === 'function') {
+    ts.subscribeVisibleTimeRangeChange(() => { drawZones(); });
+  }
+} catch (e) { /* ignore if API not available */ }
+
 const candleSeries = chart.addCandlestickSeries({ upColor: '#26a69a', downColor: '#ef5350', wickUpColor: '#26a69a', wickDownColor: '#ef5350' });
 // markers for swing points (rendered on the candle series)
 let swingMarkers = [];
+// plan zones keyed by generated id -> { area, top, bottom, meta }
+const planZones = new Map();
+let lastBarTime = null; // seconds
 
 function safeNumber(v) {
   if (v === undefined || v === null) return null;
@@ -31,6 +42,173 @@ function safeNumber(v) {
     if ('level' in v) return safeNumber(v.level);
   }
   return null;
+}
+
+function toZoneKey(z) {
+  const t = Math.floor(Number(z.startTime || z.timestamp || 0));
+  const low = safeNumber(z.low || z.lowLevel || z.value || z.lowPrice) || 0;
+  const high = safeNumber(z.high || z.highLevel || z.highPrice) || 0;
+  const rawType = (z.planZoneType || z.zoneType || '').toString();
+  const type = rawType.toLowerCase();
+  return `${t}:${low}:${high}:${type}`;
+}
+
+function ensureZoneSeries(key, zone) {
+  if (planZones.has(key)) return planZones.get(key);
+  // determine coords
+  const low = Number(safeNumber(zone.low));
+  const high = Number(safeNumber(zone.high));
+  const typeRaw = (zone.planZoneType || zone.zoneType || '').toString().toLowerCase();
+  const isDemand = typeRaw.includes('demand');
+  const isSupply = typeRaw.includes('supply');
+  // We will render the zone fill on a canvas overlay instead of using an AreaSeries.
+  // This avoids stacking multiple semi-opaque AreaSeries which accumulate opacity
+  // and become visually solid. Keep area=null as placeholder.
+  const area = null;
+
+  // top/bottom line colors: supply zones should have red top and green bottom;
+  // demand zones should have green top and red bottom. Default to demand styling.
+  let topColor;
+  let bottomColor;
+  if (isSupply) {
+    topColor = '#ff0000'; // red
+    bottomColor = '#00b050'; // green
+  } else {
+    // demand or unknown -> green top, red bottom
+    topColor = '#00b050';
+    bottomColor = '#ff0000';
+  }
+
+  const top = chart.addLineSeries({ color: topColor, lineWidth: 2, lastValueVisible: false, priceLineVisible: false });
+  const bottom = chart.addLineSeries({ color: bottomColor, lineWidth: 2, lastValueVisible: false, priceLineVisible: false });
+
+  const entry = { area, top, bottom, meta: { low, high, startTime: Math.floor(Number(zone.startTime) / 1000), endTime: zone.endTime ? Math.floor(Number(zone.endTime) / 1000) : null, type: typeRaw } };
+  planZones.set(key, entry);
+  return entry;
+}
+
+function setZoneSeriesData(entry) {
+  const { area, top, bottom, meta } = entry;
+  const start = Math.floor(Number(meta.startTime));
+  const end = meta.endTime ? Math.floor(Number(meta.endTime)) : lastBarTime || start;
+  // ensure end >= start
+  const safeEnd = Math.max(end, start);
+  const topPoints = [ { time: start, value: meta.high }, { time: safeEnd, value: meta.high } ];
+  const bottomPoints = [ { time: start, value: meta.low }, { time: safeEnd, value: meta.low } ];
+  try {
+    // set the top/bottom lines (we'll draw fills on the overlay canvas)
+    top.setData(topPoints);
+    bottom.setData(bottomPoints);
+    // trigger overlay redraw
+    drawZones();
+  } catch (e) {
+    console.error('failed setting zone series data', e);
+  }
+}
+
+// Overlay canvas for zone fills
+let overlayCanvas = null;
+let overlayCtx = null;
+
+function initOverlay() {
+  if (overlayCanvas) return;
+  overlayCanvas = document.createElement('canvas');
+  overlayCanvas.style.position = 'absolute';
+  overlayCanvas.style.left = '0';
+  overlayCanvas.style.top = '0';
+  overlayCanvas.style.width = '100%';
+  overlayCanvas.style.height = '100%';
+  overlayCanvas.style.pointerEvents = 'none';
+  overlayCanvas.style.zIndex = '5';
+  chartContainer.appendChild(overlayCanvas);
+  overlayCtx = overlayCanvas.getContext('2d');
+  resizeOverlay();
+}
+
+function resizeOverlay() {
+  if (!overlayCanvas) return;
+  const dpr = window.devicePixelRatio || 1;
+  const w = chartContainer.clientWidth;
+  const h = chartContainer.clientHeight;
+  overlayCanvas.width = Math.max(1, Math.floor(w * dpr));
+  overlayCanvas.height = Math.max(1, Math.floor(h * dpr));
+  overlayCanvas.style.width = w + 'px';
+  overlayCanvas.style.height = h + 'px';
+  overlayCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  drawZones();
+}
+
+function drawZones() {
+  try {
+    initOverlay();
+    overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+    // for coordinate conversions
+    const timeScale = chart.timeScale();
+  let total = 0, supplyCount = 0, demandCount = 0;
+    planZones.forEach((entry) => {
+      total++;
+      const { meta, top, bottom } = entry;
+      if ((meta.type || '').includes('supply')) supplyCount++;
+      else if ((meta.type || '').includes('demand')) demandCount++;
+      const start = meta.startTime;
+      const end = meta.endTime || lastBarTime || start;
+      const safeEnd = Math.max(end, start);
+      const x0 = timeScale.timeToCoordinate(start);
+      const x1 = timeScale.timeToCoordinate(safeEnd);
+      if (x0 === null || x1 === null) return; // not visible
+      // price to pixel
+      const yTop = candleSeries.priceToCoordinate(meta.high);
+      const yBottom = candleSeries.priceToCoordinate(meta.low);
+      if (yTop === null || yBottom === null) return;
+      const x = Math.min(x0, x1);
+      const width = Math.abs(x1 - x0);
+      const y = Math.min(yTop, yBottom);
+      const height = Math.abs(yBottom - yTop);
+      if (width <= 0 || height <= 0) return;
+      // choose fill and stroke colors
+      const isSupply = (meta.type || '').includes('supply');
+      let topColor = '#00b050';
+      let bottomColor = '#ff0000';
+      if (isSupply) {
+        topColor = '#ff0000';
+        bottomColor = '#00b050';
+      }
+      // choose distinct translucent fills so supply/demand are visually different
+      const supplyFill = 'rgba(180,130,240,0.18)'; // purple for supply
+      const demandFill = 'rgba(160,230,160,0.12)'; // light green for demand
+      const fillStyle = isSupply ? supplyFill : demandFill;
+      overlayCtx.save();
+      overlayCtx.fillStyle = fillStyle;
+      overlayCtx.fillRect(x, y, width, height);
+      // draw top line
+      overlayCtx.strokeStyle = topColor;
+      overlayCtx.lineWidth = 2;
+      overlayCtx.beginPath();
+      overlayCtx.moveTo(x, y + 1);
+      overlayCtx.lineTo(x + width, y + 1);
+      overlayCtx.stroke();
+      // draw bottom line
+      overlayCtx.strokeStyle = bottomColor;
+      overlayCtx.lineWidth = 2;
+      overlayCtx.beginPath();
+      overlayCtx.moveTo(x, y + height - 1);
+      overlayCtx.lineTo(x + width, y + height - 1);
+      overlayCtx.stroke();
+      overlayCtx.restore();
+    });
+  // no-op: removed debug logging
+  } catch (e) {
+    console.error('failed drawing zone overlays', e);
+  }
+}
+
+function updateOpenZones() {
+  for (const [k, entry] of planZones.entries()) {
+    if (!entry.meta.endTime) {
+      // extend to lastBarTime if available
+      if (lastBarTime) setZoneSeriesData(entry);
+    }
+  }
 }
 
 function handleSwingEvent(event) {
@@ -57,6 +235,47 @@ function handleSwingEvent(event) {
   } catch (e) { console.error('failed handling swing event', e); }
 }
 
+function handlePlanZoneEvent(event) {
+  try {
+    const p = (event && (event.planZone || event.plan_zone || event.plan)) ? (event.planZone || event.plan_zone || event.plan) : event;
+    if (!p) return;
+  // incoming plan zone payload
+    // core timestamps are milliseconds
+    const startMs = (p.startTime !== undefined && p.startTime !== null) ? p.startTime : (event.timestamp || Date.now());
+    const endMs = (p.endTime !== undefined && p.endTime !== null) ? p.endTime : null;
+    const start = Math.floor(Number(startMs) / 1000);
+    const end = endMs ? Math.floor(Number(endMs) / 1000) : null;
+    const low = safeNumber(p.low || p.lowLevel || (p.range && p.range.low) || (p.low && p.low.value) );
+    const high = safeNumber(p.high || p.highLevel || (p.range && p.range.high) || (p.high && p.high.value) );
+    if (low === null || high === null) return;
+    // normalize planZoneType which may be an object like {Demand:{}} or a string
+    let rawTypeVal = p.planZoneType || p.zoneType || p.type || '';
+    let planZoneType = rawTypeVal;
+    if (rawTypeVal && typeof rawTypeVal === 'object') {
+      try {
+        const keys = Object.keys(rawTypeVal);
+        planZoneType = keys.length ? keys[0] : '';
+      } catch (_) { planZoneType = '' }
+    }
+    const zoneObj = { planZoneType: planZoneType, low, high, startTime: start * 1000, endTime: end ? end * 1000 : null };
+  // derived zoneObj
+    const key = toZoneKey(zoneObj);
+    const entry = ensureZoneSeries(key, zoneObj);
+    // update meta.endTime if provided
+    if (end) entry.meta.endTime = end;
+    // update values (and extend if open)
+    setZoneSeriesData(entry);
+    // keep map size bounded mildly
+    if (planZones.size > 200) {
+      // remove oldest
+      const firstKey = planZones.keys().next().value;
+      const old = planZones.get(firstKey);
+      try { old.area.remove(); old.top.remove(); old.bottom.remove(); } catch (_) {}
+      planZones.delete(firstKey);
+    }
+  } catch (e) { console.error('failed handling plan zone event', e); }
+}
+
 function resizeChart() {
   const width = chartContainer.clientWidth;
   const height = Math.max(200, chartContainer.clientHeight);
@@ -67,6 +286,8 @@ function resizeChart() {
     try { chart.remove(); } catch (_) {}
     chart = createChart();
   }
+  // resize overlay canvas when chart resizes
+  resizeOverlay();
 }
 
 window.addEventListener('resize', () => resizeChart());
@@ -132,11 +353,16 @@ function connectCoreWS(url = 'ws://localhost:9001') {
         if (isCandle) {
           const bar = toBarFromCandle(event);
           if (bar) candleSeries.update(bar);
+          // track last bar time (seconds) and extend open zones
+          lastBarTime = bar.time;
+          updateOpenZones();
         }
         const isSwing = Boolean(event && (event.swingPoint || (event.eventType && (String(event.eventType).toLowerCase().includes('swing') || String(event.eventType) === 'SwingPoint'))));
         if (isSwing) {
           handleSwingEvent(event);
         }
+        const isPlan = Boolean(event && (event.planZone || (event.eventType && (String(event.eventType).toLowerCase().includes('planzone') || String(event.eventType) === 'PlanZone'))));
+        if (isPlan) handlePlanZoneEvent(event);
       } catch (e) { console.error('failed parsing buffered core event', e); }
     }
   }
@@ -159,12 +385,22 @@ function connectCoreWS(url = 'ws://localhost:9001') {
       const isCandle = Boolean(event && (event.candle || (event.eventType && (String(event.eventType).includes('Candle') || event.eventType === 'Candle'))));
       if (isCandle) {
         const bar = toBarFromCandle(event);
-        if (bar) candleSeries.update(bar);
+        if (bar) {
+          candleSeries.update(bar);
+          lastBarTime = bar.time;
+          updateOpenZones();
+          // redraw overlays for zones on candle updates
+          drawZones();
         }
-        const isSwing = Boolean(event && (event.swingPoint || (event.eventType && (String(event.eventType).toLowerCase().includes('swing') || event.eventType === 'SwingPoint'))));
-        if (isSwing) {
-          handleSwingEvent(event);
       }
+
+      const isSwing = Boolean(event && (event.swingPoint || (event.eventType && (String(event.eventType).toLowerCase().includes('swing') || event.eventType === 'SwingPoint'))));
+      if (isSwing) {
+        handleSwingEvent(event);
+      }
+
+      const isPlan = Boolean(event && (event.planZone || (event.eventType && (String(event.eventType).toLowerCase().includes('planzone') || event.eventType === 'PlanZone'))));
+      if (isPlan) handlePlanZoneEvent(event);
     } catch (e) { console.error('failed parsing core event', e); }
   });
 
