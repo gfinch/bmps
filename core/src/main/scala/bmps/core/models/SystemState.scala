@@ -8,5 +8,5 @@ case class SystemState(
     direction: Direction,
     swingPoints: List[SwingPoint],
     planZones: List[PlanZone] = List.empty,
-    liquidityZones: List[DaytimeExtreme] = List.empty
+    daytimeExtremes: List[DaytimeExtreme] = List.empty
 )
