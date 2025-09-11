@@ -1,12 +1,37 @@
 // Live-only frontend: consume candle events from core's embedded WS and apply to chart.
 // Uses the global `LightweightCharts` UMD bundle loaded by index.html.
 
-const chartContainer = document.getElementById('chart');
+const rootChartEl = document.getElementById('chart');
 
-function createChart() {
-  const width = chartContainer.clientWidth;
-  const height = Math.max(200, chartContainer.clientHeight);
-  return LightweightCharts.createChart(chartContainer, {
+// We will render two chart views inside the root element: the Plan chart (default visible)
+// and an (initially empty) Trade chart. Most existing code expects `chartContainer` to
+// refer to the visible chart container; set that to the Plan view so little else needs
+// to change.
+const planView = document.createElement('div');
+planView.id = 'planChartView';
+planView.style.position = 'relative';
+planView.style.width = '100%';
+planView.style.height = '100%';
+// Trade view is created and kept hidden until the user clicks Trade
+const tradeView = document.createElement('div');
+tradeView.id = 'tradeChartView';
+tradeView.style.position = 'relative';
+tradeView.style.width = '100%';
+tradeView.style.height = '100%';
+tradeView.style.display = 'none';
+// append plan then trade into the root container
+if (rootChartEl) {
+  rootChartEl.appendChild(planView);
+  rootChartEl.appendChild(tradeView);
+}
+
+// Keep chartContainer referencing the Plan view to preserve existing logic
+const chartContainer = planView;
+
+function createChart(container = chartContainer) {
+  const width = container.clientWidth;
+  const height = Math.max(200, container.clientHeight);
+  return LightweightCharts.createChart(container, {
     width,
     height,
     layout: { backgroundColor: '#ffffff', textColor: '#333' },
@@ -31,6 +56,10 @@ function createChart() {
 }
 
 let chart = createChart();
+// create a second, empty Trade chart on the hidden tradeView. We'll show it when
+// the user first clicks Trade. Keep the instance so we can toggle visibility.
+let tradeChart = null;
+try { tradeChart = createChart(tradeView); } catch (e) { tradeChart = null; }
 
 // redraw overlay when visible time range changes (user scroll/zoom)
 try {
@@ -423,11 +452,30 @@ function toBarFromCandle(obj) {
 
 function connectCoreWS(url = 'ws://localhost:9001') {
   const ws = new WebSocket(url);
+  // buffer for raw incoming messages until user starts processing them
   const msgBuffer = [];
   let started = false;
+  // pending speed message to send when WS opens if changed before connect
+  let pendingSpeed = null;
+
+  // Global app state: 'initial' | 'planning' | 'trading'
+  const GlobalState = {
+    INITIAL: 'initial',
+    PLANNING: 'planning',
+    TRADING: 'trading'
+  };
+  // current state (initialized to Initial on first load)
+  let currentState = GlobalState.INITIAL;
+
+  // store parsed events separated by state
+  const stateEvents = {
+    [GlobalState.PLANNING]: [],
+    [GlobalState.TRADING]: []
+  };
 
   const statusEl = document.getElementById('status');
-  const startBtn = document.getElementById('startBtn');
+  const planBtn = document.getElementById('planBtn');
+  const tradeBtn = document.getElementById('tradeBtn');
   const datePicker = document.getElementById('datePicker');
     const speedSlider = document.getElementById('speedSlider');
     const speedValue = document.getElementById('speedValue');
@@ -446,9 +494,21 @@ function connectCoreWS(url = 'ws://localhost:9001') {
     let replaySpeed = 1.0;
     if (speedSlider && speedValue) {
       speedValue.textContent = `${speedSlider.value}x`;
+      // disable speed control while in INITIAL state
+      if (currentState === GlobalState.INITIAL) speedSlider.disabled = true;
       speedSlider.addEventListener('input', (ev) => {
         replaySpeed = ev.target.value;
         speedValue.textContent = `${replaySpeed}x`;
+        // send speed update to server/app
+        try {
+          const msg = { cmd: 'SPEED', speed: Number(replaySpeed) };
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify(msg));
+          } else {
+            // store the latest speed to send when connection opens
+            pendingSpeed = msg;
+          }
+        } catch (e) { console.warn('failed send SPEED', e); }
       });
     }
 
@@ -464,6 +524,8 @@ function connectCoreWS(url = 'ws://localhost:9001') {
       const ev = msgBuffer.shift();
       try {
         const event = JSON.parse(ev);
+  // store by current global state
+  try { stateEvents[currentState].push(event); } catch (_) {}
         const isCandle = Boolean(event && (event.candle || (event.eventType && (String(event.eventType).includes('Candle') || event.eventType === 'Candle'))));
         if (isCandle) {
           const bar = toBarFromCandle(event);
@@ -486,8 +548,28 @@ function connectCoreWS(url = 'ws://localhost:9001') {
 
   ws.addEventListener('open', () => {
     console.log('Connected to core WS');
-    statusEl.textContent = 'Connected (waiting)';
-    startBtn.disabled = false;
+    statusEl.textContent = `Connected (state=${currentState})`;
+    // initialize UI buttons based on currentState
+    if (currentState === GlobalState.INITIAL) {
+      // allow planning, but disable Trade and speed until Plan is clicked
+      if (planBtn) planBtn.disabled = false;
+      if (tradeBtn) tradeBtn.disabled = true;
+      if (speedSlider) speedSlider.disabled = true;
+    } else if (currentState === GlobalState.PLANNING) {
+      if (planBtn) planBtn.disabled = true;
+      if (tradeBtn) tradeBtn.disabled = false;
+      if (speedSlider) speedSlider.disabled = false;
+    } else if (currentState === GlobalState.TRADING) {
+      // in trading state both buttons are enabled but their handlers are inert
+      if (planBtn) planBtn.disabled = false;
+      if (tradeBtn) tradeBtn.disabled = false;
+      if (speedSlider) speedSlider.disabled = false;
+    }
+    // flush any pending speed change made before the socket opened
+    if (pendingSpeed) {
+      try { ws.send(JSON.stringify(pendingSpeed)); } catch (_) {}
+      pendingSpeed = null;
+    }
   });
 
   ws.addEventListener('message', (ev) => {
@@ -499,6 +581,8 @@ function connectCoreWS(url = 'ws://localhost:9001') {
     }
     try {
       const event = JSON.parse(ev.data);
+  // store incoming events per current state
+  try { stateEvents[currentState].push(event); } catch (_) {}
       const isCandle = Boolean(event && (event.candle || (event.eventType && (String(event.eventType).includes('Candle') || event.eventType === 'Candle'))));
       if (isCandle) {
         const bar = toBarFromCandle(event);
@@ -526,19 +610,84 @@ function connectCoreWS(url = 'ws://localhost:9001') {
   ws.addEventListener('close', () => { console.log('WS closed, reconnecting in 2s'); statusEl.textContent = 'Disconnected'; setTimeout(() => connectCoreWS(url), 2000); });
   ws.addEventListener('error', (e) => { console.error('WS error', e); statusEl.textContent = 'Error'; });
 
-  startBtn.addEventListener('click', () => {
-    if (started) return;
-    started = true;
-    // signal core that client is ready
-    const selectedDate = datePicker ? datePicker.value : '';
-  const connectMsg = { cmd: 'CONNECT', date: selectedDate, days };
-    try { ws.send(JSON.stringify(connectMsg)); } catch (e) { console.warn('failed send CONNECT', e); }
-  // Show selected simulation parameters in status
-  statusEl.textContent = `Running ${selectedDate || ''} days=${days} @ ${replaySpeed}x`;
-    startBtn.disabled = true;
-    // flush any buffered messages
-    flushBuffer();
+  // Plan button: tell core to start planning and keep the state as Planning
+  if (planBtn) planBtn.addEventListener('click', () => {
+    // If we're already in trading state, in new behavior Plan should toggle to Plan chart
+    if (currentState === GlobalState.TRADING) {
+      // toggle to Plan view without sending any server messages
+      showPlanView();
+      return;
+    }
+    // if websocket not open yet, ignore
+    try {
+      const selectedDate = datePicker ? datePicker.value : '';
+      const msg = { cmd: 'PLAN', date: selectedDate, days };
+      ws.send(JSON.stringify(msg));
+  statusEl.textContent = `Planned ${selectedDate || ''} days=${days} @ ${replaySpeed}x`;
+  // ensure state becomes planning and start processing incoming events
+  currentState = GlobalState.PLANNING;
+  started = true;
+  // disable plan button to avoid duplicate sends
+  if (planBtn) planBtn.disabled = true;
+  // enable trade button and speed control now that planning started
+  if (tradeBtn) tradeBtn.disabled = false;
+  if (speedSlider) speedSlider.disabled = false;
+  // flush any buffered messages
+  flushBuffer();
+  statusEl.textContent = `Connected (state=${currentState})`;
+    } catch (e) { console.warn('failed send PLAN', e); }
   });
+
+  // Trade button: tell core to start trading and switch global state to Trading
+  if (tradeBtn) tradeBtn.addEventListener('click', () => {
+    // allow the initial TRADE send when coming from Planning. Once in TRADING state
+    // subsequent clicks should toggle between the Trade and Plan charts without
+    // sending additional messages to the server.
+    if (currentState === GlobalState.TRADING) {
+      // toggle to Trade view
+      showTradeView();
+      return;
+    }
+    try {
+      const selectedDate = datePicker ? datePicker.value : '';
+      const msg = { cmd: 'TRADE', date: selectedDate, days };
+      ws.send(JSON.stringify(msg));
+  // switch global state to trading and start processing incoming events
+  currentState = GlobalState.TRADING;
+  started = true;
+  // per new behavior: enable both buttons, but their handlers will be no-ops while trading
+  if (planBtn) planBtn.disabled = false;
+  if (tradeBtn) tradeBtn.disabled = false;
+  if (speedSlider) speedSlider.disabled = false;
+  // flush any buffered messages
+  flushBuffer();
+  // show the Trade chart when we first enter TRADING
+  showTradeView();
+  statusEl.textContent = `Connected (state=${currentState})`;
+    } catch (e) { console.warn('failed send TRADE', e); }
+  });
+
+  // Helper to toggle views
+  function showTradeView() {
+    try {
+      // hide plan view, show trade view
+      if (planView) planView.style.display = 'none';
+      if (tradeView) tradeView.style.display = 'block';
+    } catch (e) { /* ignore */ }
+  }
+
+  function showPlanView() {
+    try {
+      if (tradeView) tradeView.style.display = 'none';
+      if (planView) planView.style.display = 'block';
+    } catch (e) { /* ignore */ }
+  }
+
+  // expose a small API to query currentState and events for debugging
+  window.__appState = {
+    getState: () => currentState,
+    getEvents: (state) => stateEvents[state || currentState]
+  };
 }
 
 connectCoreWS();
