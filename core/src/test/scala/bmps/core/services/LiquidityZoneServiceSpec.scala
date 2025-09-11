@@ -66,6 +66,53 @@ class LiquidityZoneServiceSpec extends AnyFunSuite {
     assert(!sAfterOut.daytimeExtremes.exists(_.description.startsWith("London -")))
 
   }
+
+  test("ending a DaytimeExtreme High when another High surpasses it") {
+    val tradingDay = LocalDate.of(2020, 1, 2)
+
+    // Create a New York high first (previous day 10:00)
+    val nyTs = tsFor(tradingDay.minusDays(1), 10, 0)
+    val nyC = Candle(lvl(100f), lvl(110f), lvl(90f), lvl(105f), nyTs, CandleDuration.OneMinute)
+    val state1 = SystemState(tradingDay = tradingDay, candles = List(nyC), direction = Direction.Up, swingPoints = List.empty)
+    val (sAfterNy, eventsNy) = LiquidityZoneService.processLiquidityZones(state1)
+
+    val nyHigh = sAfterNy.daytimeExtremes.find(_.description.startsWith("New York - High")).get
+    assert(nyHigh.endTime.isEmpty)
+
+    // Now an Asia candle with a higher high should cause the New York high to end
+    val asiaTs = tsFor(tradingDay.minusDays(1), 19, 0) // Asia session
+    val asiaC = Candle(lvl(200f), lvl(120f), lvl(195f), lvl(200f), asiaTs, CandleDuration.OneMinute)
+    val state2 = sAfterNy.copy(candles = sAfterNy.candles :+ asiaC)
+    val (sAfterAsia, eventsAsia) = LiquidityZoneService.processLiquidityZones(state2)
+
+    val nyHighAfter = sAfterAsia.daytimeExtremes.find(_.description.startsWith("New York - High")).get
+    assert(nyHighAfter.endTime.isDefined, "NY high should be end-dated when Asia high surpasses it")
+    // events should include the end update for NY high
+    assert(eventsAsia.exists(_.daytimeExtreme.exists(de => de.description.startsWith("New York - High") && de.endTime.isDefined)))
+  }
+
+  test("ending a DaytimeExtreme Low when another Low surpasses it (lower)") {
+    val tradingDay = LocalDate.of(2020, 1, 2)
+
+    // Create a New York low first (previous day 10:00)
+    val nyTs = tsFor(tradingDay.minusDays(1), 10, 0)
+    val nyC = Candle(lvl(100f), lvl(110f), lvl(90f), lvl(105f), nyTs, CandleDuration.OneMinute)
+    val state1 = SystemState(tradingDay = tradingDay, candles = List(nyC), direction = Direction.Up, swingPoints = List.empty)
+    val (sAfterNy, _) = LiquidityZoneService.processLiquidityZones(state1)
+
+    val nyLow = sAfterNy.daytimeExtremes.find(_.description.startsWith("New York - Low")).get
+    assert(nyLow.endTime.isEmpty)
+
+    // Now an Asia candle with a lower low should cause the New York low to end
+    val asiaTs = tsFor(tradingDay.minusDays(1), 19, 0) // Asia session
+    val asiaC = Candle(lvl(50f), lvl(55f), lvl(80f), lvl(52f), asiaTs, CandleDuration.OneMinute)
+    val state2 = sAfterNy.copy(candles = sAfterNy.candles :+ asiaC)
+    val (sAfterAsia, eventsAsia) = LiquidityZoneService.processLiquidityZones(state2)
+
+    val nyLowAfter = sAfterAsia.daytimeExtremes.find(_.description.startsWith("New York - Low")).get
+    assert(nyLowAfter.endTime.isDefined, "NY low should be end-dated when Asia low goes lower")
+    assert(eventsAsia.exists(_.daytimeExtreme.exists(de => de.description.startsWith("New York - Low") && de.endTime.isDefined)))
+  }
 }
 
 

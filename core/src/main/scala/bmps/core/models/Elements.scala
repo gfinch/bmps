@@ -109,7 +109,7 @@ object ExtremeType {
     case object Low extends ExtremeType
 }
 
-case class DaytimeExtreme(level: Level, extremeType: ExtremeType, timestamp: Long, description: String)
+case class DaytimeExtreme(level: Level, extremeType: ExtremeType, timestamp: Long, endTime: Option[Long], description: String)
 
 sealed trait OrderStatus
 object OrderStatus {

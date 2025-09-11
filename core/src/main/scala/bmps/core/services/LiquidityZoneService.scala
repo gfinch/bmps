@@ -55,7 +55,7 @@ object LiquidityZoneService {
 
                 // create if missing
                 if (!map.contains(lowDesc)) {
-                    val de = DaytimeExtreme(Level(lastCandle.low.value), ExtremeType.Low, lastCandle.timestamp, lowDesc)
+                    val de = DaytimeExtreme(Level(lastCandle.low.value), ExtremeType.Low, lastCandle.timestamp, None, lowDesc)
                     println(s"[LiquidityZoneService] creating extreme $lowDesc -> ${de.level}")
                     map.put(lowDesc, de)
                 } else {
@@ -64,7 +64,7 @@ object LiquidityZoneService {
                 }
 
                 if (!map.contains(highDesc)) {
-                    val de = DaytimeExtreme(Level(lastCandle.high.value), ExtremeType.High, lastCandle.timestamp, highDesc)
+                    val de = DaytimeExtreme(Level(lastCandle.high.value), ExtremeType.High, lastCandle.timestamp, None, highDesc)
                     println(s"[LiquidityZoneService] creating extreme $highDesc -> ${de.level}")
                     map.put(highDesc, de)
                 } else {
@@ -82,6 +82,31 @@ object LiquidityZoneService {
         ensureAndUpdate("Asia", asiaOpenPrev, asiaClose)
         ensureAndUpdate("London", londonOpen, londonClose)
 
+        // After creating/updating extremes for the current candle, end-date any existing extremes
+        // that are now surpassed by another daytime extreme of the same type.
+        val origMap = state.daytimeExtremes.map(de => de.description -> de).toMap
+
+        // For every original extreme that is still open, if any other updated extreme of the
+        // same ExtremeType has moved past it (higher for High, lower for Low), then close it
+        // at the current candle timestamp.
+        for ((desc, orig) <- origMap if orig.endTime.isEmpty) {
+            // find any other updated extreme that surpasses the original
+            val others = map.values.filter(de => de.description != desc && de.extremeType == orig.extremeType)
+            val shouldClose = orig.extremeType match {
+                // only consider 'other' extremes that were created/updated after the original extreme's start
+                case ExtremeType.High => others.exists(o => o.timestamp > orig.timestamp && o.level.value > orig.level.value)
+                case ExtremeType.Low  => others.exists(o => o.timestamp > orig.timestamp && o.level.value < orig.level.value)
+            }
+
+            if (shouldClose) {
+                println(s"[LiquidityZoneService] ending extreme $desc because another extreme surpassed it at ts=$ts")
+                // update the map entry to include endTime if not already set
+                map.get(desc).foreach { cur =>
+                    if (cur.endTime.isEmpty) map.put(desc, cur.copy(endTime = Some(ts)))
+                }
+            }
+        }
+
         map.values.toList
     }
 
@@ -91,15 +116,21 @@ object LiquidityZoneService {
         val origMap = original.map(de => de.description -> de).toMap
         val updMap = updated.map(de => de.description -> de).toMap
 
-        // For every updated extreme, emit an event when it's new or its level changed.
+
+        // For every updated extreme, emit an event when it's new, its level changed, or its endTime changed.
         val createdOrChanged = updated.filter { de =>
             origMap.get(de.description) match {
                 case None =>
                     println(s"[LiquidityZoneService] detected new daytime extreme: ${de.description} = ${de.level}")
                     true
                 case Some(orig) =>
-                    if (orig.level.value != de.level.value) {
+                    val levelChanged = orig.level.value != de.level.value
+                    val endTimeChanged = orig.endTime != de.endTime
+                    if (levelChanged) {
                         println(s"[LiquidityZoneService] detected changed daytime extreme: ${de.description} ${orig.level} -> ${de.level}")
+                        true
+                    } else if (endTimeChanged) {
+                        println(s"[LiquidityZoneService] detected ended daytime extreme: ${de.description} endTime ${orig.endTime} -> ${de.endTime}")
                         true
                     } else false
             }
