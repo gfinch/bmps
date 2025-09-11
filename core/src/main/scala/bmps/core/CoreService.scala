@@ -46,7 +46,7 @@ class CoreService(params: InitParams, parquetPath: String = "core/src/main/resou
 
   // Public events stream so other modules (web) can consume core events directly.
   def events: Stream[IO, Event] = {
-    val initialState = SystemState(Nil, Direction.Up, Nil)
+    val initialState = SystemState(params.tradingDate, Nil, Direction.Up, Nil)
     for {
       // read all candles (delegated to ParquetSource)
       candles <- Stream.eval(ParquetSource.readParquetAsCandles(parquetPath))
@@ -221,7 +221,7 @@ class CoreService(params: InitParams, parquetPath: String = "core/src/main/resou
 
     // Build events stream from an explicit list of candles (like the existing `events` but parameterized)
     def eventsFromCandles(candles: List[Candle]): Stream[IO, Event] = {
-      val initialState = SystemState(Nil, Direction.Up, Nil)
+      val initialState = SystemState(params.tradingDate, Nil, Direction.Up, Nil)
       for {
         stateRef <- Stream.eval(Ref.of[IO, SystemState](initialState))
         event <- Stream.emits(candles).covary[IO].evalMap { candle =>
@@ -231,7 +231,7 @@ class CoreService(params: InitParams, parquetPath: String = "core/src/main/resou
             val (updatedState, zoneEvents) = PlanZoneService.processPlanZones(withSwings)
 
             zoneEventBuffer.appendAll(zoneEvents)
-            zoneEventBuffer.map(z => s"${z.planZone.get.planZoneType} ${z.planZone.get.startTime} ${z.planZone.get.endTime} .... ${z.planZone.get}").foreach(println)
+            // zoneEventBuffer.map(z => s"${z.planZone.get.planZoneType} ${z.planZone.get.startTime} ${z.planZone.get.endTime} .... ${z.planZone.get}").foreach(println)
 
             val newSwingPoints = updatedState.swingPoints.drop(state.swingPoints.length)
             (updatedState, (candle, newSwingPoints, zoneEvents))
@@ -269,7 +269,7 @@ class CoreService(params: InitParams, parquetPath: String = "core/src/main/resou
                     try {
                       val readyClients = conns.asScala.filter(c => Option(readyMap.get(c)).contains(java.lang.Boolean.TRUE))
                       if (readyClients.nonEmpty) {
-                        println(s"sending event to ${readyClients.size} clients: ${json.take(200)}")
+                        println(s"sending event to ${readyClients.size} clients: ${json.take(400)}")
                         readyClients.foreach { c => try c.send(json) catch { case _: Throwable => () } }
                       } else {
                         println(s"buffering event: ${json.take(200)}")
