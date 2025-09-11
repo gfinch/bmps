@@ -27,6 +27,7 @@ import java.time.LocalDate
 import java.time.format.DateTimeParseException
 import bmps.core.services.PlanZoneService
 import scala.collection.mutable.ListBuffer
+import bmps.core.services.LiquidityZoneService
 
 /**
  * CoreService reads market data (currently from a Parquet file via DuckDB),
@@ -54,19 +55,23 @@ class CoreService(params: InitParams, parquetPath: String = "core/src/main/resou
       // keep mutable state in Ref so each candle can be processed sequentially
       stateRef <- Stream.eval(Ref.of[IO, SystemState](initialState))
 
-      // publish each candle and any newly discovered swing points
+      // publish each candle and any newly discovered swing points, plan zones, and liquidity events
       event <- Stream.emits(candles).covary[IO].evalMap { candle =>
-        // Atomically update state and compute new swings
+        // Atomically update state and compute new swings, plan zones, and liquidity zones
         stateRef.modify { state =>
           val updatedCandles = state.candles :+ candle
-          val updatedState = swingService.computeSwings(state.copy(candles = updatedCandles))
+          val withSwings = swingService.computeSwings(state.copy(candles = updatedCandles))
+          val (withZones, zoneEvents) = PlanZoneService.processPlanZones(withSwings)
+          val (updatedState, liquidEvents) = LiquidityZoneService.processLiquidityZones(withZones)
+
           val newSwingPoints = updatedState.swingPoints.drop(state.swingPoints.length)
-          (updatedState, (candle, newSwingPoints))
+          (updatedState, (candle, newSwingPoints, zoneEvents, liquidEvents))
         }
-      }.flatMap { case (candle, newSwings) =>
-        val candleEvent = Event(EventType.Candle, candle.timestamp, Some(candle), None)
-        val swingEvents = newSwings.map(sp => Event(EventType.SwingPoint, sp.timestamp, None, Some(sp)))
-        Stream.emit(candleEvent) ++ Stream.emits(swingEvents)
+        }.flatMap { case (candle, newSwings, zoneEvents, liquidEvents) =>
+        val candleEvent = Event.fromCandle(candle)
+        val swingEvents = newSwings.map(sp => Event.fromSwingPoint(sp))
+        if (liquidEvents.nonEmpty) println(s"[CoreService] candle ${candle.timestamp} produced ${liquidEvents.size} liquidity events")
+        Stream.emit(candleEvent) ++ Stream.emits(swingEvents) ++ Stream.emits(zoneEvents) ++ Stream.emits(liquidEvents)
       }
     } yield event
   }
@@ -220,27 +225,26 @@ class CoreService(params: InitParams, parquetPath: String = "core/src/main/resou
     val zoneEventBuffer: ListBuffer[Event] = ListBuffer.empty[Event]
 
     // Build events stream from an explicit list of candles (like the existing `events` but parameterized)
-    def eventsFromCandles(candles: List[Candle]): Stream[IO, Event] = {
-      val initialState = SystemState(params.tradingDate, Nil, Direction.Up, Nil)
+    // Accept the trading day so downstream services (zones/extremes) can compute time windows correctly.
+    def eventsFromCandles(candles: List[Candle], tradingDay: LocalDate): Stream[IO, Event] = {
+      val initialState = SystemState(tradingDay, Nil, Direction.Up, Nil)
       for {
         stateRef <- Stream.eval(Ref.of[IO, SystemState](initialState))
         event <- Stream.emits(candles).covary[IO].evalMap { candle =>
           stateRef.modify { state =>
             val updatedCandles = state.candles :+ candle
             val withSwings = swingService.computeSwings(state.copy(candles = updatedCandles))
-            val (updatedState, zoneEvents) = PlanZoneService.processPlanZones(withSwings)
-
-            zoneEventBuffer.appendAll(zoneEvents)
-            // zoneEventBuffer.map(z => s"${z.planZone.get.planZoneType} ${z.planZone.get.startTime} ${z.planZone.get.endTime} .... ${z.planZone.get}").foreach(println)
+            val (withZones, zoneEvents) = PlanZoneService.processPlanZones(withSwings)
+            val (updatedState, liquidEvents) = LiquidityZoneService.processLiquidityZones(withZones)
 
             val newSwingPoints = updatedState.swingPoints.drop(state.swingPoints.length)
-            (updatedState, (candle, newSwingPoints, zoneEvents))
+            (updatedState, (candle, newSwingPoints, zoneEvents, liquidEvents))
           }
-        }.flatMap { case (candle, newSwings, zoneEvents) =>
+        }.flatMap { case (candle, newSwings, zoneEvents, liquidEvents) =>
           val candleEvent = Event.fromCandle(candle)
           val swingEvents = newSwings.map(sp => Event.fromSwingPoint(sp))
 
-          Stream.emit(candleEvent) ++ Stream.emits(swingEvents) ++ Stream.emits(zoneEvents)
+          Stream.emit(candleEvent) ++ Stream.emits(swingEvents) ++ Stream.emits(zoneEvents) ++ Stream.emits(liquidEvents)
         }
       } yield event
     }
@@ -256,14 +260,20 @@ class CoreService(params: InitParams, parquetPath: String = "core/src/main/resou
         val prevDates = computePrevTradingDates(reqDate, reqDays)
         if (prevDates.isEmpty) IO.unit else {
                 // compute start (inclusive) and end (exclusive) epoch millis covering the two previous trading days
+                // End should be 9:30 AM Eastern on the trading day (market open), not the start of the trading day.
                 val sorted = prevDates.toList.sorted
                 val startDate = sorted.min
-                val endDate = sorted.max.plusDays(1)
+                // determine the requested trading day; fall back to params.tradingDate if parsing fails
+                val tradingDay = try { LocalDate.parse(reqDate) } catch { case _: Throwable => params.tradingDate }
+                val eastern = ZoneId.of("America/New_York")
                 val startMs = startDate.atStartOfDay(zoneId).toInstant.toEpochMilli
-                val endMs = endDate.atStartOfDay(zoneId).toInstant.toEpochMilli
+                // end at 9:30 AM Eastern on tradingDay
+                val endMs = tradingDay.atTime(9, 30).atZone(eastern).toInstant.toEpochMilli
                 ParquetSource.readParquetAsCandlesInRange(parquetPath, startMs, endMs, zoneId).flatMap { candlesInRange =>
                   println(s"Parquet read: candlesInRange=${candlesInRange.size} for dates=${prevDates}")
-                  eventsFromCandles(candlesInRange).evalMap { event =>
+                  // parse requested date into LocalDate to pass to eventsFromCandles
+                  val reqLocal = tradingDay
+                  eventsFromCandles(candlesInRange, reqLocal).evalMap { event =>
                   val json = event.asJson.noSpaces
                   IO {
                     try {

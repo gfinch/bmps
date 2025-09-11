@@ -101,7 +101,7 @@ object PlanZoneService {
                     while (i >= 0) {
                         val candidate = buf(i)
                         // if (candidate.planZoneType == last.planZoneType && (candidate.engulfs(last) || candidate.overlaps(last))) {
-                        if (candidate.planZoneType == last.planZoneType && candidate.engulfs(last)) {
+                        if (candidate.planZoneType == last.planZoneType && last.engulfs(candidate)) {
                             // Use PlanZone.mergeWith with later-start semantics so we retain a closed older zone
                             val (merged, closedOlder) = candidate.mergeWith(last)
 

@@ -4,7 +4,7 @@ import bmps.core.models.SystemState
 import bmps.core.models.SwingPoint
 import bmps.core.models.Direction
 
-class SwingService(minConfirmations: Int = 3) {
+class SwingService(minConfirmations: Int = 1) {
 
     def computeSwings(state: SystemState): SystemState = {
         val candles = state.candles

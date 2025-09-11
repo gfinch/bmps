@@ -12,6 +12,20 @@ function createChart() {
     layout: { backgroundColor: '#ffffff', textColor: '#333' },
     grid: { vertLines: { color: '#f0f3f7' }, horzLines: { color: '#f0f3f7' } },
     rightPriceScale: { scaleMargins: { top: 0.1, bottom: 0.1 } },
+    // force x-axis labels to show in US/Eastern (New York) timezone
+    localization: {
+      timeFormatter: (time) => {
+        try {
+          // time is seconds since epoch (number) for this app
+          const ts = Number(time) * 1000;
+          const d = new Date(ts);
+          // show hours:minutes:seconds in 24-hour format
+          return new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(d);
+        } catch (e) {
+          return String(time);
+        }
+      }
+    },
     timeScale: { timeVisible: true, secondsVisible: true }
   });
 }
@@ -32,6 +46,8 @@ let swingMarkers = [];
 // plan zones keyed by generated id -> { area, top, bottom, meta }
 const planZones = new Map();
 let lastBarTime = null; // seconds
+// daytime extremes keyed by description -> { time, value, type, description }
+const daytimeExtremes = new Map();
 
 function safeNumber(v) {
   if (v === undefined || v === null) return null;
@@ -196,6 +212,55 @@ function drawZones() {
       overlayCtx.stroke();
       overlayCtx.restore();
     });
+
+      // draw daytime extremes as solid horizontal lines from their timestamp to the right edge
+      try {
+        const chartWidth = chartContainer.clientWidth;
+        daytimeExtremes.forEach((de) => {
+          try {
+            const t = de.time; // seconds
+            const x0 = timeScale.timeToCoordinate(t);
+            if (x0 === null) return; // not visible
+            const y = candleSeries.priceToCoordinate(de.value);
+            if (y === null) return;
+            // force daytime extreme lines to black for both highs and lows
+            const strokeColor = '#000000';
+
+            // derive a short abbreviation for common descriptions
+            const desc = String(de.description || '');
+            let abbrev = '';
+            try {
+              if (desc.toLowerCase().includes('london')) abbrev = 'L';
+              else if (desc.toLowerCase().includes('asia')) abbrev = 'A';
+              else if (desc.toLowerCase().includes('new york') || desc.toLowerCase().includes('newyork') || desc.toUpperCase().includes('NY')) abbrev = 'NY';
+              else if (desc.length) abbrev = desc.trim()[0].toUpperCase();
+            } catch (_) { abbrev = '' }
+
+            overlayCtx.save();
+            // draw the horizontal line
+            overlayCtx.strokeStyle = strokeColor;
+            overlayCtx.lineWidth = 2;
+            overlayCtx.beginPath();
+            overlayCtx.moveTo(x0, y);
+            overlayCtx.lineTo(chartWidth, y);
+            overlayCtx.stroke();
+
+            // draw the abbreviation just to the left of the line start
+            if (abbrev) {
+              overlayCtx.fillStyle = '#000000';
+              // choose a readable font size; uses CSS pixels
+              overlayCtx.font = '12px Arial, Helvetica, sans-serif';
+              overlayCtx.textBaseline = 'middle';
+              overlayCtx.textAlign = 'right';
+              // position a few pixels left of the line start, but keep inside canvas
+              const textX = Math.max(4, x0 - 6);
+              overlayCtx.fillText(abbrev, textX, y);
+            }
+
+            overlayCtx.restore();
+          } catch (e) { /* ignore single de failures */ }
+        });
+      } catch (e) { /* ignore drawing extremes */ }
   // no-op: removed debug logging
   } catch (e) {
     console.error('failed drawing zone overlays', e);
@@ -274,6 +339,23 @@ function handlePlanZoneEvent(event) {
       planZones.delete(firstKey);
     }
   } catch (e) { console.error('failed handling plan zone event', e); }
+}
+
+function handleDaytimeExtremeEvent(event) {
+  try {
+    const de = (event && (event.daytimeExtreme || event.daytime_extreme)) ? (event.daytimeExtreme || event.daytime_extreme) : event;
+    if (!de) return;
+    const tsMs = de.timestamp || event.timestamp || Date.now();
+    const time = Math.floor(Number(tsMs) / 1000);
+    const level = safeNumber(de.level || de.value || (de.level && de.level.value));
+    if (level === null || Number.isNaN(level)) return;
+    const desc = de.description || (de.extremeType ? `${de.extremeType} - ${time}` : `DaytimeExtreme - ${time}`);
+    const typeRaw = (de.extremeType || de.extreme || '').toString();
+    // store keyed by description
+    daytimeExtremes.set(desc, { time, value: Number(level), type: typeRaw, description: desc });
+    // trigger redraw
+    drawZones();
+  } catch (e) { console.error('failed handling daytime extreme event', e); }
 }
 
 function resizeChart() {
@@ -363,6 +445,8 @@ function connectCoreWS(url = 'ws://localhost:9001') {
         }
         const isPlan = Boolean(event && (event.planZone || (event.eventType && (String(event.eventType).toLowerCase().includes('planzone') || String(event.eventType) === 'PlanZone'))));
         if (isPlan) handlePlanZoneEvent(event);
+  const isDaytime = Boolean(event && (event.daytimeExtreme || (event.eventType && (String(event.eventType).toLowerCase().includes('daytime') || String(event.eventType) === 'DaytimeExtreme'))));
+  if (isDaytime) handleDaytimeExtremeEvent(event);
       } catch (e) { console.error('failed parsing buffered core event', e); }
     }
   }
@@ -401,6 +485,8 @@ function connectCoreWS(url = 'ws://localhost:9001') {
 
       const isPlan = Boolean(event && (event.planZone || (event.eventType && (String(event.eventType).toLowerCase().includes('planzone') || event.eventType === 'PlanZone'))));
       if (isPlan) handlePlanZoneEvent(event);
+  const isDaytime = Boolean(event && (event.daytimeExtreme || (event.eventType && (String(event.eventType).toLowerCase().includes('daytime') || String(event.eventType) === 'DaytimeExtreme'))));
+  if (isDaytime) handleDaytimeExtremeEvent(event);
     } catch (e) { console.error('failed parsing core event', e); }
   });
 
