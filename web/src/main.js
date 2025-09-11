@@ -113,6 +113,18 @@ function setZoneSeriesData(entry) {
   const bottomPoints = [ { time: start, value: meta.low }, { time: safeEnd, value: meta.low } ];
   try {
     // set the top/bottom lines (we'll draw fills on the overlay canvas)
+    // Ensure line series colors reflect closed/open state (closed -> greys)
+    const isClosed = Boolean(meta.endTime);
+    // derive colors consistent with drawZones: default colored lines for open supply/demand
+    const isSupply = (meta.type || '').includes('supply');
+    let seriesTopColor = isSupply ? '#ff0000' : '#00b050';
+    let seriesBottomColor = isSupply ? '#00b050' : '#ff0000';
+    if (isClosed) {
+      seriesTopColor = '#bdbdbd';
+      seriesBottomColor = '#9e9e9e';
+    }
+    try { if (typeof top.applyOptions === 'function') top.applyOptions({ color: seriesTopColor }); } catch (_) {}
+    try { if (typeof bottom.applyOptions === 'function') bottom.applyOptions({ color: seriesBottomColor }); } catch (_) {}
     top.setData(topPoints);
     bottom.setData(bottomPoints);
     // trigger overlay redraw
@@ -183,16 +195,26 @@ function drawZones() {
       if (width <= 0 || height <= 0) return;
       // choose fill and stroke colors
       const isSupply = (meta.type || '').includes('supply');
+      // closed zones (have endTime) should be drawn faintly in grey: opaque grey top/bottom lines
+      // and a very light transparent grey fill so they remain visible but subtle.
+      const isClosed = Boolean(meta.endTime);
       let topColor = '#00b050';
       let bottomColor = '#ff0000';
       if (isSupply) {
         topColor = '#ff0000';
         bottomColor = '#00b050';
       }
-      // choose distinct translucent fills so supply/demand are visually different
-      const supplyFill = 'rgba(180,130,240,0.18)'; // purple for supply
-      const demandFill = 'rgba(93, 146, 225, 0.12)'; // blue for demand
-      const fillStyle = isSupply ? supplyFill : demandFill;
+      // choose distinct translucent fills so supply/demand are visually different for open zones
+      const supplyFill = 'rgba(180,130,240,0.18)'; // purple for supply (open)
+      const demandFill = 'rgba(93, 146, 225, 0.18)'; // blue for demand (open)
+      // styling for closed zones: faint grey lines + very light grey fill
+      const closedColor = '#bdbdbd';   // light grey (opaque)
+      const closedFill = 'rgba(160,160,160,0.1)'; // very faint grey fill
+      const fillStyle = isClosed ? closedFill : (isSupply ? supplyFill : demandFill);
+      if (isClosed) {
+        topColor = closedColor;
+        bottomColor = closedColor;
+      }
       overlayCtx.save();
       overlayCtx.fillStyle = fillStyle;
       overlayCtx.fillRect(x, y, width, height);
@@ -213,7 +235,8 @@ function drawZones() {
       overlayCtx.restore();
     });
 
-      // draw daytime extremes as solid horizontal lines from their timestamp to the right edge
+      // draw daytime extremes as solid horizontal lines from their timestamp to their endTime (if ended),
+      // otherwise continue the line to the right edge of the chart.
       try {
         const chartWidth = chartContainer.clientWidth;
         daytimeExtremes.forEach((de) => {
@@ -237,12 +260,19 @@ function drawZones() {
             } catch (_) { abbrev = '' }
 
             overlayCtx.save();
-            // draw the horizontal line
+            // draw the horizontal line: to endTime if provided, otherwise to right edge
+            let x1 = chartWidth;
+            if (de.endTime) {
+              try {
+                const endCoord = timeScale.timeToCoordinate(de.endTime);
+                if (endCoord !== null) x1 = endCoord;
+              } catch (_) { /* fall back to chartWidth */ }
+            }
             overlayCtx.strokeStyle = strokeColor;
             overlayCtx.lineWidth = 2;
             overlayCtx.beginPath();
             overlayCtx.moveTo(x0, y);
-            overlayCtx.lineTo(chartWidth, y);
+            overlayCtx.lineTo(x1, y);
             overlayCtx.stroke();
 
             // draw the abbreviation just to the left of the line start
@@ -345,14 +375,17 @@ function handleDaytimeExtremeEvent(event) {
   try {
     const de = (event && (event.daytimeExtreme || event.daytime_extreme)) ? (event.daytimeExtreme || event.daytime_extreme) : event;
     if (!de) return;
-    const tsMs = de.timestamp || event.timestamp || Date.now();
-    const time = Math.floor(Number(tsMs) / 1000);
+  const tsMs = de.timestamp || event.timestamp || Date.now();
+  const time = Math.floor(Number(tsMs) / 1000);
     const level = safeNumber(de.level || de.value || (de.level && de.level.value));
     if (level === null || Number.isNaN(level)) return;
     const desc = de.description || (de.extremeType ? `${de.extremeType} - ${time}` : `DaytimeExtreme - ${time}`);
     const typeRaw = (de.extremeType || de.extreme || '').toString();
     // store keyed by description
-    daytimeExtremes.set(desc, { time, value: Number(level), type: typeRaw, description: desc });
+  // capture optional endTime (ms) from payload; convert to seconds
+  const endMs = (de.endTime !== undefined && de.endTime !== null) ? de.endTime : null;
+  const endSec = endMs ? Math.floor(Number(endMs) / 1000) : null;
+  daytimeExtremes.set(desc, { time, value: Number(level), type: typeRaw, description: desc, endTime: endSec });
     // trigger redraw
     drawZones();
   } catch (e) { console.error('failed handling daytime extreme event', e); }
