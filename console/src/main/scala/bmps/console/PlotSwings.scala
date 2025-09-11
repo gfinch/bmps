@@ -6,6 +6,7 @@ import bmps.core.models._
 import bmps.core.services.SwingService
 import java.sql.{Connection, DriverManager, ResultSet}
 import java.time.Instant
+import java.time.LocalDate
 import java.time.Duration
 import java.nio.file.Paths
 import breeze.plot._
@@ -59,7 +60,7 @@ object PlotSwings extends IOApp.Simple {
         duration = CandleDuration.OneHour
       ))
       swingService = new SwingService(minConfirmations = 3)
-      initialState = SystemState(candles = candles, direction = Direction.Up, swingPoints = List.empty)
+  initialState = SystemState(tradingDay = LocalDate.now(), candles = candles, direction = Direction.Up, swingPoints = List.empty)
       finalState = swingService.computeSwings(initialState)
       _ <- IO {
         println(s"Computed ${finalState.swingPoints.length} swing points")

@@ -175,7 +175,7 @@ function drawZones() {
       }
       // choose distinct translucent fills so supply/demand are visually different
       const supplyFill = 'rgba(180,130,240,0.18)'; // purple for supply
-      const demandFill = 'rgba(160,230,160,0.12)'; // light green for demand
+      const demandFill = 'rgba(93, 146, 225, 0.12)'; // blue for demand
       const fillStyle = isSupply ? supplyFill : demandFill;
       overlayCtx.save();
       overlayCtx.fillStyle = fillStyle;

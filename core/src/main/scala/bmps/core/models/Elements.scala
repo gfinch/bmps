@@ -55,16 +55,28 @@ object PlanZoneType {
 
 case class PlanZone(planZoneType: PlanZoneType, low: Level, high: Level, startTime: Long, endTime: Option[Long] = None) {
     def closedOut(candle: Candle): PlanZone = {
-        if (planZoneType == PlanZoneType.Supply && candle.close < this.low) {
-            this.copy(endTime = Some(candle.timestamp))
-        } else this
+        if (endTime.isDefined) this else {
+            planZoneType match {
+                case PlanZoneType.Supply if candle.close > this.high =>
+                    this.copy(endTime = Some(candle.timestamp))
+                case PlanZoneType.Demand if candle.close < this.low =>
+                    this.copy(endTime = Some(candle.timestamp))
+                case _ => this
+            }
+        }
     }
 
-    def mergeWith(other: PlanZone): PlanZone = {
-        val newStartTime = Seq(this.startTime, other.startTime).max
+    def mergeWith(other: PlanZone): (PlanZone, PlanZone) = {
         val newLow = Seq(this.low.value, other.low.value).min
         val newHigh = Seq(this.high.value, other.high.value).max
-        PlanZone(planZoneType, Level(newLow), Level(newHigh), newStartTime)
+
+        val laterStart = Seq(this.startTime, other.startTime).max
+        val merged = PlanZone(planZoneType, Level(newLow), Level(newHigh), laterStart)
+
+        val closedOlder = if (this.startTime < other.startTime) this.copy(endTime = Some(laterStart))
+                                                else other.copy(endTime = Some(laterStart))
+
+        (merged, closedOlder)
     }
 
     def engulfs(other: PlanZone): Boolean = {
@@ -75,8 +87,11 @@ case class PlanZone(planZoneType: PlanZoneType, low: Level, high: Level, startTi
 
     def overlaps(other: PlanZone): Boolean = {
         if (planZoneType == other.planZoneType && endTime.isEmpty && other.endTime.isEmpty) {
-            if (high >= other.high && other.high >= low ||
-                high >= other.low && other.low >= low) true else false
+            val thisLow = this.low.value
+            val thisHigh = this.high.value
+            val otherLow = other.low.value
+            val otherHigh = other.high.value
+            if ((otherLow < thisHigh && otherHigh > thisLow)) true else false
         } else false
     }
 }
@@ -88,13 +103,13 @@ object PlanZone {
     }
 }
 
-sealed trait MaxType
-object MaxType {
-    case object High extends MaxType
-    case object Low extends MaxType
+sealed trait ExtremeType
+object ExtremeType {
+    case object High extends ExtremeType
+    case object Low extends ExtremeType
 }
 
-case class DaytimeMax(level: Level, maxType: MaxType, description: String)
+case class DaytimeExtreme(level: Level, extremeType: ExtremeType, description: String)
 
 sealed trait OrderStatus
 object OrderStatus {

@@ -1,8 +1,12 @@
 package bmps.core.models
 
+import java.time.LocalDate
+
 case class SystemState(
+    tradingDay: LocalDate,
     candles: List[Candle],
     direction: Direction,
     swingPoints: List[SwingPoint],
-    planZones: List[PlanZone] = List.empty
+    planZones: List[PlanZone] = List.empty,
+    liquidityZones: List[DaytimeExtreme] = List.empty
 )
