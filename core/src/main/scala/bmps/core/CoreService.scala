@@ -85,7 +85,7 @@ class CoreService(params: InitParams, parquetPath: String = "core/src/main/resou
   val readyMap = new java.util.concurrent.ConcurrentHashMap[org.java_websocket.WebSocket, java.lang.Boolean]()
   val eventBuffer = new java.util.concurrent.ConcurrentLinkedQueue[String]()
   val conns = java.util.Collections.newSetFromMap(new java.util.concurrent.ConcurrentHashMap[org.java_websocket.WebSocket, java.lang.Boolean]())
-  // queue to receive CONNECT commands (date) from clients; blocks the replay runner until a client requests a replay
+  // queue to receive PLAN commands (date) from clients; blocks the replay runner until a client requests a replay
   // queue receives strings of the form "YYYY-MM-DD|N" where N is optional number of prior trading days
   val connectQueue = new java.util.concurrent.LinkedBlockingQueue[String]()
 
@@ -106,7 +106,7 @@ class CoreService(params: InitParams, parquetPath: String = "core/src/main/resou
       }
 
       override def onMessage(conn: org.java_websocket.WebSocket, message: String): Unit = {
-        // Control messages: expect either a simple "READY" or a JSON CONNECT command
+  // Control messages: expect either a simple "READY" or a JSON PLAN command (or TRADE placeholder)
         try {
           if (message != null && message.trim.equalsIgnoreCase("READY")) {
             readyMap.put(conn, java.lang.Boolean.TRUE)
@@ -120,9 +120,10 @@ class CoreService(params: InitParams, parquetPath: String = "core/src/main/resou
           } else {
             // Try to parse a CONNECT JSON: { "cmd": "CONNECT", "date": "YYYY-MM-DD" }
             try {
-              // Expect a simple JSON like {"cmd":"CONNECT","date":"YYYY-MM-DD"}
+              // Expect a simple JSON like {"cmd":"PLAN","date":"YYYY-MM-DD"} or {"cmd":"TRADE",...}
               val msgLower = if (message != null) message.toUpperCase else ""
-              if (msgLower.contains("\"CMD\"") && msgLower.contains("CONNECT")) {
+              // Handle PLAN (used previously as CONNECT)
+              if (msgLower.contains("\"CMD\"") && msgLower.contains("PLAN")) {
                 // crude date extraction
                 val DateRegex = (""".*\"date\"\s*:\s*\"(\d{4}-\d{2}-\d{2})\".*""").r
                 message match {
@@ -146,6 +147,21 @@ class CoreService(params: InitParams, parquetPath: String = "core/src/main/resou
                     } catch { case _: Throwable => () }
                   case _ => ()
                 }
+              } else if (msgLower.contains("\"CMD\"") && msgLower.contains("TRADE")) {
+                // Placeholder: TRADE command received from client (no server action yet)
+                try {
+                  println(s"Received TRADE command from ${conn.getRemoteSocketAddress}: ${message.take(200)}")
+                } catch { case _: Throwable => () }
+              } else if (msgLower.contains("\"CMD\"") && msgLower.contains("SPEED")) {
+                // Placeholder: SPEED command received from client — log the speed value if present
+                try {
+                  val SpeedRegex = (".*\"speed\"\\s*:\\s*([0-9]+(?:\\.[0-9]+)?).*").r
+                  val speedStr = message match {
+                    case SpeedRegex(s) => s
+                    case _ => "<unknown>"
+                  }
+                  println(s"Received SPEED command from ${conn.getRemoteSocketAddress}: speed=${speedStr} message=${message.take(200)}")
+                } catch { case _: Throwable => () }
               }
             } catch { case _: Throwable => () }
           }
@@ -249,11 +265,11 @@ class CoreService(params: InitParams, parquetPath: String = "core/src/main/resou
       } yield event
     }
 
-    // Prepare broadcaster as an IO that waits for CONNECT commands, then reads parquet and broadcasts filtered events.
-    val broadcasterIO: IO[Unit] = fs2.Stream
+  // Prepare broadcaster as an IO that waits for PLAN commands, then reads parquet and broadcasts filtered events.
+  val broadcasterIO: IO[Unit] = fs2.Stream
       .repeatEval(IO.blocking(connectQueue.take()))
       .evalMap { dateStr =>
-        IO.blocking(println(s"Received CONNECT for date=$dateStr")).flatMap { _ =>
+    IO.blocking(println(s"Received PLAN for date=$dateStr")).flatMap { _ =>
         val parts = dateStr.split("\\|")
         val reqDate = parts.lift(0).getOrElse("")
         val reqDays = parts.lift(1).flatMap(s => try Some(s.toInt) catch { case _: Throwable => None }).getOrElse(2)
