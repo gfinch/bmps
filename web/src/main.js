@@ -61,22 +61,25 @@ let chart = createChart();
 let tradeChart = null;
 try { tradeChart = createChart(tradeView); } catch (e) { tradeChart = null; }
 
-// redraw overlay when visible time range changes (user scroll/zoom)
-try {
-  const ts = chart.timeScale();
-  if (ts && typeof ts.subscribeVisibleTimeRangeChange === 'function') {
-    ts.subscribeVisibleTimeRangeChange(() => { drawZones(); });
-  }
-} catch (e) { /* ignore if API not available */ }
+// per-view contexts (plan and trade)
+const planCtx = makeViewContext(planView, chart);
+const tradeCtx = tradeChart ? makeViewContext(tradeView, tradeChart) : null;
 
-const candleSeries = chart.addCandlestickSeries({ upColor: '#26a69a', downColor: '#ef5350', wickUpColor: '#26a69a', wickDownColor: '#ef5350' });
-// markers for swing points (rendered on the candle series)
-let swingMarkers = [];
-// plan zones keyed by generated id -> { area, top, bottom, meta }
-const planZones = new Map();
-let lastBarTime = null; // seconds
-// daytime extremes keyed by description -> { time, value, type, description }
-const daytimeExtremes = new Map();
+// Create view-specific contexts so Plan and Trade can maintain separate series
+// and overlays while sharing the same rendering logic.
+function makeViewContext(container, chartInstance) {
+  const ctx = {};
+  ctx.container = container;
+  ctx.chart = chartInstance;
+  ctx.candleSeries = chartInstance.addCandlestickSeries({ upColor: '#26a69a', downColor: '#ef5350', wickUpColor: '#26a69a', wickDownColor: '#ef5350' });
+  ctx.swingMarkers = [];
+  ctx.planZones = new Map();
+  ctx.daytimeExtremes = new Map();
+  ctx.overlayCanvas = null;
+  ctx.overlayCtx = null;
+  ctx.lastBarTime = null; // seconds
+  return ctx;
+}
 
 function safeNumber(v) {
   if (v === undefined || v === null) return null;
@@ -98,78 +101,48 @@ function toZoneKey(z) {
   return `${t}:${low}:${high}:${type}`;
 }
 
-function ensureZoneSeries(key, zone) {
-  if (planZones.has(key)) return planZones.get(key);
+function ensureZoneSeries(ctx, key, zone) {
+  const zones = ctx.planZones;
+  if (zones.has(key)) return zones.get(key);
   // determine coords
   const low = Number(safeNumber(zone.low));
   const high = Number(safeNumber(zone.high));
   const typeRaw = (zone.planZoneType || zone.zoneType || '').toString().toLowerCase();
-  const isDemand = typeRaw.includes('demand');
   const isSupply = typeRaw.includes('supply');
-  // We will render the zone fill on a canvas overlay instead of using an AreaSeries.
-  // This avoids stacking multiple semi-opaque AreaSeries which accumulate opacity
-  // and become visually solid. Keep area=null as placeholder.
+  // area placeholder (we draw fills on canvas overlays)
+  // area placeholder (we draw fills and edge lines on canvas overlays).
+  // Historically we also added chart line series for the zone edges, which caused
+  // duplicate rendering (lines on both chart and canvas). Stop creating those
+  // series and keep top/bottom as null so the overlay is the single source of
+  // truth for visual rendering of zones.
   const area = null;
-
-  // top/bottom line colors: supply zones should have red top and green bottom;
-  // demand zones should have green top and red bottom. Default to demand styling.
-  let topColor;
-  let bottomColor;
-  if (isSupply) {
-    topColor = '#ff0000'; // red
-    bottomColor = '#00b050'; // green
-  } else {
-    // demand or unknown -> green top, red bottom
-    topColor = '#00b050';
-    bottomColor = '#ff0000';
-  }
-
-  const top = chart.addLineSeries({ color: topColor, lineWidth: 2, lastValueVisible: false, priceLineVisible: false });
-  const bottom = chart.addLineSeries({ color: bottomColor, lineWidth: 2, lastValueVisible: false, priceLineVisible: false });
-
+  const top = null;
+  const bottom = null;
   const entry = { area, top, bottom, meta: { low, high, startTime: Math.floor(Number(zone.startTime) / 1000), endTime: zone.endTime ? Math.floor(Number(zone.endTime) / 1000) : null, type: typeRaw } };
-  planZones.set(key, entry);
+  zones.set(key, entry);
   return entry;
 }
 
-function setZoneSeriesData(entry) {
-  const { area, top, bottom, meta } = entry;
-  const start = Math.floor(Number(meta.startTime));
-  const end = meta.endTime ? Math.floor(Number(meta.endTime)) : lastBarTime || start;
-  // ensure end >= start
-  const safeEnd = Math.max(end, start);
-  const topPoints = [ { time: start, value: meta.high }, { time: safeEnd, value: meta.high } ];
-  const bottomPoints = [ { time: start, value: meta.low }, { time: safeEnd, value: meta.low } ];
+function setZoneSeriesData(ctx, entry) {
+  const { top, bottom, meta } = entry;
+  // We no longer maintain line series on the chart for zone edges. Update the
+  // entry.meta (already set by callers) and trigger a canvas redraw so the
+  // overlay becomes the single renderer for fills and edge lines.
   try {
-    // set the top/bottom lines (we'll draw fills on the overlay canvas)
-    // Ensure line series colors reflect closed/open state (closed -> greys)
-    const isClosed = Boolean(meta.endTime);
-    // derive colors consistent with drawZones: default colored lines for open supply/demand
-    const isSupply = (meta.type || '').includes('supply');
-    let seriesTopColor = isSupply ? '#ff0000' : '#00b050';
-    let seriesBottomColor = isSupply ? '#00b050' : '#ff0000';
-    if (isClosed) {
-      seriesTopColor = '#bdbdbd';
-      seriesBottomColor = '#9e9e9e';
-    }
-    try { if (typeof top.applyOptions === 'function') top.applyOptions({ color: seriesTopColor }); } catch (_) {}
-    try { if (typeof bottom.applyOptions === 'function') bottom.applyOptions({ color: seriesBottomColor }); } catch (_) {}
-    top.setData(topPoints);
-    bottom.setData(bottomPoints);
-    // trigger overlay redraw
-    drawZones();
+    // ensure meta.startTime/endTime are numbers (seconds)
+    meta.startTime = Math.floor(Number(meta.startTime));
+    meta.endTime = meta.endTime ? Math.floor(Number(meta.endTime)) : meta.endTime;
+    // trigger overlay redraw for this ctx
+    drawZones(ctx);
   } catch (e) {
     console.error('failed setting zone series data', e);
   }
 }
 
 // Overlay canvas for zone fills
-let overlayCanvas = null;
-let overlayCtx = null;
-
-function initOverlay() {
-  if (overlayCanvas) return;
-  overlayCanvas = document.createElement('canvas');
+function initOverlay(ctx) {
+  if (ctx.overlayCanvas) return;
+  const overlayCanvas = document.createElement('canvas');
   overlayCanvas.style.position = 'absolute';
   overlayCanvas.style.left = '0';
   overlayCanvas.style.top = '0';
@@ -177,165 +150,182 @@ function initOverlay() {
   overlayCanvas.style.height = '100%';
   overlayCanvas.style.pointerEvents = 'none';
   overlayCanvas.style.zIndex = '5';
-  chartContainer.appendChild(overlayCanvas);
-  overlayCtx = overlayCanvas.getContext('2d');
-  resizeOverlay();
-}
-
-function resizeOverlay() {
-  if (!overlayCanvas) return;
-  const dpr = window.devicePixelRatio || 1;
-  const w = chartContainer.clientWidth;
-  const h = chartContainer.clientHeight;
-  overlayCanvas.width = Math.max(1, Math.floor(w * dpr));
-  overlayCanvas.height = Math.max(1, Math.floor(h * dpr));
-  overlayCanvas.style.width = w + 'px';
-  overlayCanvas.style.height = h + 'px';
-  overlayCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  drawZones();
-}
-
-function drawZones() {
+  ctx.container.appendChild(overlayCanvas);
+  ctx.overlayCanvas = overlayCanvas;
+  ctx.overlayCtx = overlayCanvas.getContext('2d');
+  resizeOverlay(ctx);
+  // If there are any existing line series on entries (older code), remove them
+  // so the overlay becomes the single renderer and we avoid duplicate lines.
   try {
-    initOverlay();
-    overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-    // for coordinate conversions
-    const timeScale = chart.timeScale();
-  let total = 0, supplyCount = 0, demandCount = 0;
-    planZones.forEach((entry) => {
-      total++;
-      const { meta, top, bottom } = entry;
-      if ((meta.type || '').includes('supply')) supplyCount++;
-      else if ((meta.type || '').includes('demand')) demandCount++;
+    for (const entry of ctx.planZones.values()) {
+      try {
+        if (entry.top && typeof entry.top.remove === 'function') {
+          entry.top.remove();
+          entry.top = null;
+        }
+      } catch (_) { }
+      try {
+        if (entry.bottom && typeof entry.bottom.remove === 'function') {
+          entry.bottom.remove();
+          entry.bottom = null;
+        }
+      } catch (_) { }
+    }
+  } catch (_) { }
+
+  // Keep canvas synchronized with chart pan/zoom/price changes. Different
+  // versions of the LightweightCharts API expose slightly different
+  // subscription method names; subscribe defensively to whichever exists.
+  try {
+    const ts = ctx.chart.timeScale();
+    if (ts) {
+      if (typeof ts.subscribeVisibleTimeRangeChange === 'function') ts.subscribeVisibleTimeRangeChange(() => drawZones(ctx));
+      if (typeof ts.subscribeVisibleLogicalRangeChange === 'function') ts.subscribeVisibleLogicalRangeChange(() => drawZones(ctx));
+    }
+  } catch (_) { }
+  try {
+    // price range/zoom changes should also trigger redraw. Attempt common
+    // priceScale subscription points.
+    if (typeof ctx.chart.subscribePriceScale === 'function') {
+      ctx.chart.subscribePriceScale(() => drawZones(ctx));
+    }
+    // try subscribing via the series price scale if present
+    if (ctx.candleSeries && typeof ctx.candleSeries.priceScale === 'function') {
+      try {
+        const ps = ctx.chart.priceScale ? ctx.chart.priceScale('right') : null;
+        if (ps && typeof ps.subscribeVisibleRangeChange === 'function') ps.subscribeVisibleRangeChange(() => drawZones(ctx));
+      } catch (_) { }
+    }
+  } catch (_) { }
+}
+
+function resizeOverlay(ctx) {
+  if (!ctx.overlayCanvas) return;
+  const dpr = window.devicePixelRatio || 1;
+  const w = ctx.container.clientWidth;
+  const h = ctx.container.clientHeight;
+  ctx.overlayCanvas.width = Math.max(1, Math.floor(w * dpr));
+  ctx.overlayCanvas.height = Math.max(1, Math.floor(h * dpr));
+  ctx.overlayCanvas.style.width = w + 'px';
+  ctx.overlayCanvas.style.height = h + 'px';
+  ctx.overlayCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  drawZones(ctx);
+}
+
+function drawZones(ctx) {
+  try {
+    if (!ctx) return;
+  initOverlay(ctx);
+  if (!ctx.overlayCtx || !ctx.overlayCanvas) return;
+  const { overlayCtx } = ctx;
+  // clear using CSS pixel dimensions to avoid scaling artifacts
+  const cssW = ctx.container.clientWidth;
+  const cssH = ctx.container.clientHeight;
+  overlayCtx.clearRect(0, 0, cssW, cssH);
+    const timeScale = ctx.chart.timeScale();
+    const candleSeriesLocal = ctx.candleSeries;
+    ctx.planZones.forEach((entry) => {
+      const { meta } = entry;
       const start = meta.startTime;
-      const end = meta.endTime || lastBarTime || start;
+      const end = meta.endTime || ctx.lastBarTime || start;
       const safeEnd = Math.max(end, start);
       const x0 = timeScale.timeToCoordinate(start);
       const x1 = timeScale.timeToCoordinate(safeEnd);
       if (x0 === null || x1 === null) return; // not visible
-      // price to pixel
-      const yTop = candleSeries.priceToCoordinate(meta.high);
-      const yBottom = candleSeries.priceToCoordinate(meta.low);
+      const yTop = candleSeriesLocal.priceToCoordinate(meta.high);
+      const yBottom = candleSeriesLocal.priceToCoordinate(meta.low);
       if (yTop === null || yBottom === null) return;
       const x = Math.min(x0, x1);
       const width = Math.abs(x1 - x0);
       const y = Math.min(yTop, yBottom);
-      const height = Math.abs(yBottom - yTop);
+  const height = Math.abs(yBottom - yTop);
       if (width <= 0 || height <= 0) return;
-      // choose fill and stroke colors
       const isSupply = (meta.type || '').includes('supply');
-      // closed zones (have endTime) should be drawn faintly in grey: opaque grey top/bottom lines
-      // and a very light transparent grey fill so they remain visible but subtle.
       const isClosed = Boolean(meta.endTime);
-      let topColor = '#00b050';
-      let bottomColor = '#ff0000';
-      if (isSupply) {
-        topColor = '#ff0000';
-        bottomColor = '#00b050';
-      }
-      // choose distinct translucent fills so supply/demand are visually different for open zones
-      const supplyFill = 'rgba(180,130,240,0.18)'; // purple for supply (open)
-      const demandFill = 'rgba(93, 146, 225, 0.18)'; // blue for demand (open)
-      // styling for closed zones: faint grey lines + very light grey fill
-      const closedColor = '#bdbdbd';   // light grey (opaque)
-      const closedFill = 'rgba(160,160,160,0.1)'; // very faint grey fill
+      let topColor = isSupply ? '#ff0000' : '#00b050';
+      let bottomColor = isSupply ? '#00b050' : '#ff0000';
+      const supplyFill = 'rgba(180,130,240,0.18)';
+      const demandFill = 'rgba(93, 146, 225, 0.18)';
+      const closedColor = '#bdbdbd';
+      const closedFill = 'rgba(160,160,160,0.1)';
       const fillStyle = isClosed ? closedFill : (isSupply ? supplyFill : demandFill);
-      if (isClosed) {
-        topColor = closedColor;
-        bottomColor = closedColor;
-      }
-      overlayCtx.save();
-      overlayCtx.fillStyle = fillStyle;
-      overlayCtx.fillRect(x, y, width, height);
-      // draw top line
-      overlayCtx.strokeStyle = topColor;
-      overlayCtx.lineWidth = 2;
-      overlayCtx.beginPath();
-      overlayCtx.moveTo(x, y + 1);
-      overlayCtx.lineTo(x + width, y + 1);
-      overlayCtx.stroke();
-      // draw bottom line
-      overlayCtx.strokeStyle = bottomColor;
-      overlayCtx.lineWidth = 2;
-      overlayCtx.beginPath();
-      overlayCtx.moveTo(x, y + height - 1);
-      overlayCtx.lineTo(x + width, y + height - 1);
-      overlayCtx.stroke();
-      overlayCtx.restore();
+      if (isClosed) { topColor = closedColor; bottomColor = closedColor; }
+  // draw rect and top/bottom edges on the canvas overlay
+  overlayCtx.save();
+  overlayCtx.fillStyle = fillStyle;
+  overlayCtx.fillRect(x, y, width, height);
+  overlayCtx.strokeStyle = topColor;
+  overlayCtx.lineWidth = 2;
+  overlayCtx.beginPath();
+  overlayCtx.moveTo(x, Math.round(y) + 1);
+  overlayCtx.lineTo(x + width, Math.round(y) + 1);
+  overlayCtx.stroke();
+  overlayCtx.strokeStyle = bottomColor;
+  overlayCtx.lineWidth = 2;
+  overlayCtx.beginPath();
+  overlayCtx.moveTo(x, Math.round(y + height) - 1);
+  overlayCtx.lineTo(x + width, Math.round(y + height) - 1);
+  overlayCtx.stroke();
+  overlayCtx.restore();
     });
 
-      // draw daytime extremes as solid horizontal lines from their timestamp to their endTime (if ended),
-      // otherwise continue the line to the right edge of the chart.
-      try {
-        const chartWidth = chartContainer.clientWidth;
-        daytimeExtremes.forEach((de) => {
+    // draw daytime extremes for this ctx
+    try {
+      const chartWidth = ctx.container.clientWidth;
+      ctx.daytimeExtremes.forEach((de) => {
+        try {
+          const t = de.time;
+          const x0 = timeScale.timeToCoordinate(t);
+          if (x0 === null) return;
+          const y = ctx.candleSeries.priceToCoordinate(de.value);
+          if (y === null) return;
+          const strokeColor = '#000000';
+          const desc = String(de.description || '');
+          let abbrev = '';
           try {
-            const t = de.time; // seconds
-            const x0 = timeScale.timeToCoordinate(t);
-            if (x0 === null) return; // not visible
-            const y = candleSeries.priceToCoordinate(de.value);
-            if (y === null) return;
-            // force daytime extreme lines to black for both highs and lows
-            const strokeColor = '#000000';
-
-            // derive a short abbreviation for common descriptions
-            const desc = String(de.description || '');
-            let abbrev = '';
-            try {
-              if (desc.toLowerCase().includes('london')) abbrev = 'L';
-              else if (desc.toLowerCase().includes('asia')) abbrev = 'A';
-              else if (desc.toLowerCase().includes('new york') || desc.toLowerCase().includes('newyork') || desc.toUpperCase().includes('NY')) abbrev = 'NY';
-              else if (desc.length) abbrev = desc.trim()[0].toUpperCase();
-            } catch (_) { abbrev = '' }
-
-            overlayCtx.save();
-            // draw the horizontal line: to endTime if provided, otherwise to right edge
-            let x1 = chartWidth;
-            if (de.endTime) {
-              try {
-                const endCoord = timeScale.timeToCoordinate(de.endTime);
-                if (endCoord !== null) x1 = endCoord;
-              } catch (_) { /* fall back to chartWidth */ }
-            }
-            overlayCtx.strokeStyle = strokeColor;
-            overlayCtx.lineWidth = 2;
-            overlayCtx.beginPath();
-            overlayCtx.moveTo(x0, y);
-            overlayCtx.lineTo(x1, y);
-            overlayCtx.stroke();
-
-            // draw the abbreviation just to the left of the line start
-            if (abbrev) {
-              overlayCtx.fillStyle = '#000000';
-              // choose a readable font size; uses CSS pixels
-              overlayCtx.font = '12px Arial, Helvetica, sans-serif';
-              overlayCtx.textBaseline = 'middle';
-              overlayCtx.textAlign = 'right';
-              // position a few pixels left of the line start, but keep inside canvas
-              const textX = Math.max(4, x0 - 6);
-              overlayCtx.fillText(abbrev, textX, y);
-            }
-
-            overlayCtx.restore();
-          } catch (e) { /* ignore single de failures */ }
-        });
-      } catch (e) { /* ignore drawing extremes */ }
-  // no-op: removed debug logging
+            if (desc.toLowerCase().includes('london')) abbrev = 'L';
+            else if (desc.toLowerCase().includes('asia')) abbrev = 'A';
+            else if (desc.toLowerCase().includes('new york') || desc.toLowerCase().includes('newyork') || desc.toUpperCase().includes('NY')) abbrev = 'NY';
+            else if (desc.length) abbrev = desc.trim()[0].toUpperCase();
+          } catch (_) { abbrev = '' }
+          overlayCtx.save();
+          let x1 = chartWidth;
+          if (de.endTime) {
+            try { const endCoord = timeScale.timeToCoordinate(de.endTime); if (endCoord !== null) x1 = endCoord; } catch (_) { }
+          }
+          overlayCtx.strokeStyle = strokeColor;
+          overlayCtx.lineWidth = 2;
+          overlayCtx.beginPath();
+          overlayCtx.moveTo(x0, y);
+          overlayCtx.lineTo(x1, y);
+          overlayCtx.stroke();
+          if (abbrev) {
+            overlayCtx.fillStyle = '#000000';
+            overlayCtx.font = '12px Arial, Helvetica, sans-serif';
+            overlayCtx.textBaseline = 'middle';
+            overlayCtx.textAlign = 'right';
+            const textX = Math.max(4, x0 - 6);
+            overlayCtx.fillText(abbrev, textX, y);
+          }
+          overlayCtx.restore();
+        } catch (e) { }
+      });
+    } catch (e) { }
   } catch (e) {
     console.error('failed drawing zone overlays', e);
   }
 }
 
-function updateOpenZones() {
-  for (const [k, entry] of planZones.entries()) {
+function updateOpenZones(ctx) {
+  if (!ctx) return;
+  for (const [k, entry] of ctx.planZones.entries()) {
     if (!entry.meta.endTime) {
-      // extend to lastBarTime if available
-      if (lastBarTime) setZoneSeriesData(entry);
+      if (ctx.lastBarTime) setZoneSeriesData(ctx, entry);
     }
   }
 }
 
-function handleSwingEvent(event) {
+function handleSwingEvent(event, ctx) {
   try {
     const sp = (event && (event.swingPoint || event.swing || event.swing_point)) ? (event.swingPoint || event.swing || event.swing_point) : event;
     if (!sp) return;
@@ -352,25 +342,25 @@ function handleSwingEvent(event) {
       shape: isUp ? 'arrowUp' : 'arrowDown',
       text: ''
     };
-    swingMarkers.push(marker);
-    // keep marker list bounded to avoid memory growth
-    if (swingMarkers.length > 5000) swingMarkers = swingMarkers.slice(swingMarkers.length - 5000);
-    candleSeries.setMarkers(swingMarkers);
+  if (!ctx) return;
+  ctx.swingMarkers.push(marker);
+  if (ctx.swingMarkers.length > 5000) ctx.swingMarkers = ctx.swingMarkers.slice(ctx.swingMarkers.length - 5000);
+  ctx.candleSeries.setMarkers(ctx.swingMarkers);
   } catch (e) { console.error('failed handling swing event', e); }
 }
 
-function handlePlanZoneEvent(event) {
+function handlePlanZoneEvent(event, ctx) {
   try {
     const p = (event && (event.planZone || event.plan_zone || event.plan)) ? (event.planZone || event.plan_zone || event.plan) : event;
     if (!p) return;
-  // incoming plan zone payload
+    // incoming plan zone payload
     // core timestamps are milliseconds
     const startMs = (p.startTime !== undefined && p.startTime !== null) ? p.startTime : (event.timestamp || Date.now());
     const endMs = (p.endTime !== undefined && p.endTime !== null) ? p.endTime : null;
     const start = Math.floor(Number(startMs) / 1000);
     const end = endMs ? Math.floor(Number(endMs) / 1000) : null;
-    const low = safeNumber(p.low || p.lowLevel || (p.range && p.range.low) || (p.low && p.low.value) );
-    const high = safeNumber(p.high || p.highLevel || (p.range && p.range.high) || (p.high && p.high.value) );
+    const low = safeNumber(p.low || p.lowLevel || (p.range && p.range.low) || (p.low && p.low.value));
+    const high = safeNumber(p.high || p.highLevel || (p.range && p.range.high) || (p.high && p.high.value));
     if (low === null || high === null) return;
     // normalize planZoneType which may be an object like {Demand:{}} or a string
     let rawTypeVal = p.planZoneType || p.zoneType || p.type || '';
@@ -382,56 +372,58 @@ function handlePlanZoneEvent(event) {
       } catch (_) { planZoneType = '' }
     }
     const zoneObj = { planZoneType: planZoneType, low, high, startTime: start * 1000, endTime: end ? end * 1000 : null };
-  // derived zoneObj
+    // derived zoneObj
     const key = toZoneKey(zoneObj);
-    const entry = ensureZoneSeries(key, zoneObj);
+    const entry = ensureZoneSeries(ctx, key, zoneObj);
     // update meta.endTime if provided
     if (end) entry.meta.endTime = end;
-    // update values (and extend if open)
-    setZoneSeriesData(entry);
-    // keep map size bounded mildly
-    if (planZones.size > 200) {
-      // remove oldest
-      const firstKey = planZones.keys().next().value;
-      const old = planZones.get(firstKey);
-      try { old.area.remove(); old.top.remove(); old.bottom.remove(); } catch (_) {}
-      planZones.delete(firstKey);
+    setZoneSeriesData(ctx, entry);
+    if (ctx.planZones.size > 200) {
+      const firstKey = ctx.planZones.keys().next().value;
+      const old = ctx.planZones.get(firstKey);
+      try { old.area.remove(); old.top.remove(); old.bottom.remove(); } catch (_) { }
+      ctx.planZones.delete(firstKey);
     }
   } catch (e) { console.error('failed handling plan zone event', e); }
 }
 
-function handleDaytimeExtremeEvent(event) {
+function handleDaytimeExtremeEvent(event, ctx) {
   try {
     const de = (event && (event.daytimeExtreme || event.daytime_extreme)) ? (event.daytimeExtreme || event.daytime_extreme) : event;
     if (!de) return;
-  const tsMs = de.timestamp || event.timestamp || Date.now();
-  const time = Math.floor(Number(tsMs) / 1000);
+    const tsMs = de.timestamp || event.timestamp || Date.now();
+    const time = Math.floor(Number(tsMs) / 1000);
     const level = safeNumber(de.level || de.value || (de.level && de.level.value));
     if (level === null || Number.isNaN(level)) return;
     const desc = de.description || (de.extremeType ? `${de.extremeType} - ${time}` : `DaytimeExtreme - ${time}`);
     const typeRaw = (de.extremeType || de.extreme || '').toString();
     // store keyed by description
-  // capture optional endTime (ms) from payload; convert to seconds
-  const endMs = (de.endTime !== undefined && de.endTime !== null) ? de.endTime : null;
-  const endSec = endMs ? Math.floor(Number(endMs) / 1000) : null;
-  daytimeExtremes.set(desc, { time, value: Number(level), type: typeRaw, description: desc, endTime: endSec });
-    // trigger redraw
-    drawZones();
+    // capture optional endTime (ms) from payload; convert to seconds
+    const endMs = (de.endTime !== undefined && de.endTime !== null) ? de.endTime : null;
+    const endSec = endMs ? Math.floor(Number(endMs) / 1000) : null;
+  if (!ctx) return;
+  ctx.daytimeExtremes.set(desc, { time, value: Number(level), type: typeRaw, description: desc, endTime: endSec });
+  drawZones(ctx);
   } catch (e) { console.error('failed handling daytime extreme event', e); }
 }
 
 function resizeChart() {
-  const width = chartContainer.clientWidth;
-  const height = Math.max(200, chartContainer.clientHeight);
   try {
-    chart.resize(width, height);
-  } catch (e) {
-    // fallback: recreate chart if resize not supported
-    try { chart.remove(); } catch (_) {}
-    chart = createChart();
-  }
-  // resize overlay canvas when chart resizes
-  resizeOverlay();
+    // resize plan chart
+    if (planCtx && planCtx.chart) {
+      const w = planCtx.container.clientWidth;
+      const h = Math.max(200, planCtx.container.clientHeight);
+      try { planCtx.chart.resize(w, h); } catch (e) { try { planCtx.chart.remove(); planCtx.chart = createChart(planCtx.container); } catch (_) { } }
+      resizeOverlay(planCtx);
+    }
+    // resize trade chart if present
+    if (tradeCtx && tradeCtx.chart) {
+      const w2 = tradeCtx.container.clientWidth;
+      const h2 = Math.max(200, tradeCtx.container.clientHeight);
+      try { tradeCtx.chart.resize(w2, h2); } catch (e) { try { tradeCtx.chart.remove(); tradeCtx.chart = createChart(tradeCtx.container); } catch (_) { } }
+      resizeOverlay(tradeCtx);
+    }
+  } catch (e) { /* ignore resize errors */ }
 }
 
 window.addEventListener('resize', () => resizeChart());
@@ -477,71 +469,71 @@ function connectCoreWS(url = 'ws://localhost:9001') {
   const planBtn = document.getElementById('planBtn');
   const tradeBtn = document.getElementById('tradeBtn');
   const datePicker = document.getElementById('datePicker');
-    const speedSlider = document.getElementById('speedSlider');
-    const speedValue = document.getElementById('speedValue');
+  const speedSlider = document.getElementById('speedSlider');
+  const speedValue = document.getElementById('speedValue');
   const daysInput = document.getElementById('daysInput');
 
-    // Initialize date picker to today
-    try {
-      const today = new Date();
-      const yyyy = today.getFullYear();
-      const mm = String(today.getMonth() + 1).padStart(2, '0');
-      const dd = String(today.getDate()).padStart(2, '0');
-      if (datePicker) datePicker.value = `${yyyy}-${mm}-${dd}`;
-    } catch (e) { /* ignore */ }
+  // Initialize date picker to today
+  try {
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    if (datePicker) datePicker.value = `${yyyy}-${mm}-${dd}`;
+  } catch (e) { /* ignore */ }
 
-    // Update displayed speed when slider moves
-    let replaySpeed = 1.0;
-    if (speedSlider && speedValue) {
-      speedValue.textContent = `${speedSlider.value}x`;
-      // disable speed control while in INITIAL state
-      if (currentState === GlobalState.INITIAL) speedSlider.disabled = true;
-      speedSlider.addEventListener('input', (ev) => {
-        replaySpeed = ev.target.value;
-        speedValue.textContent = `${replaySpeed}x`;
-        // send speed update to server/app
-        try {
-          const msg = { cmd: 'SPEED', speed: Number(replaySpeed) };
-          if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify(msg));
-          } else {
-            // store the latest speed to send when connection opens
-            pendingSpeed = msg;
-          }
-        } catch (e) { console.warn('failed send SPEED', e); }
-      });
-    }
+  // Update displayed speed when slider moves
+  let replaySpeed = 1.0;
+  if (speedSlider && speedValue) {
+    speedValue.textContent = `${speedSlider.value}x`;
+    // disable speed control while in INITIAL state
+    if (currentState === GlobalState.INITIAL) speedSlider.disabled = true;
+    speedSlider.addEventListener('input', (ev) => {
+      replaySpeed = ev.target.value;
+      speedValue.textContent = `${replaySpeed}x`;
+      // send speed update to server/app
+      try {
+        const msg = { cmd: 'SPEED', speed: Number(replaySpeed) };
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify(msg));
+        } else {
+          // store the latest speed to send when connection opens
+          pendingSpeed = msg;
+        }
+      } catch (e) { console.warn('failed send SPEED', e); }
+    });
+  }
 
-    // Initialize days input default
-    let days = 2;
-    if (daysInput) {
-      days = parseInt(daysInput.value || '2', 10) || 2;
-      daysInput.addEventListener('input', (e) => { days = parseInt(e.target.value || '2', 10) || 2; });
-    }
+  // Initialize days input default
+  let days = 2;
+  if (daysInput) {
+    days = parseInt(daysInput.value || '2', 10) || 2;
+    daysInput.addEventListener('input', (e) => { days = parseInt(e.target.value || '2', 10) || 2; });
+  }
 
   function flushBuffer() {
     while (msgBuffer.length) {
       const ev = msgBuffer.shift();
       try {
         const event = JSON.parse(ev);
-  // store by current global state
-  try { stateEvents[currentState].push(event); } catch (_) {}
+        // store by current global state
+        try { stateEvents[currentState].push(event); } catch (_) { }
+        const ctx = (currentState === GlobalState.TRADING) ? tradeCtx : planCtx;
         const isCandle = Boolean(event && (event.candle || (event.eventType && (String(event.eventType).includes('Candle') || event.eventType === 'Candle'))));
         if (isCandle) {
           const bar = toBarFromCandle(event);
-          if (bar) candleSeries.update(bar);
-          // track last bar time (seconds) and extend open zones
-          lastBarTime = bar.time;
-          updateOpenZones();
+          if (bar && ctx) ctx.candleSeries.update(bar);
+          // track last bar time (seconds) and extend open zones for this ctx
+          if (bar && ctx) { ctx.lastBarTime = bar.time; updateOpenZones(ctx); }
         }
         const isSwing = Boolean(event && (event.swingPoint || (event.eventType && (String(event.eventType).toLowerCase().includes('swing') || String(event.eventType) === 'SwingPoint'))));
         if (isSwing) {
-          handleSwingEvent(event);
+          handleSwingEvent(event, ctx);
         }
         const isPlan = Boolean(event && (event.planZone || (event.eventType && (String(event.eventType).toLowerCase().includes('planzone') || String(event.eventType) === 'PlanZone'))));
-        if (isPlan) handlePlanZoneEvent(event);
-  const isDaytime = Boolean(event && (event.daytimeExtreme || (event.eventType && (String(event.eventType).toLowerCase().includes('daytime') || String(event.eventType) === 'DaytimeExtreme'))));
-  if (isDaytime) handleDaytimeExtremeEvent(event);
+        if (isPlan) handlePlanZoneEvent(event, ctx);
+        const isDaytime = Boolean(event && (event.daytimeExtreme || (event.eventType && (String(event.eventType).toLowerCase().includes('daytime') || String(event.eventType) === 'DaytimeExtreme'))));
+        if (isDaytime) handleDaytimeExtremeEvent(event, ctx);
       } catch (e) { console.error('failed parsing buffered core event', e); }
     }
   }
@@ -567,7 +559,7 @@ function connectCoreWS(url = 'ws://localhost:9001') {
     }
     // flush any pending speed change made before the socket opened
     if (pendingSpeed) {
-      try { ws.send(JSON.stringify(pendingSpeed)); } catch (_) {}
+      try { ws.send(JSON.stringify(pendingSpeed)); } catch (_) { }
       pendingSpeed = null;
     }
   });
@@ -581,29 +573,30 @@ function connectCoreWS(url = 'ws://localhost:9001') {
     }
     try {
       const event = JSON.parse(ev.data);
-  // store incoming events per current state
-  try { stateEvents[currentState].push(event); } catch (_) {}
+      // store incoming events per current state
+      try { stateEvents[currentState].push(event); } catch (_) { }
+      const ctx = (currentState === GlobalState.TRADING) ? tradeCtx : planCtx;
       const isCandle = Boolean(event && (event.candle || (event.eventType && (String(event.eventType).includes('Candle') || event.eventType === 'Candle'))));
       if (isCandle) {
         const bar = toBarFromCandle(event);
-        if (bar) {
-          candleSeries.update(bar);
-          lastBarTime = bar.time;
-          updateOpenZones();
+        if (bar && ctx) {
+          ctx.candleSeries.update(bar);
+          ctx.lastBarTime = bar.time;
+          updateOpenZones(ctx);
           // redraw overlays for zones on candle updates
-          drawZones();
+          drawZones(ctx);
         }
       }
 
       const isSwing = Boolean(event && (event.swingPoint || (event.eventType && (String(event.eventType).toLowerCase().includes('swing') || event.eventType === 'SwingPoint'))));
       if (isSwing) {
-        handleSwingEvent(event);
+        handleSwingEvent(event, ctx);
       }
 
-      const isPlan = Boolean(event && (event.planZone || (event.eventType && (String(event.eventType).toLowerCase().includes('planzone') || event.eventType === 'PlanZone'))));
-      if (isPlan) handlePlanZoneEvent(event);
-  const isDaytime = Boolean(event && (event.daytimeExtreme || (event.eventType && (String(event.eventType).toLowerCase().includes('daytime') || String(event.eventType) === 'DaytimeExtreme'))));
-  if (isDaytime) handleDaytimeExtremeEvent(event);
+      const isPlan = Boolean(event && (event.planZone || (event.eventType && (String(event.eventType).toLowerCase().includes('planzone') || String(event.eventType) === 'PlanZone'))));
+      if (isPlan) handlePlanZoneEvent(event, ctx);
+      const isDaytime = Boolean(event && (event.daytimeExtreme || (event.eventType && (String(event.eventType).toLowerCase().includes('daytime') || String(event.eventType) === 'DaytimeExtreme'))));
+      if (isDaytime) handleDaytimeExtremeEvent(event, ctx);
     } catch (e) { console.error('failed parsing core event', e); }
   });
 
@@ -623,18 +616,18 @@ function connectCoreWS(url = 'ws://localhost:9001') {
       const selectedDate = datePicker ? datePicker.value : '';
       const msg = { cmd: 'PLAN', date: selectedDate, days };
       ws.send(JSON.stringify(msg));
-  statusEl.textContent = `Planned ${selectedDate || ''} days=${days} @ ${replaySpeed}x`;
-  // ensure state becomes planning and start processing incoming events
-  currentState = GlobalState.PLANNING;
-  started = true;
-  // disable plan button to avoid duplicate sends
-  if (planBtn) planBtn.disabled = true;
-  // enable trade button and speed control now that planning started
-  if (tradeBtn) tradeBtn.disabled = false;
-  if (speedSlider) speedSlider.disabled = false;
-  // flush any buffered messages
-  flushBuffer();
-  statusEl.textContent = `Connected (state=${currentState})`;
+      statusEl.textContent = `Planned ${selectedDate || ''} days=${days} @ ${replaySpeed}x`;
+      // ensure state becomes planning and start processing incoming events
+      currentState = GlobalState.PLANNING;
+      started = true;
+      // disable plan button to avoid duplicate sends
+      if (planBtn) planBtn.disabled = true;
+      // enable trade button and speed control now that planning started
+      if (tradeBtn) tradeBtn.disabled = false;
+      if (speedSlider) speedSlider.disabled = false;
+      // flush any buffered messages
+      flushBuffer();
+      statusEl.textContent = `Connected (state=${currentState})`;
     } catch (e) { console.warn('failed send PLAN', e); }
   });
 
@@ -652,18 +645,18 @@ function connectCoreWS(url = 'ws://localhost:9001') {
       const selectedDate = datePicker ? datePicker.value : '';
       const msg = { cmd: 'TRADE', date: selectedDate, days };
       ws.send(JSON.stringify(msg));
-  // switch global state to trading and start processing incoming events
-  currentState = GlobalState.TRADING;
-  started = true;
-  // per new behavior: enable both buttons, but their handlers will be no-ops while trading
-  if (planBtn) planBtn.disabled = false;
-  if (tradeBtn) tradeBtn.disabled = false;
-  if (speedSlider) speedSlider.disabled = false;
-  // flush any buffered messages
-  flushBuffer();
-  // show the Trade chart when we first enter TRADING
-  showTradeView();
-  statusEl.textContent = `Connected (state=${currentState})`;
+      // switch global state to trading and start processing incoming events
+      currentState = GlobalState.TRADING;
+      started = true;
+      // per new behavior: enable both buttons, but their handlers will be no-ops while trading
+      if (planBtn) planBtn.disabled = false;
+      if (tradeBtn) tradeBtn.disabled = false;
+      if (speedSlider) speedSlider.disabled = false;
+      // flush any buffered messages
+      flushBuffer();
+      // show the Trade chart when we first enter TRADING
+      showTradeView();
+      statusEl.textContent = `Connected (state=${currentState})`;
     } catch (e) { console.warn('failed send TRADE', e); }
   });
 
@@ -673,6 +666,26 @@ function connectCoreWS(url = 'ws://localhost:9001') {
       // hide plan view, show trade view
       if (planView) planView.style.display = 'none';
       if (tradeView) tradeView.style.display = 'block';
+      // ensure trade overlay/chart are initialized and resized
+      if (tradeCtx) {
+        initOverlay(tradeCtx);
+        resizeOverlay(tradeCtx);
+        drawZones(tradeCtx);
+        // schedule a frame refresh to ensure the chart paints correctly when
+        // the container was hidden and is now shown. Resize on the next
+        // animation frame and redraw overlays.
+        try {
+          window.requestAnimationFrame(() => {
+            try {
+              const w = tradeCtx.container.clientWidth;
+              const h = Math.max(200, tradeCtx.container.clientHeight);
+              try { tradeCtx.chart.resize(w, h); } catch (_) { }
+              resizeOverlay(tradeCtx);
+              drawZones(tradeCtx);
+            } catch (_) { }
+          });
+        } catch (_) { }
+      }
     } catch (e) { /* ignore */ }
   }
 
@@ -680,6 +693,24 @@ function connectCoreWS(url = 'ws://localhost:9001') {
     try {
       if (tradeView) tradeView.style.display = 'none';
       if (planView) planView.style.display = 'block';
+      if (planCtx) {
+        initOverlay(planCtx);
+        resizeOverlay(planCtx);
+        drawZones(planCtx);
+        // also refresh plan chart on the next frame to be consistent when
+        // toggling views
+        try {
+          window.requestAnimationFrame(() => {
+            try {
+              const w = planCtx.container.clientWidth;
+              const h = Math.max(200, planCtx.container.clientHeight);
+              try { planCtx.chart.resize(w, h); } catch (_) { }
+              resizeOverlay(planCtx);
+              drawZones(planCtx);
+            } catch (_) { }
+          });
+        } catch (_) { }
+      }
     } catch (e) { /* ignore */ }
   }
 

@@ -1,6 +1,7 @@
 package bmps.core.io
 
 import cats.effect.IO
+import fs2.Stream
 import java.sql.DriverManager
 import java.time.Instant
 import bmps.core.models._
@@ -23,105 +24,94 @@ object ParquetSource {
     case "1d" | "1day"  => CandleDuration.OneDay
     case _                 => CandleDuration.OneHour
   }
-
-  def readParquetAsCandles(path: String): IO[List[Candle]] = IO.blocking {
-    val conn = DriverManager.getConnection("jdbc:duckdb:")
-    try {
-      val stmt = conn.createStatement()
-      val safePath = path.replace("'", "''")
-      val q = s"SELECT symbol, timestamp, timeframe, open, high, low, close, volume FROM read_parquet('" + safePath + "')"
-      val rs = stmt.executeQuery(q)
-      val buf = scala.collection.mutable.ListBuffer.empty[Candle]
-      while (rs.next()) {
-        val tf = Option(rs.getString("timeframe")).getOrElse("1h")
-        val tsObj = rs.getObject("timestamp")
-        val epochMillis = tsObj match {
-          case null =>
-            0L
-          case t: java.sql.Timestamp =>
-            t.toInstant.toEpochMilli
-          case s: String =>
-            Instant.parse(s).toEpochMilli
-          case l: java.lang.Long =>
-            l.longValue()
-          case i: java.lang.Integer =>
-            i.longValue()
-          case d: java.lang.Double =>
-            d.longValue()
-          case bd: java.math.BigDecimal =>
-            bd.longValue()
-          case inst: java.time.Instant =>
-            inst.toEpochMilli
-          case ldt: java.time.LocalDateTime =>
-            ldt.atZone(java.time.ZoneId.systemDefault()).toInstant.toEpochMilli
-          case odt: java.time.OffsetDateTime =>
-            odt.toInstant.toEpochMilli
-          case other =>
-            // Emit a debug line to help diagnose unexpected JDBC types coming from DuckDB
-            println(s"ParquetSource: unexpected timestamp object class=${other.getClass.getName} value=${other.toString}")
-            0L
-        }
-        val open = rs.getDouble("open").toFloat
-        val high = rs.getDouble("high").toFloat
-        val low = rs.getDouble("low").toFloat
-        val close = rs.getDouble("close").toFloat
-        val duration = timeframeToDuration(tf)
-        buf += Candle(Level(open), Level(high), Level(low), Level(close), epochMillis, duration)
-      }
-      rs.close()
-      stmt.close()
-      buf.toList
-    } finally {
-      conn.close()
-    }
-  }
-
   /**
    * Read candles within an inclusive start (ms) and exclusive end (ms) range.
    * Uses DuckDB SQL to filter rows inside the database so only matching rows are returned.
    */
-  def readParquetAsCandlesInRange(path: String, startMs: Long, endMs: Long, zone: ZoneId): IO[List[Candle]] = IO.blocking {
-    val conn = DriverManager.getConnection("jdbc:duckdb:")
-    try {
-      val stmt = conn.createStatement()
+  // Streaming version of range-read: emits matching candles lazily.
+  // This is the single public API exposed by ParquetSource now.
+  def readParquetAsCandlesInRangeStream(path: String, startMs: Long, endMs: Long, zone: ZoneId): Stream[IO, Candle] = {
+    // Build query (inspects parquet timestamp column type where possible) in a blocking IO
+    def buildQuery(path: String, startMs: Long, endMs: Long, zone: ZoneId): IO[String] = IO.blocking {
       val safePath = path.replace("'", "''")
-      // Format timestamps as local date-time strings for DuckDB TIMESTAMP literal
       val fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
       val startStr = Instant.ofEpochMilli(startMs).atZone(zone).toLocalDateTime.format(fmt)
       val endStr = Instant.ofEpochMilli(endMs).atZone(zone).toLocalDateTime.format(fmt)
-      val q = s"SELECT symbol, timestamp, timeframe, open, high, low, close, volume FROM read_parquet('" + safePath + "') WHERE timestamp >= TIMESTAMP '" + startStr + "' AND timestamp < TIMESTAMP '" + endStr + "'"
-      val rs = stmt.executeQuery(q)
-      val buf = scala.collection.mutable.ListBuffer.empty[Candle]
-      while (rs.next()) {
-        val tf = Option(rs.getString("timeframe")).getOrElse("1h")
-        val tsObj = rs.getObject("timestamp")
-        val epochMillis = tsObj match {
-          case null => 0L
-          case t: java.sql.Timestamp => t.toInstant.toEpochMilli
-          case s: String => Instant.parse(s).toEpochMilli
-          case l: java.lang.Long => l.longValue()
-          case i: java.lang.Integer => i.longValue()
-          case d: java.lang.Double => d.longValue()
-          case bd: java.math.BigDecimal => bd.longValue()
-          case inst: java.time.Instant => inst.toEpochMilli
-          case ldt: java.time.LocalDateTime => ldt.atZone(ZoneId.systemDefault()).toInstant.toEpochMilli
-          case odt: java.time.OffsetDateTime => odt.toInstant.toEpochMilli
-          case other =>
-            println(s"ParquetSource(range): unexpected timestamp object class=${other.getClass.getName} value=${other.toString}")
-            0L
+      // Open a connection to inspect the timestamp column type
+      val conn = DriverManager.getConnection("jdbc:duckdb:")
+      try {
+        val stmt = conn.createStatement()
+        val typeRs = stmt.executeQuery(s"SELECT typeof(timestamp) as t FROM read_parquet('" + safePath + "') LIMIT 1")
+        val ttype = if (typeRs.next()) Option(typeRs.getString("t")).getOrElse("") else ""
+        typeRs.close()
+        stmt.close()
+        conn.close()
+        val whereClause = if (ttype.toUpperCase.contains("BIGINT") || ttype.toUpperCase.contains("INT") || ttype.toUpperCase.contains("INT64") || ttype.toUpperCase.contains("LONG") || ttype.toUpperCase.contains("DECIMAL") || ttype.toUpperCase.contains("DOUBLE")) {
+          s"timestamp >= ${startMs} AND timestamp <= ${endMs}"
+        } else {
+          s"timestamp >= TIMESTAMP '${startStr}' AND timestamp <= TIMESTAMP '${endStr}'"
         }
-        val open = rs.getDouble("open").toFloat
-        val high = rs.getDouble("high").toFloat
-        val low = rs.getDouble("low").toFloat
-        val close = rs.getDouble("close").toFloat
-        val duration = timeframeToDuration(tf)
-        buf += Candle(Level(open), Level(high), Level(low), Level(close), epochMillis, duration)
+        s"SELECT * FROM read_parquet('" + safePath + "') WHERE " + whereClause
+      } catch { case _: Throwable =>
+        try { conn.close() } catch { case _: Throwable => () }
+        // fallback to timestamp literal
+        s"SELECT * FROM read_parquet('" + safePath + "') WHERE timestamp >= TIMESTAMP '" + startStr + "' AND timestamp <= TIMESTAMP '" + endStr + "'"
       }
-      rs.close()
-      stmt.close()
-      buf.toList
-    } finally {
-      conn.close()
+    }
+
+    // Map a ResultSet row to Candle (keeps same tolerant conversions as before)
+    def candleFromRow(rs: java.sql.ResultSet, md: java.sql.ResultSetMetaData): Candle = {
+      val colCount = md.getColumnCount
+      def idx(name: String): Int = (1 to colCount).find(i => md.getColumnLabel(i).equalsIgnoreCase(name)).getOrElse(-1)
+      val idxTimestamp = idx("timestamp")
+      val idxTimeframe = idx("timeframe")
+      val idxOpen = idx("open")
+      val idxHigh = idx("high")
+      val idxLow = idx("low")
+      val idxClose = idx("close")
+
+      val tf = if (idxTimeframe > 0) Option(rs.getString(idxTimeframe)).getOrElse("1h") else "1h"
+      val tsObj = if (idxTimestamp > 0) rs.getObject(idxTimestamp) else null
+      val epochMillis = tsObj match {
+        case null => 0L
+        case t: java.sql.Timestamp => t.toInstant.toEpochMilli
+        case s: String => Instant.parse(s).toEpochMilli
+        case l: java.lang.Long => l.longValue()
+        case i: java.lang.Integer => i.longValue()
+        case d: java.lang.Double => d.longValue()
+        case bd: java.math.BigDecimal => bd.longValue()
+        case inst: java.time.Instant => inst.toEpochMilli
+        case ldt: java.time.LocalDateTime => ldt.atZone(ZoneId.systemDefault()).toInstant.toEpochMilli
+        case odt: java.time.OffsetDateTime => odt.toInstant.toEpochMilli
+        case other =>
+          println(s"ParquetSource(range stream): unexpected timestamp object class=${other.getClass.getName} value=${other.toString}")
+          0L
+      }
+      val open = if (idxOpen > 0) rs.getDouble(idxOpen).toFloat else 0.0f
+      val high = if (idxHigh > 0) rs.getDouble(idxHigh).toFloat else 0.0f
+      val low = if (idxLow > 0) rs.getDouble(idxLow).toFloat else 0.0f
+      val close = if (idxClose > 0) rs.getDouble(idxClose).toFloat else 0.0f
+      val duration = timeframeToDuration(tf)
+      Candle(Level(open), Level(high), Level(low), Level(close), epochMillis, duration)
+    }
+
+    val qIO = buildQuery(path, startMs, endMs, zone)
+
+    Stream.bracket(qIO.flatMap { q =>
+      IO.blocking {
+        val conn = DriverManager.getConnection("jdbc:duckdb:")
+        val stmt = conn.createStatement()
+        val rs = stmt.executeQuery(q)
+        (conn, stmt, rs)
+      }
+    })( { case (conn, stmt, rs) => IO.blocking { try rs.close() catch { case _: Throwable => () }; try stmt.close() catch { case _: Throwable => () }; try conn.close() catch { case _: Throwable => () } } } )
+    .flatMap { case (_, stmt, rs) =>
+        val md = rs.getMetaData()
+        def nextRow: IO[Option[Candle]] = IO.blocking {
+        if (rs.next()) Some(candleFromRow(rs, md)) else None
+      }
+
+      Stream.unfoldEval(()) { _ => nextRow.map(_.map(c => (c, ()))) }
     }
   }
 }

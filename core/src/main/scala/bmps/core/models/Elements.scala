@@ -1,4 +1,7 @@
 package bmps.core.models
+import bmps.core.models.OrderStatus.Planned
+import bmps.core.models.OrderStatus.Placed
+import java.security.KeyStore.Entry
 
 case class Level(value: Float) {
     def <(other: Level): Boolean = this.value < other.value
@@ -7,6 +10,9 @@ case class Level(value: Float) {
     def >=(other: Level): Boolean = this.value >= other.value
     def ==(other: Level): Boolean = this.value == other.value
     def !=(other: Level): Boolean = this.value != other.value
+
+    def +(other: Level): Level = Level(this.value + other.value)
+    def -(other: Level): Level = Level(this.value - other.value)
 }
 
 case class Line(level: Float, startTime: Long, endTime: Option[Long])
@@ -26,6 +32,13 @@ object CandleDuration {
     case object OneDay extends CandleDuration
 }
 
+sealed trait Direction
+object Direction {
+    case object Up extends Direction
+    case object Down extends Direction
+    case object Doji extends Direction
+}
+
 case class Candle(
     open: Level,
     high: Level,
@@ -33,12 +46,21 @@ case class Candle(
     close: Level,
     timestamp: Long,
     duration: CandleDuration
-)
+) {
+    final val DojiThreshold = 0.25
+    lazy val isBullish: Boolean = (close.value - DojiThreshold) > open.value
+    lazy val isBearish: Boolean = (close.value + DojiThreshold) < open.value
+    lazy val isDoji: Boolean = !isBearish && !isBearish
+    lazy val direction: Direction = {
+        if (isBullish) Direction.Up
+        else if (isBearish) Direction.Down
+        else Direction.Doji
+    }
 
-sealed trait Direction
-object Direction {
-    case object Up extends Direction
-    case object Down extends Direction
+    lazy val bodyHeight = if (isBullish) close - open else open - close
+
+    def engulfs(other: Candle): Boolean = bodyHeight > other.bodyHeight
+    def isOpposite(other: Candle): Boolean = isBullish && other.isBearish || isBearish && other.isBullish
 }
 
 case class SwingPoint(
@@ -121,11 +143,152 @@ object OrderStatus {
     case object Cancelled extends OrderStatus
 }
 
-sealed trait OrderZoneType
+sealed trait OrderType
+object OrderType {
+    case object Long extends OrderType
+    case object Short extends OrderType
+}
 
-case class OrderZone(low: Double, high: Double, 
+sealed trait EntryType
+object EntryType {
+    case object EngulfingOrderBlock extends EntryType
+}
+
+case class Order(low: Level, 
+                     high: Level, 
                      timestamp: Long, 
-                     zoneType: OrderZoneType, 
-                     status: OrderStatus,
+                     orderType: OrderType,
+                     entryType: EntryType, 
+                     status: OrderStatus = Planned,
+                     profitMultiplier: Double = 2.0,
+                     riskDollars: Double = 550.0,
                      placedTimestamp: Option[Long] = None,
-                     closeTimestamp: Option[Long] = None)
+                     filledTimestamp: Option[Long] = None,
+                     closeTimestamp: Option[Long] = None) {
+
+    import OrderType._
+    import OrderStatus._
+
+    require(high > low, "High and Low of an order zone cannot be equal or inverted.")
+
+    final val DollarsPerMicro = 5.0 //Five dollars per point on micros (MES)
+    final val MaxContracts = 50
+
+    lazy val entryPoint = orderType match {
+        case Long => high.value
+        case Short => low.value
+    }
+
+    lazy val stopLoss = orderType match {
+        case Long => low.value
+        case Short => high.value
+    }
+
+    lazy val atRiskPoints = (high.value - low.value)
+    lazy val profitPoints = atRiskPoints * profitMultiplier
+
+    lazy val atRiskPerContract = atRiskPoints * DollarsPerMicro 
+    lazy val potentialPerContract = profitPoints * DollarsPerMicro
+
+    lazy val takeProfit = orderType match {
+        case Long => high.value + profitPoints
+        case Short => low.value - profitPoints
+    }
+
+    lazy val contracts: Int = Math.floor(riskDollars / atRiskPerContract).toInt
+    lazy val atRisk = atRiskPerContract * contracts
+    lazy val potential = potentialPerContract * contracts
+    lazy val isViable = contracts <= MaxContracts
+
+    def adjustState(candle: Candle): Order = {
+        (status, orderType)  match {
+            case (Planned, Long) if candle.high.value >= takeProfit || candle.low.value <= stopLoss => 
+                this.copy(status = Cancelled, closeTimestamp = Some(candle.timestamp))
+            case (Planned, Short) if candle.low.value <= takeProfit || candle.high.value >= stopLoss =>
+                this.copy(status = Cancelled, closeTimestamp = Some(candle.timestamp))
+            case (Planned, _) => this
+
+            case (Placed, Long) if candle.low.value <= stopLoss && candle.high.value >= takeProfit && candle.isBullish =>
+                this.copy(status = Loss, filledTimestamp = Some(candle.timestamp), closeTimestamp = Some(candle.timestamp))
+            case (Placed, Long) if candle.low.value <= stopLoss && candle.high.value >= takeProfit && candle.isBearish =>
+                this.copy(status = Profit, filledTimestamp = Some(candle.timestamp), closeTimestamp = Some(candle.timestamp))
+            case (Placed, Long) if candle.low.value <= entryPoint && candle.high.value >= takeProfit => 
+                this.copy(status = Profit, filledTimestamp = Some(candle.timestamp), closeTimestamp = Some(candle.timestamp))
+            case (Placed, Long) if candle.high.value >= takeProfit =>
+                this.copy(status = Cancelled, closeTimestamp = Some(candle.timestamp))
+            case (Placed, Long) if candle.low.value <= stopLoss => 
+                this.copy(status = Loss, filledTimestamp = Some(candle.timestamp), closeTimestamp = Some(candle.timestamp))
+            case (Placed, Long) if candle.low.value <= entryPoint => 
+                this.copy(status = Filled, filledTimestamp = Some(candle.timestamp))
+
+            case (Placed, Short) if candle.high.value >= stopLoss && candle.low.value <= takeProfit && candle.isBearish =>
+                this.copy(status = Loss, filledTimestamp = Some(candle.timestamp), closeTimestamp = Some(candle.timestamp))
+            case (Placed, Short) if candle.high.value >= stopLoss && candle.low.value <= takeProfit && candle.isBullish =>
+                this.copy(status = Profit, filledTimestamp = Some(candle.timestamp), closeTimestamp = Some(candle.timestamp))
+            case (Placed, Short) if candle.high.value >= entryPoint && candle.low.value <= takeProfit =>
+                this.copy(status = Profit, filledTimestamp = Some(candle.timestamp), closeTimestamp = Some(candle.timestamp))
+            case (Placed, Short) if candle.low.value <= takeProfit =>
+                this.copy(status = Cancelled, closeTimestamp = Some(candle.timestamp))
+            case (Placed, Short) if candle.high.value >= stopLoss =>
+                this.copy(status = Loss, filledTimestamp = Some(candle.timestamp), closeTimestamp = Some(candle.timestamp))
+            case (Placed, Short) if candle.high.value >= entryPoint =>
+                this.copy(status = Filled, filledTimestamp = Some(candle.timestamp))
+
+            case (Filled, Long) if candle.high.value >= takeProfit && candle.low.value <= stopLoss && candle.isBullish =>
+                this.copy(status = Loss, closeTimestamp = Some(candle.timestamp))
+            case (Filled, Long) if candle.high.value >= takeProfit && candle.low.value <= stopLoss && candle.isBearish =>
+                this.copy(status = Profit, closeTimestamp = Some(candle.timestamp))
+            case (Filled, Long) if candle.high.value >= takeProfit =>
+                this.copy(status = Profit, closeTimestamp = Some(candle.timestamp))
+            case (Filled, Long) if candle.low.value <= stopLoss =>
+                this.copy(status = Loss, closeTimestamp = Some(candle.timestamp))
+
+            case (Filled, Short) if candle.low.value <= takeProfit && candle.high.value >= stopLoss && candle.isBearish =>
+                this.copy(status = Loss, closeTimestamp = Some(candle.timestamp))
+            case (Filled, Short) if candle.low.value <= takeProfit && candle.high.value >= stopLoss && candle.isBullish =>
+                this.copy(status = Profit, closeTimestamp = Some(candle.timestamp))
+            case (Filled, Short) if candle.low.value <= takeProfit =>
+                this.copy(status = Profit, closeTimestamp = Some(candle.timestamp))
+            case (Filled, Short) if candle.high.value >= stopLoss =>
+                this.copy(status = Loss, closeTimestamp = Some(candle.timestamp))
+
+            case _ => this
+        }
+    }
+
+    def cancelOrSell(candle: Candle): Order = {
+        import java.time.{Instant, LocalTime, ZoneId, Duration}
+
+        val zone = ZoneId.of("America/New_York")
+        val instant = Instant.ofEpochMilli(candle.timestamp)
+
+        // Determine the local date in Eastern time for the candle's instant,
+        // then build the 4:00 PM Eastern ZonedDateTime for that date.
+        val localDate = instant.atZone(zone).toLocalDate
+        val closingZdt = localDate.atTime(LocalTime.of(16, 0)).atZone(zone)
+        val closingMillis = closingZdt.toInstant.toEpochMilli
+
+        val tenMinutesMillis = Duration.ofMinutes(10).toMillis
+
+        if ((candle.timestamp - closingMillis) <= tenMinutesMillis) {
+          (status, orderType) match {
+            case (Filled, Long) if candle.close.value >= entryPoint =>
+                this.copy(status = Profit, closeTimestamp = Some(candle.timestamp))
+            case (Filled, Long) if candle.close.value <= entryPoint =>
+                this.copy(status = Loss, closeTimestamp = Some(candle.timestamp))
+            case (Filled, Short) if candle.close.value <= entryPoint =>
+                this.copy(status = Profit, closeTimestamp = Some(candle.timestamp))
+            case (Filled, Short) if candle.close.value >= entryPoint =>
+                this.copy(status = Loss, closeTimestamp = Some(candle.timestamp))
+            case _ => 
+                this.copy(status = Cancelled, closeTimestamp = Some(candle.timestamp))
+          }
+        } else this
+    }
+}
+
+object Order {
+    def fromCandle(candle: Candle, orderType: OrderType, entryType: EntryType, timestamp: Long) = {
+        Order(candle.low, candle.high, timestamp, orderType, entryType)
+    }
+}
