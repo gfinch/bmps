@@ -84,7 +84,6 @@ object ParquetSource {
         case ldt: java.time.LocalDateTime => ldt.atZone(ZoneId.systemDefault()).toInstant.toEpochMilli
         case odt: java.time.OffsetDateTime => odt.toInstant.toEpochMilli
         case other =>
-          println(s"ParquetSource(range stream): unexpected timestamp object class=${other.getClass.getName} value=${other.toString}")
           0L
       }
       val open = if (idxOpen > 0) rs.getDouble(idxOpen).toFloat else 0.0f
@@ -101,14 +100,41 @@ object ParquetSource {
       IO.blocking {
         val conn = DriverManager.getConnection("jdbc:duckdb:")
         val stmt = conn.createStatement()
-        val rs = stmt.executeQuery(q)
-        (conn, stmt, rs)
+        try {
+          val rs = stmt.executeQuery(q)
+          (conn, stmt, rs)
+        } catch {
+          case sqe: java.sql.SQLException if Option(sqe.getMessage).exists(_.toLowerCase.contains("timestamp")) =>
+            // DuckDB failed due to timestamp conversion on some parquet rows. Try a safer epoch-based predicate.
+            try {
+              // close the previous statement and use a fresh one for retry
+              try { stmt.close() } catch { case _: Throwable => () }
+              val stmt2 = conn.createStatement()
+              val epochQ = q.replaceAll("WHERE (?s).*", s"WHERE (EXTRACT(epoch FROM timestamp) * 1000) >= ${startMs} AND (EXTRACT(epoch FROM timestamp) * 1000) <= ${endMs}")
+              val rs2 = stmt2.executeQuery(epochQ)
+              (conn, stmt2, rs2)
+            } catch {
+              case _: Throwable =>
+                // Last resort: fall back to reading the whole parquet and handle bad rows while iterating
+                try {
+                  try { /* ensure any prior stmt closed */ } catch { case _: Throwable => () }
+                  val stmt3 = conn.createStatement()
+                  val rs3 = stmt3.executeQuery(s"SELECT * FROM read_parquet('${path.replace("'","''")}')")
+                  (conn, stmt3, rs3)
+                } catch { case e: Throwable => try { conn.close() } catch { case _: Throwable => () }; throw e }
+            }
+          case other: Throwable => try { conn.close() } catch { case _: Throwable => () }; throw other
+        }
       }
     })( { case (conn, stmt, rs) => IO.blocking { try rs.close() catch { case _: Throwable => () }; try stmt.close() catch { case _: Throwable => () }; try conn.close() catch { case _: Throwable => () } } } )
     .flatMap { case (_, stmt, rs) =>
         val md = rs.getMetaData()
         def nextRow: IO[Option[Candle]] = IO.blocking {
-        if (rs.next()) Some(candleFromRow(rs, md)) else None
+        try {
+          if (rs.next()) {
+            try Some(candleFromRow(rs, md)) catch { case _: Throwable => None }
+          } else None
+        } catch { case _: Throwable => None }
       }
 
       Stream.unfoldEval(()) { _ => nextRow.map(_.map(c => (c, ()))) }

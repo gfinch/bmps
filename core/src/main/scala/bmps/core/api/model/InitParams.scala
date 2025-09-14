@@ -1,4 +1,4 @@
-package bmps.core
+package bmps.core.api.model
 
 import java.time.LocalDate
 
@@ -13,3 +13,5 @@ case class InitParams(
   tradingDate: LocalDate = LocalDate.now(),
   playbackSpeed: Double = 1.0
 )
+
+

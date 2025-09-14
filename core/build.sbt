@@ -17,3 +17,9 @@ libraryDependencies ++= Seq(
 
 // Embedded websocket server for single-process frontend + core
 libraryDependencies += "org.java-websocket" % "Java-WebSocket" % "1.5.3"
+
+// Logging implementation for SLF4J (enable our logger.info/info output)
+libraryDependencies += "ch.qos.logback" % "logback-classic" % "1.4.11"
+
+// Note: running in-process (non-forked) is preferred for interactive debugging.
+// Removed the forked-run JVM settings to keep sbt in-process.
