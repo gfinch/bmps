@@ -2,9 +2,11 @@ package bmps.core
 
 import cats.effect.{IO, IOApp, Ref}
 import fs2.Stream
+import cats.effect.unsafe.IORuntime
 import _root_.io.circe.syntax._
 import _root_.io.circe.generic.auto._
 import java.time.{Instant, ZoneId}
+import java.util.concurrent.atomic.AtomicReference
 import java.sql.DriverManager
 import bmps.core.models._
 import bmps.core.services.SwingService
@@ -45,31 +47,55 @@ class CoreService(params: InitParams, parquetPath: String = "core/src/main/resou
   // Parquet reading lives in ParquetSource to keep CoreService data-source agnostic.
   import bmps.core.io.ParquetSource
 
+  // Keep a snapshot of the latest SystemState so other threads (WS handler) can
+  // access the planning state when a TRADE command arrives.
+  private val initialState = SystemState(params.tradingDate, Nil, Direction.Up, Nil)
+  private val latestStateRef: AtomicReference[SystemState] = new AtomicReference[SystemState](initialState)
+  // Reference to an optional outbound offer function; using a function type
+  // avoids referencing fs2.concurrent.Queue in the class signature and lets
+  // the WS handler publish events into the running stream.
+  private val outboundOfferRef: AtomicReference[Option[Event => IO[Unit]]] = new AtomicReference[Option[Event => IO[Unit]]](None)
+
   // Public events stream so other modules (web) can consume core events directly.
   def events: Stream[IO, Event] = {
-    val initialState = SystemState(params.tradingDate, Nil, Direction.Up, Nil)
+  // Stream the parquet file via the single range-stream API (wide open range)
+  val candleStream: Stream[IO, Candle] = ParquetSource.readParquetAsCandlesInRangeStream(parquetPath, 0L, Long.MaxValue, zoneId)
+  processCandlesStream(candleStream, params.tradingDate)
+  }
+
+  // Build events stream from a stream of candles. This is the shared implementation
+  // used by both `events` (full parquet) and replays (range reads).
+  private def processCandlesStream(candles: Stream[IO, Candle], tradingDay: LocalDate): Stream[IO, Event] = {
+    // Each stream keeps its own Ref for sequential updates, but mirror the
+    // latest computed state into latestStateRef so the WS handler can read it.
+    // Use a stream-local initial state with the requested tradingDay so the
+    // replayed/restated planning state reflects the date the client requested.
+    val streamInitial = SystemState(tradingDay, Nil, Direction.Up, Nil)
     for {
-      // read all candles (delegated to ParquetSource)
-      candles <- Stream.eval(ParquetSource.readParquetAsCandles(parquetPath))
-
-      // keep mutable state in Ref so each candle can be processed sequentially
-      stateRef <- Stream.eval(Ref.of[IO, SystemState](initialState))
-
-      // publish each candle and any newly discovered swing points, plan zones, and liquidity events
-      event <- Stream.emits(candles).covary[IO].evalMap { candle =>
-        // Atomically update state and compute new swings, plan zones, and liquidity zones
+      stateRef <- Stream.eval(Ref.of[IO, SystemState](streamInitial))
+      // Mirror the stream initial state into the shared latestStateRef so
+      // WebSocket handlers that read the planning snapshot see the correct
+      // tradingDay even before the first candle is processed.
+      _ <- Stream.eval(IO { try { latestStateRef.set(streamInitial) } catch { case _: Throwable => () } })
+      event <- candles.evalMap { candle =>
         stateRef.modify { state =>
           val updatedCandles = state.candles :+ candle
           val withSwings = swingService.computeSwings(state.copy(candles = updatedCandles))
           val (withZones, zoneEvents) = PlanZoneService.processPlanZones(withSwings)
           val (updatedState, liquidEvents) = LiquidityZoneService.processLiquidityZones(withZones)
+          println(s"***************${withZones.tradingDay}")
+          println(s"***************${updatedState.daytimeExtremes.size}")
+
+          // keep a live snapshot for TRADE handling
+          try { latestStateRef.set(updatedState) } catch { case _: Throwable => () }
 
           val newSwingPoints = updatedState.swingPoints.drop(state.swingPoints.length)
           (updatedState, (candle, newSwingPoints, zoneEvents, liquidEvents))
         }
-        }.flatMap { case (candle, newSwings, zoneEvents, liquidEvents) =>
+      }.flatMap { case (candle, newSwings, zoneEvents, liquidEvents) =>
         val candleEvent = Event.fromCandle(candle)
         val swingEvents = newSwings.map(sp => Event.fromSwingPoint(sp))
+
         if (liquidEvents.nonEmpty) println(s"[CoreService] candle ${candle.timestamp} produced ${liquidEvents.size} liquidity events")
         Stream.emit(candleEvent) ++ Stream.emits(swingEvents) ++ Stream.emits(zoneEvents) ++ Stream.emits(liquidEvents)
       }
@@ -148,9 +174,147 @@ class CoreService(params: InitParams, parquetPath: String = "core/src/main/resou
                   case _ => ()
                 }
               } else if (msgLower.contains("\"CMD\"") && msgLower.contains("TRADE")) {
-                // Placeholder: TRADE command received from client (no server action yet)
+                // TRADE command received from client: convert planning SystemState
+                // into a sequence of events and publish them so the trading side
+                // can pick up the plan that was created during planning.
                 try {
                   println(s"Received TRADE command from ${conn.getRemoteSocketAddress}: ${message.take(200)}")
+
+                  // mark this connection ready and flush any buffered events so the
+                  // client (and other ready clients) receive prior events before
+                  // we send the TRADE-derived events.
+                  try { readyMap.put(conn, java.lang.Boolean.TRUE) } catch { case _: Throwable => () }
+                  var m = eventBuffer.poll()
+                  while (m != null) {
+                    val readyConns = conns.asScala.filter(c => Option(readyMap.get(c)).contains(java.lang.Boolean.TRUE))
+                    readyConns.foreach { c => try c.send(m) catch { case _: Throwable => () } }
+                    m = eventBuffer.poll()
+                  }
+
+                  // Read current planning state snapshot
+                  val st = Option(latestStateRef.get())
+                  st.foreach { state =>
+                    // 1) All non-closed PlanZone (endTime.isEmpty)
+                    val openPlanZones = state.planZones.filter(pz => pz.endTime.isEmpty)
+                    // 2) All non-closed Liquidity zones (daytimeExtremes with endTime.isEmpty)
+                    val openDaytime = state.daytimeExtremes.filter(de => de.endTime.isEmpty)
+
+                    println(s"[CoreService][TRADE] openPlanZones=${openPlanZones.size} openDaytime=${openDaytime.size} outboundOfferPresent=${outboundOfferRef.get().isDefined}")
+
+                    // If there are no active items, nothing to playback
+                    if (openPlanZones.isEmpty && openDaytime.isEmpty) {
+                      // nothing to send
+                    } else {
+                      // Determine earliest timestamp among open plan zones and daytime extremes
+                      val planTs = openPlanZones.map(_.startTime)
+                      val dayTs = openDaytime.map(_.timestamp)
+                      val earliestOpt = (planTs ++ dayTs).sorted.headOption
+
+                      earliestOpt.foreach { earliest =>
+                        // Start playback one hour earlier than the earliest plan zone / daytime extreme
+                        val oneHourMs = 3600L * 1000L
+                        val startMs = Math.max(0L, earliest - oneHourMs)
+
+                        val eastern = ZoneId.of("America/New_York")
+                        val tradingDay = state.tradingDay
+                        val endMs = tradingDay.atTime(9, 30).atZone(eastern).toInstant.toEpochMilli
+
+                        // 5-min parquet path (resource included in project)
+                        val fiveMinPath = "core/src/main/resources/samples/es_futures_5min_60days.parquet"
+
+                        if (startMs < endMs) {
+                          // Track which existing items we've emitted so we only emit once
+                          val emittedPlanStarts = scala.collection.mutable.Set.empty[Long]
+                          val emittedDayStarts = scala.collection.mutable.Set.empty[Long]
+
+                          // Stream 5-min candles from earliest to market open and process them
+                          val candlesStream = ParquetSource.readParquetAsCandlesInRangeStream(fiveMinPath, startMs, endMs, zoneId)
+
+                          // Process each 5-min candle: update latestStateRef.fiveMinCandles and compute fiveMin swings
+                          try {
+                            val processIO = candlesStream.evalMap { candle =>
+                              IO {
+                                try {
+                                  // Update fiveMinCandles and compute swings
+                                  val prev = latestStateRef.get()
+                                  val newFiveCandles = prev.fiveMinCandles :+ candle
+                                  // Build a SystemState containing fiveMinCandles to compute swings
+                                  val tmp = prev.copy(fiveMinCandles = newFiveCandles, fiveMinSwingPoints = List.empty)
+                                  val swingsComputed = swingService.computeSwings(tmp)
+                                  val newFiveSwings = swingsComputed.swingPoints
+                                  val updated = prev.copy(fiveMinCandles = newFiveCandles, fiveMinSwingPoints = newFiveSwings)
+                                  try { latestStateRef.set(updated) } catch { case _: Throwable => () }
+
+                                  // Emit the candle event (forward into pipeline like broadcaster did)
+                                  val candleEvent = Event.fromCandle(candle)
+                                  val candleJson = candleEvent.asJson.noSpaces
+                                  try conn.send(candleJson) catch { case _: Throwable => () }
+                                  outboundOfferRef.get() match {
+                                    case Some(offerFn) => try { offerFn(candleEvent).unsafeRunAndForget()(IORuntime.global) } catch { case _: Throwable => () }
+                                    case None =>
+                                      val readyConns = conns.asScala.filter(c => Option(readyMap.get(c)).contains(java.lang.Boolean.TRUE))
+                                      if (readyConns.nonEmpty) readyConns.foreach { c => try c.send(candleJson) catch { case _: Throwable => () } }
+                                      else eventBuffer.add(candleJson)
+                                  }
+
+                                  // Emit any new five-min swing events (diff by timestamp)
+                                  val prevSwings = prev.fiveMinSwingPoints.map(_.timestamp).toSet
+                                  val newSwings = newFiveSwings.filterNot(sp => prevSwings.contains(sp.timestamp))
+                                  val swingEvents = newSwings.map(sp => Event.fromSwingPoint(sp))
+                                  // send swing events to requesting conn and pipeline
+                                  swingEvents.foreach { ev =>
+                                    val json = ev.asJson.noSpaces
+                                    try conn.send(json) catch { case _: Throwable => () }
+                                  }
+                                  outboundOfferRef.get() match {
+                                    case Some(offerFn) => newSwings.foreach(sp => try { offerFn(Event.fromSwingPoint(sp)).unsafeRunAndForget()(IORuntime.global) } catch { case _: Throwable => () })
+                                    case None =>
+                                      val jsons = swingEvents.map(_.asJson.noSpaces)
+                                      val readyConns = conns.asScala.filter(c => Option(readyMap.get(c)).contains(java.lang.Boolean.TRUE))
+                                      if (readyConns.nonEmpty) readyConns.foreach { c => jsons.foreach { j => try c.send(j) catch { case _: Throwable => () } } }
+                                      else jsons.foreach(j => eventBuffer.add(j))
+                                  }
+
+                                  // If we've reached or passed any existing plan zone startTime or daytime timestamp, emit those existing events
+                                  openPlanZones.filter(pz => !emittedPlanStarts.contains(pz.startTime) && candle.timestamp >= pz.startTime).foreach { pz =>
+                                    emittedPlanStarts += pz.startTime
+                                    val ev = Event.fromPlanZone(pz)
+                                    val json = ev.asJson.noSpaces
+                                    try conn.send(json) catch { case _: Throwable => () }
+                                    outboundOfferRef.get() match {
+                                      case Some(offerFn) => try { offerFn(ev).unsafeRunAndForget()(IORuntime.global) } catch { case _: Throwable => () }
+                                      case None =>
+                                        val readyConns = conns.asScala.filter(c => Option(readyMap.get(c)).contains(java.lang.Boolean.TRUE))
+                                        if (readyConns.nonEmpty) readyConns.foreach { c => try c.send(json) catch { case _: Throwable => () } }
+                                        else eventBuffer.add(json)
+                                    }
+                                  }
+
+                                  openDaytime.filter(de => !emittedDayStarts.contains(de.timestamp) && candle.timestamp >= de.timestamp).foreach { de =>
+                                    emittedDayStarts += de.timestamp
+                                    val ev = Event.fromDaytimeExtreme(de)
+                                    val json = ev.asJson.noSpaces
+                                    try conn.send(json) catch { case _: Throwable => () }
+                                    outboundOfferRef.get() match {
+                                      case Some(offerFn) => try { offerFn(ev).unsafeRunAndForget()(IORuntime.global) } catch { case _: Throwable => () }
+                                      case None =>
+                                        val readyConns = conns.asScala.filter(c => Option(readyMap.get(c)).contains(java.lang.Boolean.TRUE))
+                                        if (readyConns.nonEmpty) readyConns.foreach { c => try c.send(json) catch { case _: Throwable => () } }
+                                        else eventBuffer.add(json)
+                                    }
+                                  }
+
+                                } catch { case _: Throwable => () }
+                              }
+                            }.compile.drain
+
+                            // Start processing asynchronously so we don't block the WebSocket handler
+                            try { processIO.unsafeRunAndForget()(IORuntime.global) } catch { case _: Throwable => () }
+                          } catch { case _: Throwable => () }
+                        }
+                      }
+                    }
+                  }
                 } catch { case _: Throwable => () }
               } else if (msgLower.contains("\"CMD\"") && msgLower.contains("SPEED")) {
                 // Placeholder: SPEED command received from client — log the speed value if present
@@ -239,38 +403,14 @@ class CoreService(params: InitParams, parquetPath: String = "core/src/main/resou
     }
 
     val zoneEventBuffer: ListBuffer[Event] = ListBuffer.empty[Event]
+    
 
-    // Build events stream from an explicit list of candles (like the existing `events` but parameterized)
-    // Accept the trading day so downstream services (zones/extremes) can compute time windows correctly.
-    def eventsFromCandles(candles: List[Candle], tradingDay: LocalDate): Stream[IO, Event] = {
-      val initialState = SystemState(tradingDay, Nil, Direction.Up, Nil)
-      for {
-        stateRef <- Stream.eval(Ref.of[IO, SystemState](initialState))
-        event <- Stream.emits(candles).covary[IO].evalMap { candle =>
-          stateRef.modify { state =>
-            val updatedCandles = state.candles :+ candle
-            val withSwings = swingService.computeSwings(state.copy(candles = updatedCandles))
-            val (withZones, zoneEvents) = PlanZoneService.processPlanZones(withSwings)
-            val (updatedState, liquidEvents) = LiquidityZoneService.processLiquidityZones(withZones)
-
-            val newSwingPoints = updatedState.swingPoints.drop(state.swingPoints.length)
-            (updatedState, (candle, newSwingPoints, zoneEvents, liquidEvents))
-          }
-        }.flatMap { case (candle, newSwings, zoneEvents, liquidEvents) =>
-          val candleEvent = Event.fromCandle(candle)
-          val swingEvents = newSwings.map(sp => Event.fromSwingPoint(sp))
-
-          Stream.emit(candleEvent) ++ Stream.emits(swingEvents) ++ Stream.emits(zoneEvents) ++ Stream.emits(liquidEvents)
-        }
-      } yield event
-    }
-
-  // Prepare broadcaster as an IO that waits for PLAN commands, then reads parquet and broadcasts filtered events.
-  val broadcasterIO: IO[Unit] = fs2.Stream
+  // Broadcaster builder that uses a supplied global queue for outbound events.
+  def broadcasterIO(globalQueue: cats.effect.std.Queue[IO, Event]): IO[Unit] = fs2.Stream
       .repeatEval(IO.blocking(connectQueue.take()))
       .evalMap { dateStr =>
     IO.blocking(println(s"Received PLAN for date=$dateStr")).flatMap { _ =>
-        val parts = dateStr.split("\\|")
+  val parts = dateStr.split("\\|")
         val reqDate = parts.lift(0).getOrElse("")
         val reqDays = parts.lift(1).flatMap(s => try Some(s.toInt) catch { case _: Throwable => None }).getOrElse(2)
         val prevDates = computePrevTradingDates(reqDate, reqDays)
@@ -285,36 +425,44 @@ class CoreService(params: InitParams, parquetPath: String = "core/src/main/resou
                 val startMs = startDate.atStartOfDay(zoneId).toInstant.toEpochMilli
                 // end at 9:30 AM Eastern on tradingDay
                 val endMs = tradingDay.atTime(9, 30).atZone(eastern).toInstant.toEpochMilli
-                ParquetSource.readParquetAsCandlesInRange(parquetPath, startMs, endMs, zoneId).flatMap { candlesInRange =>
-                  println(s"Parquet read: candlesInRange=${candlesInRange.size} for dates=${prevDates}")
-                  // parse requested date into LocalDate to pass to eventsFromCandles
-                  val reqLocal = tradingDay
-                  eventsFromCandles(candlesInRange, reqLocal).evalMap { event =>
-                  val json = event.asJson.noSpaces
-                  IO {
-                    try {
-                      val readyClients = conns.asScala.filter(c => Option(readyMap.get(c)).contains(java.lang.Boolean.TRUE))
-                      if (readyClients.nonEmpty) {
-                        println(s"sending event to ${readyClients.size} clients: ${json.take(400)}")
-                        readyClients.foreach { c => try c.send(json) catch { case _: Throwable => () } }
-                      } else {
-                        println(s"buffering event: ${json.take(200)}")
-                        eventBuffer.add(json)
-                      }
-                    } catch { case e: Throwable => println("broadcast error: " + e.toString) }
-                  }
-                }.compile.drain
-          }
+                // Use streaming parquet range read to avoid materializing the entire slice
+                val candlesStream = ParquetSource.readParquetAsCandlesInRangeStream(parquetPath, startMs, endMs, zoneId)
+                println(s"Parquet streaming read for dates=${prevDates}")
+                // Producer: offer events from the parquet stream into the global queue
+                processCandlesStream(candlesStream, tradingDay).evalMap(e => globalQueue.offer(e)).compile.drain
         }
-  }
-  }
-  .compile
-  .drain
+      }
+    }.compile.drain
 
     // Start servers with a bracket so they are stopped when the stream is canceled (e.g., Ctrl+C).
     // Start the broadcaster as a background fiber and then keep the stream alive forever.
+    // Create a persistent global outbound queue and consumer, then start broadcaster using it
+    val globalQueueStream: Stream[IO, cats.effect.std.Queue[IO, Event]] =
+      Stream.eval(cats.effect.std.Queue.unbounded[IO, Event]).flatMap { q =>
+        val setOffer = IO.blocking(outboundOfferRef.set(Some((e: Event) => q.offer(e))))
+        Stream.eval(setOffer) >>
+        // start consumer fiber that forwards queued events to clients/buffer
+        Stream.eval(Stream.repeatEval(q.take).evalMap { event =>
+          val json = event.asJson.noSpaces
+          IO {
+            try {
+              val readyClients = conns.asScala.filter(c => Option(readyMap.get(c)).contains(java.lang.Boolean.TRUE))
+              if (readyClients.nonEmpty) {
+                println(s"sending event to ${readyClients.size} clients: ${json.take(400)}")
+                readyClients.foreach { c => try c.send(json) catch { case _: Throwable => () } }
+              } else {
+                println(s"buffering event: ${json.take(200)}")
+                eventBuffer.add(json)
+              }
+            } catch { case e: Throwable => println("broadcast error: " + e.toString) }
+          }
+        }.compile.drain.start).evalMap(_ => IO.unit) >> Stream.emit(q)
+      }
+
     fs2.Stream.bracket(acquire)(release).flatMap { _ =>
-      Stream.eval(broadcasterIO.start).flatMap(_ => Stream.eval(IO.never))
+      globalQueueStream.flatMap { q =>
+        Stream.eval(broadcasterIO(q).start).flatMap(_ => Stream.eval(IO.never))
+      }
     }
     
   }
