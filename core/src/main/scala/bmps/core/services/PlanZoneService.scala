@@ -19,8 +19,8 @@ object PlanZoneService {
     }
 
     def buildPlanZone(state: SystemState): SystemState = {
-        val swingPoints = state.swingPoints
-        val lastCandle = state.candles.last
+    val swingPoints = state.planningSwingPoints
+    val lastCandle = state.planningCandles.last
         ((
             swingPoints.reverse.find(_.direction == Direction.Down),
             swingPoints.reverse.find(_.direction == Direction.Up)
@@ -51,7 +51,7 @@ object PlanZoneService {
         val newZones = state.planZones.filterNot(z => priorState.planZones.exists(_.startTime == z.startTime))
         val changedZones = state.planZones.filter(z => priorState.planZones.find(_.startTime == z.startTime).map(_ != z).getOrElse(false))
 
-        val lastTimestamp = state.candles.last.timestamp
+        val lastTimestamp = state.planningCandles.last.timestamp
 
         (newZones ++ changedZones).map(Event.fromPlanZone)
     }
@@ -70,7 +70,7 @@ object PlanZoneService {
     }
 
     private def close(state: SystemState): SystemState = {
-        val lastCandle = state.candles.last
+        val lastCandle = state.planningCandles.last
         val newPlanZones = state.planZones.map(_.closedOut(lastCandle))
         state.copy(planZones = newPlanZones)
     }

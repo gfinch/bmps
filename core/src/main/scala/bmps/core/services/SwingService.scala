@@ -7,7 +7,7 @@ import bmps.core.models.Direction
 class SwingService(minConfirmations: Int = 1) {
 
     def computeSwings(state: SystemState): SystemState = {
-        val candles = state.candles
+    val candles = state.planningCandles
         if (candles.length < 2 * minConfirmations + 1) return state
 
         val swingPointsBuilder = List.newBuilder[SwingPoint]
@@ -24,8 +24,8 @@ class SwingService(minConfirmations: Int = 1) {
             }
         }
         val swingPoints = swingPointsBuilder.result()
-        val newDirection = if (swingPoints.nonEmpty) swingPoints.last.direction else state.direction
-        state.copy(swingPoints = swingPoints, direction = newDirection)
+        val newDirection = if (swingPoints.nonEmpty) swingPoints.last.direction else state.swingDirection
+    state.copy(planningSwingPoints = swingPoints, swingDirection = newDirection)
     }
   
 }

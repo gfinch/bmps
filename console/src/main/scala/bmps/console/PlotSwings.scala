@@ -60,17 +60,17 @@ object PlotSwings extends IOApp.Simple {
         duration = CandleDuration.OneHour
       ))
       swingService = new SwingService(minConfirmations = 3)
-  initialState = SystemState(tradingDay = LocalDate.now(), candles = candles, direction = Direction.Up, swingPoints = List.empty)
+  initialState = SystemState(tradingDay = LocalDate.now(), planningCandles = candles, swingDirection = Direction.Up, planningSwingPoints = List.empty)
       finalState = swingService.computeSwings(initialState)
       _ <- IO {
-        println(s"Computed ${finalState.swingPoints.length} swing points")
-        finalState.swingPoints.foreach(sp => println(s"Swing at level ${sp.level.value}, direction ${sp.direction}"))
+  println(s"Computed ${finalState.planningSwingPoints.length} swing points")
+  finalState.planningSwingPoints.foreach(sp => println(s"Swing at level ${sp.level.value}, direction ${sp.direction}"))
 
         // Plotting
         val timestamps = candles.map(_.timestamp.toDouble).toArray
         val closes = candles.map(_.close.value.toDouble).toArray
-        val swingTimestamps = finalState.swingPoints.map(_.timestamp.toDouble).toArray
-        val swingLevels = finalState.swingPoints.map(_.level.value.toDouble).toArray
+  val swingTimestamps = finalState.planningSwingPoints.map(_.timestamp.toDouble).toArray
+  val swingLevels = finalState.planningSwingPoints.map(_.level.value.toDouble).toArray
 
         val f = Figure()
         val p = f.subplot(0)

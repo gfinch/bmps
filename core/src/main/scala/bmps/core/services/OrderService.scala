@@ -7,8 +7,8 @@ import bmps.core.models.Order
 object OrderService {
 
     def placeOrders(state: SystemState): SystemState = {
-        require(state.fiveMinCandles.nonEmpty, "placeOrders called before there are candles in Trade state.")
-        val timestamp = state.fiveMinCandles.last.timestamp
+    require(state.tradingCandles.nonEmpty, "placeOrders called before there are candles in Trade state.")
+    val timestamp = state.tradingCandles.last.timestamp
         val updatedOrders = state.orders.zipWithIndex.map { case (order, i) => 
             if (order.status == OrderStatus.Planned && shouldPlaceOrder(order, state.orders)) {
                 placeOrder(order, timestamp)
