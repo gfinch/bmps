@@ -28,7 +28,7 @@ class CoreServiceImpl(params: InitParams, parquetPath: String = "core/src/main/r
   private val zoneId = ZoneId.systemDefault()
 
   // Keep a snapshot of the latest SystemState so other threads can access it.
-  private val initialState = SystemState(params.tradingDate, Nil, Direction.Up, Nil)
+  private val initialState = SystemState(tradingDay = params.tradingDate)
   private val latestStateRef: AtomicReference[SystemState] = new AtomicReference[SystemState](initialState)
   private val outboundOfferRef: AtomicReference[Option[Event => IO[Unit]]] = new AtomicReference[Option[Event => IO[Unit]]](None)
 
@@ -40,19 +40,19 @@ class CoreServiceImpl(params: InitParams, parquetPath: String = "core/src/main/r
   }
 
   private def processCandlesStream(candles: Stream[IO, Candle], tradingDay: LocalDate): Stream[IO, Event] = {
-    val streamInitial = SystemState(tradingDay, Nil, Direction.Up, Nil)
+  val streamInitial = SystemState(tradingDay = tradingDay)
     for {
       stateRef <- Stream.eval(Ref.of[IO, SystemState](streamInitial))
       _ <- Stream.eval(IO { try { latestStateRef.set(streamInitial) } catch { case _: Throwable => () } })
       event <- candles.evalMap { candle =>
         stateRef.modify { state =>
-          val updatedCandles = state.candles :+ candle
-          val withSwings = swingService.computeSwings(state.copy(candles = updatedCandles))
+          val updatedCandles = state.planningCandles :+ candle
+          val withSwings = swingService.computeSwings(state.copy(planningCandles = updatedCandles))
           val (withZones, zoneEvents) = PlanZoneService.processPlanZones(withSwings)
           val (updatedState, liquidEvents) = LiquidityZoneService.processLiquidityZones(withZones)
           try { latestStateRef.set(updatedState) } catch { case _: Throwable => () }
 
-          val newSwingPoints = updatedState.swingPoints.drop(state.swingPoints.length)
+          val newSwingPoints = updatedState.planningSwingPoints.drop(state.planningSwingPoints.length)
           (updatedState, (candle, newSwingPoints, zoneEvents, liquidEvents))
         }
       }.flatMap { case (candle, newSwings, zoneEvents, liquidEvents) =>

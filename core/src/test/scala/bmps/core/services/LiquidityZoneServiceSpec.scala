@@ -19,7 +19,7 @@ class LiquidityZoneServiceSpec extends AnyFunSuite {
     val cts = tsFor(tradingDay.minusDays(1), 9, 45)
     val candle = Candle(lvl(100f), lvl(110f), lvl(90f), lvl(105f), cts, CandleDuration.OneMinute)
 
-    val state = SystemState(tradingDay = tradingDay, candles = List(candle), direction = Direction.Up, swingPoints = List.empty)
+  val state = SystemState(tradingDay = tradingDay, planningCandles = List(candle), swingDirection = Direction.Up, planningSwingPoints = List.empty)
 
   val (newState, events) = LiquidityZoneService.processLiquidityZones(state)
 
@@ -38,7 +38,7 @@ class LiquidityZoneServiceSpec extends AnyFunSuite {
     val asiaTs = tsFor(tradingDay.minusDays(1), 18, 30)
     val asiaC1 = Candle(lvl(200f), lvl(205f), lvl(195f), lvl(200f), asiaTs, CandleDuration.OneMinute)
 
-  val state1 = SystemState(tradingDay = tradingDay, candles = List(asiaC1), direction = Direction.Up, swingPoints = List.empty)
+  val state1 = SystemState(tradingDay = tradingDay, planningCandles = List(asiaC1), swingDirection = Direction.Up, planningSwingPoints = List.empty)
   val (sAfterAsia, events1) = LiquidityZoneService.processLiquidityZones(state1)
 
   assert(sAfterAsia.daytimeExtremes.exists(_.description.startsWith("Asia - Low")))
@@ -48,7 +48,7 @@ class LiquidityZoneServiceSpec extends AnyFunSuite {
   // Now a later Asia candle sets a new low
     val asiaTs2 = tsFor(tradingDay.minusDays(1), 19, 0)
     val asiaC2 = Candle(lvl(199f), lvl(204f), lvl(190f), lvl(199f), asiaTs2, CandleDuration.OneMinute)
-    val state2 = sAfterAsia.copy(candles = sAfterAsia.candles :+ asiaC2)
+    val state2 = sAfterAsia.copy(planningCandles = sAfterAsia.planningCandles :+ asiaC2)
 
   val (sAfterAsia2, events2) = LiquidityZoneService.processLiquidityZones(state2)
 
@@ -60,7 +60,7 @@ class LiquidityZoneServiceSpec extends AnyFunSuite {
     // A candle outside London hours should not create London extremes
     val outsideLondonTs = tsFor(tradingDay, 0, 30) // before London open (03:00)
     val outsideLondonC = Candle(lvl(50f), lvl(55f), lvl(45f), lvl(52f), outsideLondonTs, CandleDuration.OneMinute)
-    val state3 = sAfterAsia2.copy(candles = sAfterAsia2.candles :+ outsideLondonC)
+    val state3 = sAfterAsia2.copy(planningCandles = sAfterAsia2.planningCandles :+ outsideLondonC)
     val (sAfterOut, _) = LiquidityZoneService.processLiquidityZones(state3)
 
     assert(!sAfterOut.daytimeExtremes.exists(_.description.startsWith("London -")))
@@ -73,7 +73,7 @@ class LiquidityZoneServiceSpec extends AnyFunSuite {
     // Create a New York high first (previous day 10:00)
     val nyTs = tsFor(tradingDay.minusDays(1), 10, 0)
     val nyC = Candle(lvl(100f), lvl(110f), lvl(90f), lvl(105f), nyTs, CandleDuration.OneMinute)
-    val state1 = SystemState(tradingDay = tradingDay, candles = List(nyC), direction = Direction.Up, swingPoints = List.empty)
+  val state1 = SystemState(tradingDay = tradingDay, planningCandles = List(nyC), swingDirection = Direction.Up, planningSwingPoints = List.empty)
     val (sAfterNy, eventsNy) = LiquidityZoneService.processLiquidityZones(state1)
 
     val nyHigh = sAfterNy.daytimeExtremes.find(_.description.startsWith("New York - High")).get
@@ -82,7 +82,7 @@ class LiquidityZoneServiceSpec extends AnyFunSuite {
     // Now an Asia candle with a higher high should cause the New York high to end
     val asiaTs = tsFor(tradingDay.minusDays(1), 19, 0) // Asia session
     val asiaC = Candle(lvl(200f), lvl(120f), lvl(195f), lvl(200f), asiaTs, CandleDuration.OneMinute)
-    val state2 = sAfterNy.copy(candles = sAfterNy.candles :+ asiaC)
+    val state2 = sAfterNy.copy(planningCandles = sAfterNy.planningCandles :+ asiaC)
     val (sAfterAsia, eventsAsia) = LiquidityZoneService.processLiquidityZones(state2)
 
     val nyHighAfter = sAfterAsia.daytimeExtremes.find(_.description.startsWith("New York - High")).get
@@ -97,7 +97,7 @@ class LiquidityZoneServiceSpec extends AnyFunSuite {
     // Create a New York low first (previous day 10:00)
     val nyTs = tsFor(tradingDay.minusDays(1), 10, 0)
     val nyC = Candle(lvl(100f), lvl(110f), lvl(90f), lvl(105f), nyTs, CandleDuration.OneMinute)
-    val state1 = SystemState(tradingDay = tradingDay, candles = List(nyC), direction = Direction.Up, swingPoints = List.empty)
+  val state1 = SystemState(tradingDay = tradingDay, planningCandles = List(nyC), swingDirection = Direction.Up, planningSwingPoints = List.empty)
     val (sAfterNy, _) = LiquidityZoneService.processLiquidityZones(state1)
 
     val nyLow = sAfterNy.daytimeExtremes.find(_.description.startsWith("New York - Low")).get
@@ -106,7 +106,7 @@ class LiquidityZoneServiceSpec extends AnyFunSuite {
     // Now an Asia candle with a lower low should cause the New York low to end
     val asiaTs = tsFor(tradingDay.minusDays(1), 19, 0) // Asia session
     val asiaC = Candle(lvl(50f), lvl(55f), lvl(80f), lvl(52f), asiaTs, CandleDuration.OneMinute)
-    val state2 = sAfterNy.copy(candles = sAfterNy.candles :+ asiaC)
+    val state2 = sAfterNy.copy(planningCandles = sAfterNy.planningCandles :+ asiaC)
     val (sAfterAsia, eventsAsia) = LiquidityZoneService.processLiquidityZones(state2)
 
     val nyLowAfter = sAfterAsia.daytimeExtremes.find(_.description.startsWith("New York - Low")).get

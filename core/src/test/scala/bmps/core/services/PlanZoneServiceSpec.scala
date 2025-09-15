@@ -44,9 +44,9 @@ class PlanZoneServiceSpec extends AnyFunSuite {
 
     val state = SystemState(
       tradingDay = LocalDate.of(2020,1,1),
-      candles = List(Candle(lvl(0f), lvl(100f), lvl(0f), lvl(50f), 100L, CandleDuration.OneMinute)),
-      direction = Direction.Up,
-      swingPoints = List.empty,
+      planningCandles = List(Candle(lvl(0f), lvl(100f), lvl(0f), lvl(50f), 100L, CandleDuration.OneMinute)),
+  swingDirection = Direction.Up,
+      planningSwingPoints = List.empty,
       planZones = List(z1, z2, z3)
     )
 

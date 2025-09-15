@@ -41,15 +41,15 @@ object ReplayProcessor {
       // Compose IO actions instead of running them unsafely.
       for {
         prev <- IO.delay(stateRef.get())
-        newFiveCandles = prev.fiveMinCandles :+ candle
-        tmp = prev.copy(fiveMinCandles = newFiveCandles, fiveMinSwingPoints = List.empty)
-        swingsComputed = swingService.computeSwings(tmp)
-        newFiveSwings = swingsComputed.swingPoints
-        updated = prev.copy(fiveMinCandles = newFiveCandles, fiveMinSwingPoints = newFiveSwings)
+  newFiveCandles = prev.tradingCandles :+ candle
+  tmp = prev.copy(tradingCandles = newFiveCandles, tradingSwingPoints = List.empty)
+  swingsComputed = swingService.computeSwings(tmp)
+  newFiveSwings = swingsComputed.planningSwingPoints
+  updated = prev.copy(tradingCandles = newFiveCandles, tradingSwingPoints = newFiveSwings)
         _ <- IO.delay(try { stateRef.set(updated) } catch { case _: Throwable => () })
         candleEvent = Event.fromCandle(candle)
         _ <- publisher(candleEvent).handleError(_ => ())
-        prevSwings = prev.fiveMinSwingPoints.map(_.timestamp).toSet
+  prevSwings = prev.tradingSwingPoints.map(_.timestamp).toSet
         newSwings = newFiveSwings.filterNot(sp => prevSwings.contains(sp.timestamp))
         _ <- newSwings.toList.traverse_(sp => publisher(Event.fromSwingPoint(sp)).handleError(_ => ()))
         _ <- IO.delay(

@@ -16,7 +16,7 @@ object LiquidityZoneService {
     // Extracted helper: build/update daytime extremes based on the last candle and market windows.
     private def updateDaytimeExtremes(state: SystemState): List[DaytimeExtreme] = {
         val tradingDay = state.tradingDay
-        val lastCandle = state.candles.last
+        val lastCandle = state.planningCandles.last
 
         // helper to build epoch millis for a given date and local time in eastern
         def toMillis(date: LocalDate, time: LocalTime): Long = {
