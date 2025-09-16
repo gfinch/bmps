@@ -7,6 +7,7 @@ import cats.effect.kernel.Outcome
 import bmps.core.models.{SystemState, SystemStatePhase}
 import bmps.core.Event
 import bmps.core.api.impl.PhaseRunner
+import scala.collection.immutable.Map
 
 class PhaseController(
     stateRef: Ref[IO, SystemState],
@@ -30,7 +31,7 @@ class PhaseController(
     * Ref and every emitted event is published to the broadcaster. On successful
     * completion the canonical stateRef is replaced with the final state.
     */
-  def startPhase(phase: SystemStatePhase): IO[Unit] =
+  def startPhase(phase: SystemStatePhase, options: Option[Map[String, String]] = None): IO[Unit] =
     semaphore.permit.use { _ =>
       for {
         current <- stateRef.get
@@ -44,7 +45,7 @@ class PhaseController(
         localRef <- Ref.of[IO, SystemState](current)
 
         // run the stream in a background fiber so this call returns immediately
-        fiber <- runner.runInto(localRef).evalMap { e =>
+        fiber <- runner.run(localRef, options).evalMap { e =>
           broadcaster.publish(phase, e)
         }.compile.drain.start
 

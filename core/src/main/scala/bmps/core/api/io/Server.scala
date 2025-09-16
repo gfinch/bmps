@@ -84,7 +84,7 @@ object Server {
                 case WebSocketFrame.Text(msg, _) =>
                   IO.fromEither(io.circe.parser.parse(msg).leftMap(err => new Exception(err))).flatMap { json =>
                     IO.fromEither(json.as[ClientCommand].leftMap(err => new Exception(err))).flatMap {
-                      case ClientCommand.StartPhase(phaseStr) =>
+                      case ClientCommand.StartPhase(phaseStr, options) =>
                         val phaseOpt = phaseStr.toLowerCase match {
                           case "planning" => Some(SystemStatePhase.Planning)
                           case "preparing" => Some(SystemStatePhase.Preparing)
@@ -92,7 +92,7 @@ object Server {
                           case _ => None
                         }
                         phaseOpt.fold(IO.unit) { p =>
-                          controller.startPhase(p).start.flatMap { _ =>
+                          controller.startPhase(p, options).start.flatMap { _ =>
                             val sub = broadcaster.subscribe(p).map(ev => WebSocketFrame.Text(ServerMessage.PhaseEvent(p.toString, ev).asJson.noSpaces)).evalMap(q.offer)
                             sub.compile.drain.start.flatMap(sf => fibersRef.update(sf :: _))
                           }
