@@ -11,7 +11,7 @@ object SystemStatePhase {
 }
 
 case class SystemState(
-    tradingDay: LocalDate,
+    tradingDay: LocalDate = LocalDate.now(),
     swingDirection: Direction = Direction.Up,
     systemStatePhase: SystemStatePhase = Planning,
     tradingDirection: Option[Direction] = None,

@@ -9,11 +9,31 @@ import bmps.core.models.SystemState
 
 sealed trait ClientCommand
 object ClientCommand {
-  case class StartPhase(phase: String) extends ClientCommand
+  case class StartPhase(phase: String, options: Option[Map[String, String]] = None) extends ClientCommand
   case object Status extends ClientCommand
 
-  implicit val startPhaseDecoder: Decoder[StartPhase] = deriveDecoder
-  implicit val startPhaseEncoder: Encoder[StartPhase] = deriveEncoder
+  implicit val startPhaseDecoder: Decoder[StartPhase] = Decoder.instance { c =>
+    for {
+      phase <- c.downField("phase").as[String]
+      optJson <- c.downField("options").as[Option[Json]]
+      optMap = optJson.flatMap { j =>
+        j.asObject.map { obj =>
+          obj.toMap.map { case (k, v) => (k, v.noSpaces) }
+        }.orElse {
+          // If options is present but not an object, represent it as a single key "value"
+          Some(Map("value" -> j.noSpaces))
+        }
+      }
+    } yield StartPhase(phase, optMap)
+  }
+
+  implicit val startPhaseEncoder: Encoder[StartPhase] = Encoder.instance { sp =>
+    val base = Json.obj("phase" -> Json.fromString(sp.phase))
+    sp.options match {
+  case Some(m) => base.deepMerge(Json.obj("options" -> Json.obj(m.toSeq.map { case (k,v) => (k, Json.fromString(v)) }: _*)))
+      case None => base
+    }
+  }
 
   implicit val commandDecoder: Decoder[ClientCommand] = Decoder.instance { c =>
     c.downField("command").as[String].flatMap {
