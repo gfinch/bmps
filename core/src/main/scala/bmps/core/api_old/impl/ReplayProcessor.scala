@@ -1,3 +1,5 @@
+
+/* DISABLED api_old
 package bmps.core.api.impl
 
 import cats.effect.IO
@@ -68,5 +70,7 @@ object ReplayProcessor {
     }.compile.drain
   }
 }
+
+*/
 
 

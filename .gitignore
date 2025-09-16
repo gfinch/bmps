@@ -10,3 +10,6 @@ target/
 .vscode/
 .idea/
 .bloop/
+.scalafmt.conf
+
+.DS_Store

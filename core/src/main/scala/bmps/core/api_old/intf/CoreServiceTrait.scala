@@ -1,3 +1,4 @@
+/* DISABLED api_old
 package bmps.core.api.intf
 
 import cats.effect.IO
@@ -27,5 +28,7 @@ trait CoreService {
   /** Stream a parquet range into the provided queue using the service's pipeline. */
   def streamParquetRangeToQueue(startMs: Long, endMs: Long, tradingDay: java.time.LocalDate, q: Queue[IO, Event]): IO[Unit]
 }
+
+*/
 
 

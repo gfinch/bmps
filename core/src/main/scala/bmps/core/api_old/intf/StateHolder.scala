@@ -1,3 +1,5 @@
+
+/* DISABLED api_old
 package bmps.core.api.intf
 
 import java.util.concurrent.atomic.AtomicReference
@@ -11,5 +13,7 @@ trait StateHolder {
   def set(s: SystemState): Unit
   def getAtomicRef(): AtomicReference[SystemState]
 }
+
+*/
 
 
