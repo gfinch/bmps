@@ -5,7 +5,7 @@ import cats.effect.Ref
 import fs2.Stream
 import bmps.core.api.intf.{CandleSource, EventGenerator}
 import bmps.core.models.{SystemState, Candle}
-import bmps.core.Event
+import bmps.core.models.Event
 
 /**
  * Generic runner for a phase: it reads candles from a CandleSource, applies
@@ -13,23 +13,34 @@ import bmps.core.Event
  * emits Events.
  */
 class PhaseRunner(source: CandleSource, processor: EventGenerator) {
-  /**
-    * Run using an externally-provided stateRef so callers can observe and
-    * persist the evolving SystemState. The stream emits events as usual and
-    * updates the provided stateRef with each processed candle.
-    */
+  
+  def initialize(stateRef: Ref[IO, SystemState], options: Option[Map[String, String]]): IO[Unit] = {
+    stateRef.update { state =>
+      processor.initialize(state, options.getOrElse(Map.empty))
+    }
+  }
+  
   def run(stateRef: Ref[IO, SystemState], options: Option[Map[String, String]] = None): Stream[IO, Event] = {
-    for {
-      event <- source.candles.evalMap { candle =>
+    Stream.eval(stateRef.get).flatMap { state =>
+      source.candles(state).evalMap { candle =>
         stateRef.modify { state =>
           val (newState, events) = processor.process(state, candle)
           (newState, (candle, events))
         }
       }.flatMap { case (candle, events) =>
-        val candleEvent = bmps.core.Event.fromCandle(candle)
+        val candleEvent = Event.fromCandle(candle)
         Stream.emit(candleEvent) ++ Stream.emits(events)
       }
-    } yield event
+    }
+  }
+
+  def finalize(stateRef: Ref[IO, SystemState]): IO[List[Event]] = {
+    // Apply the processor.finalize to the current state, update it and
+    // return the list of events that were produced during finalization.
+    stateRef.modify { state =>
+      val (newState, events) = processor.finalize(state)
+      (newState, events)
+    }
   }
 }
 

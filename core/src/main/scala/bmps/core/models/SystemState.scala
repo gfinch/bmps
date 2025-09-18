@@ -12,14 +12,19 @@ object SystemStatePhase {
 
 case class SystemState(
     tradingDay: LocalDate = LocalDate.now(),
+    planningDays: Int = 30,
+    
     swingDirection: Direction = Direction.Up,
     systemStatePhase: SystemStatePhase = Planning,
-    tradingDirection: Option[Direction] = None,
     planningCandles: List[Candle] = List.empty,
     planningSwingPoints: List[SwingPoint] = List.empty,
-    tradingCandles: List[Candle] = List.empty,
-    tradingSwingPoints: List[SwingPoint] = List.empty,
     planZones: List[PlanZone] = List.empty,
     daytimeExtremes: List[DaytimeExtreme] = List.empty,
+    
+    tradingReplayStartTime: Option[Long] = None,
+    tradingDirection: Option[Direction] = None,
+    tradingCandles: List[Candle] = List.empty,
+    tradingSwingPoints: List[SwingPoint] = List.empty,
+    
     orders: List[Order] = List.empty
 )

@@ -63,7 +63,7 @@ try { tradeChart = createChart(tradeView); } catch (e) { tradeChart = null; }
 
 // per-view contexts (plan and trade)
 const planCtx = makeViewContext(planView, chart);
-const tradeCtx = tradeChart ? makeViewContext(tradeView, tradeChart) : null;
+let tradeCtx = tradeChart ? makeViewContext(tradeView, tradeChart) : null;
 
 // Create view-specific contexts so Plan and Trade can maintain separate series
 // and overlays while sharing the same rendering logic.
@@ -74,6 +74,7 @@ function makeViewContext(container, chartInstance) {
   ctx.candleSeries = chartInstance.addCandlestickSeries({ upColor: '#26a69a', downColor: '#ef5350', wickUpColor: '#26a69a', wickDownColor: '#ef5350' });
   ctx.swingMarkers = [];
   ctx.planZones = new Map();
+  ctx.orderBoxes = new Map();
   ctx.daytimeExtremes = new Map();
   ctx.overlayCanvas = null;
   ctx.overlayCtx = null;
@@ -90,6 +91,26 @@ function safeNumber(v) {
     if ('level' in v) return safeNumber(v.level);
   }
   return null;
+}
+
+// Detect PhaseComplete events robustly. The server may encode eventType as
+// an object like { PhaseComplete: {} } or as a string; handle both shapes.
+function isPhaseCompleteEvent(event) {
+  try {
+    if (!event || !event.eventType) return false;
+    const et = event.eventType;
+    if (typeof et === 'string') {
+      return String(et).toLowerCase().includes('phasecomplete');
+    }
+    if (typeof et === 'object') {
+      try {
+        const keys = Object.keys(et || {});
+        if (!keys || !keys.length) return false;
+        return keys.some(k => String(k).toLowerCase().includes('phasecomplete'));
+      } catch (_) { return false; }
+    }
+    return false;
+  } catch (_) { return false; }
 }
 
 function toZoneKey(z) {
@@ -212,7 +233,7 @@ function resizeOverlay(ctx) {
   drawZones(ctx);
 }
 
-function drawZones(ctx) {
+function drawZonesBase(ctx) {
   try {
     if (!ctx) return;
   initOverlay(ctx);
@@ -314,6 +335,253 @@ function drawZones(ctx) {
   } catch (e) {
     console.error('failed drawing zone overlays', e);
   }
+}
+
+// integrate orders into the zone drawing pass so overlays are single source
+// of truth
+function drawZones(ctx) {
+  try {
+    drawZonesBase(ctx);
+    // draw orders on top
+    try { drawOrders(ctx); } catch (e) { console.error('failed drawing orders overlay', e); }
+  } catch (e) { console.error('drawZones wrapper error', e); }
+}
+
+function toOrderKey(o) {
+  try {
+    // Key orders by normalized start timestamp in seconds. This ensures
+    // that multiple messages for the same order (same timestamp) overwrite
+    // previous versions. Optionally include orderType for minor disambiguation.
+    const t = Math.floor(Number(o.timestamp || o.startTime || o.placedTimestamp || 0) / 1000);
+    const type = (o.orderType || o.type || '').toString() || '';
+    return `${t}:${type}`;
+  } catch (_) { return String(Math.random()); }
+}
+
+function normalizeOrderPayload(raw) {
+  // extract order object from event shapes
+  const o = (raw && (raw.order || raw.Order || raw.payload)) ? (raw.order || raw.Order || raw.payload) : raw;
+  if (!o) return null;
+  try {
+    const startMs = o.timestamp || o.startTime || o.placedTimestamp || Date.now();
+    const placedMs = o.placedTimestamp || null;
+    const filledMs = o.filledTimestamp || o.filled || null;
+    const closedMs = o.closeTimestamp || o.closedTimestamp || o.closed || null;
+    const low = safeNumber(o.low && o.low.value ? o.low.value : o.low) || safeNumber(o.lowLevel) || safeNumber(o.stopLoss) || 0;
+    const high = safeNumber(o.high && o.high.value ? o.high.value : o.high) || safeNumber(o.highLevel) || safeNumber(o.entryPoint) || 0;
+    const entryPoint = safeNumber(o.entryPoint) || null;
+    const takeProfit = safeNumber(o.takeProfit) || null;
+    const stopLoss = safeNumber(o.stopLoss) || null;
+    const statusRaw = (o.status && typeof o.status === 'object') ? Object.keys(o.status)[0] : (o.status || '');
+    const status = String(statusRaw).toLowerCase();
+    return {
+      meta: {
+        start: Math.floor(Number(startMs) / 1000),
+        placed: placedMs ? Math.floor(Number(placedMs) / 1000) : null,
+        filled: filledMs ? Math.floor(Number(filledMs) / 1000) : null,
+        closed: closedMs ? Math.floor(Number(closedMs) / 1000) : null,
+        low: Number(low),
+        high: Number(high),
+        entryPoint: entryPoint !== null ? Number(entryPoint) : null,
+        takeProfit: takeProfit !== null ? Number(takeProfit) : null,
+        stopLoss: stopLoss !== null ? Number(stopLoss) : null,
+        status: status,
+        raw: o
+      }
+    };
+  } catch (e) { return null; }
+}
+
+function handleOrderEvent(event, ctx) {
+  try {
+    if (!event) return;
+    const ord = (event.order || event.Order || event.payload) ? (event.order || event.Order || event.payload) : event;
+    if (!ord) return;
+    const normalized = normalizeOrderPayload(ord);
+    if (!normalized) return;
+    const key = toOrderKey(ord);
+    // store entry
+    ctx.orderBoxes.set(key, normalized);
+    // prune if too many
+    if (ctx.orderBoxes.size > 500) {
+      const k = ctx.orderBoxes.keys().next().value;
+      ctx.orderBoxes.delete(k);
+    }
+    // redraw overlays
+    drawZones(ctx);
+  } catch (e) { console.error('failed handling order event', e); }
+}
+
+// Draw order boxes on the same overlay canvas. Orders are stored in ctx.orderBoxes
+// keyed by a deterministic key. Each entry.meta contains numeric times (seconds)
+// and numeric price levels. This function follows the rendering rules supplied
+// in the request and uses the chart timeScale and series to convert to canvas
+// coordinates.
+function drawOrders(ctx) {
+  try {
+    if (!ctx) return;
+    initOverlay(ctx);
+    if (!ctx.overlayCtx || !ctx.overlayCanvas) return;
+    const overlayCtx = ctx.overlayCtx;
+    const timeScale = ctx.chart.timeScale();
+    const cs = ctx.candleSeries;
+    const chartWidth = ctx.container.clientWidth;
+    const chartHeight = ctx.container.clientHeight;
+
+    for (const entry of ctx.orderBoxes.values()) {
+      try {
+        const m = entry.meta;
+        // times in seconds
+        const start = Math.floor(Number(m.start || m.timestamp || 0));
+        const placed = m.placed ? Math.floor(Number(m.placed)) : null;
+        const filled = m.filled ? Math.floor(Number(m.filled)) : null;
+        const closed = m.closed ? Math.floor(Number(m.closed)) : null;
+        const edgeTime = ctx.lastBarTime || start;
+        const xStart = timeScale.timeToCoordinate(start);
+        const xPlaced = placed ? timeScale.timeToCoordinate(placed) : null;
+        const xFilled = filled ? timeScale.timeToCoordinate(filled) : null;
+        const xClosed = closed ? timeScale.timeToCoordinate(closed) : null;
+        const xEdge = timeScale.timeToCoordinate(edgeTime);
+        // fallback to right edge if timeToCoordinate returns null
+        const rightEdge = (xEdge === null || xEdge === undefined) ? chartWidth : xEdge;
+
+        const low = Number(m.low || 0);
+        const high = Number(m.high || 0);
+        const entryPrice = (m.entryPoint !== undefined && m.entryPoint !== null) ? Number(m.entryPoint) : null;
+        const takeProfit = (m.takeProfit !== undefined && m.takeProfit !== null) ? Number(m.takeProfit) : null;
+        const stopLoss = (m.stopLoss !== undefined && m.stopLoss !== null) ? Number(m.stopLoss) : null;
+
+        // helper to draw a horizontal-time span between two coords and vertical between two prices
+        const drawPriceRect = (x0, x1, pA, pB, fillStyle, strokeStyle) => {
+          if (x0 === null || x1 === null) return;
+          const xa = Math.min(x0, x1);
+          const xb = Math.max(x0, x1);
+          const yA = cs.priceToCoordinate(pA);
+          const yB = cs.priceToCoordinate(pB);
+          if (yA === null || yB === null) return;
+          const yTop = Math.min(yA, yB);
+          const h = Math.abs(yB - yA);
+          if (h <= 0 || xb - xa <= 0) return;
+          overlayCtx.save();
+          overlayCtx.fillStyle = fillStyle;
+          overlayCtx.fillRect(xa, yTop, xb - xa, h);
+          overlayCtx.strokeStyle = strokeStyle;
+          overlayCtx.lineWidth = 2;
+          overlayCtx.strokeRect(xa, yTop, xb - xa, h);
+          overlayCtx.restore();
+        };
+
+        const status = (m.status || '').toString().toLowerCase();
+
+  // Styles
+  const redFill = 'rgba(255,0,0,0.18)';
+  const greenFill = 'rgba(0,176,80,0.18)';
+  const grayFill = 'rgba(160,160,160,0.12)';
+  const redStroke = '#ff0000';
+  const greenStroke = '#00b050';
+  const grayStroke = '#bdbdbd';
+
+        // Render according to rules — mutually exclusive handling so a single
+        // order status doesn't produce conflicting overlays.
+        const isCancelled = status.includes('cancel') || status.includes('cancelled') || status.includes('canceled');
+        const isProfit = status.includes('profit') || status.includes('won');
+        const isLoss = status.includes('loss');
+        const isPlanned = status.includes('planned') || status.includes('plan');
+        const isPlaced = status.includes('placed') || (placed && !filled && !closed && !isCancelled && !isProfit && !isLoss);
+
+        if (isCancelled) {
+          // Cancelled: draw gray box from fill->close if filled, otherwise
+          // from placed/start -> close (or chart edge). Also render the
+          // entry->stopLoss vertical range and a full high->low gray overlay
+          const leftX = (xFilled !== null && xFilled !== undefined) ? xFilled : ((xPlaced !== null && xPlaced !== undefined) ? xPlaced : xStart);
+          const rightX = (xClosed !== null && xClosed !== undefined) ? xClosed : rightEdge;
+          if (leftX !== null && leftX !== undefined && rightX !== null && rightX !== undefined) {
+            // full high-low gray overlay for the duration
+            drawPriceRect(leftX, rightX, high, low, grayFill, grayStroke);
+            // entry to stopLoss highlighted within that span
+            if (entryPrice !== null && stopLoss !== null) {
+              drawPriceRect(leftX, rightX, Math.max(entryPrice, stopLoss), Math.min(entryPrice, stopLoss), grayFill, grayStroke);
+            }
+          }
+        } else if (isProfit) {
+          // Profit: prioritize showing a green box. Prefer filled->closed time
+          // span but fall back to placed/start->edge when timestamps are
+          // missing. Draw the vertical range from entry->takeProfit when
+          // available; otherwise fall back to high->low for visibility.
+          // Ensure we have usable pixel coordinates. If timeToCoordinate
+          // returned null (off-screen), fall back to chart edges so we can
+          // still draw a visible span.
+          const spanLeftRaw = (xFilled !== null && xFilled !== undefined) ? xFilled : ((xPlaced !== null && xPlaced !== undefined) ? xPlaced : xStart);
+          const spanRightRaw = (xClosed !== null && xClosed !== undefined) ? xClosed : rightEdge;
+          let spanLeft = (spanLeftRaw === null || spanLeftRaw === undefined) ? 0 : spanLeftRaw;
+          let spanRight = (spanRightRaw === null || spanRightRaw === undefined) ? chartWidth : spanRightRaw;
+          // compute pixel span for profit (no debug logging)
+          // If the computed span has effectively no width, prefer a fallback
+          // using the placed->closed timestamps (or start->edge) so we draw a
+          // meaningful span instead of artificially expanding the pixels.
+          try {
+            if (Math.abs(spanRight - spanLeft) <= 0) {
+              const fbLeft = (xPlaced !== null && xPlaced !== undefined) ? xPlaced : xStart;
+              const fbRight = (xClosed !== null && xClosed !== undefined) ? xClosed : rightEdge;
+              if (fbLeft !== null && fbRight !== null && Math.abs(fbRight - fbLeft) > 0) {
+                spanLeft = fbLeft;
+                spanRight = fbRight;
+              }
+            }
+          } catch (_) { }
+          if (spanLeft !== null && spanRight !== null && spanLeft !== undefined && spanRight !== undefined) {
+            if (entryPrice !== null && takeProfit !== null) {
+              // entry -> takeProfit within the chosen time span
+              drawPriceRect(spanLeft, spanRight, Math.max(entryPrice, takeProfit), Math.min(entryPrice, takeProfit), greenFill, greenStroke);
+            } else {
+              // fallback: draw full high-low green box for the span. If price
+              // coordinates are not available (off-screen), draw a full-height
+              // solid rectangle so the profit is unmistakable during testing.
+              const drew = (() => {
+                try {
+                  drawPriceRect(spanLeft, spanRight, high, low, greenFill, greenStroke);
+                  return true;
+                } catch (_) { return false; }
+              })();
+              if (!drew) {
+                // full-height fallback (CSS pixels)
+                try {
+                  overlayCtx.save();
+                  overlayCtx.fillStyle = greenFill;
+                  overlayCtx.fillRect(Math.min(spanLeft, spanRight), 0, Math.abs(spanRight - spanLeft), chartHeight);
+                  overlayCtx.strokeStyle = greenStroke;
+                  overlayCtx.lineWidth = 2;
+                  overlayCtx.strokeRect(Math.min(spanLeft, spanRight), 0, Math.abs(spanRight - spanLeft), chartHeight);
+                  overlayCtx.restore();
+                } catch (_) { }
+              }
+            }
+          }
+        } else if (isLoss) {
+          // Loss: red box from filled->close, entry->stopLoss
+          if (xFilled !== null && xClosed !== null && entryPrice !== null && stopLoss !== null) {
+            drawPriceRect(xFilled, xClosed, Math.max(entryPrice, stopLoss), Math.min(entryPrice, stopLoss), redFill, redStroke);
+          }
+        } else if (filled) {
+          // Filled: gray start->filled, red filled->edge (high-low), and
+          // green entry->takeProfit from filled->edge (if not profit/loss/cancel)
+          if (xFilled !== null) drawPriceRect(xStart, xFilled, high, low, grayFill, grayStroke);
+          if (xFilled !== null) drawPriceRect(xFilled, rightEdge, high, low, redFill, redStroke);
+          if (entryPrice !== null && takeProfit !== null) {
+            drawPriceRect(xFilled || rightEdge, rightEdge, entryPrice, takeProfit, greenFill, greenStroke);
+          }
+        } else if (isPlaced) {
+          // Placed: gray box start->placed, and green box start->edge
+          if (placed && xPlaced !== null) drawPriceRect(xStart, xPlaced, high, low, grayFill, grayStroke);
+          if (xStart !== null) drawPriceRect(xStart, rightEdge, high, low, greenFill, greenStroke);
+        } else if (isPlanned) {
+          // Planned: red box from start to edge, height high->low
+          if (xStart !== null) drawPriceRect(xStart, rightEdge, high, low, redFill, redStroke);
+        }
+
+      } catch (e) { /* ignore per-entry errors */ }
+    }
+  } catch (e) { console.error('failed drawing orders', e); }
 }
 
 function updateOpenZones(ctx) {
@@ -442,13 +710,15 @@ function toBarFromCandle(obj) {
   return { time, open: Number(open), high: Number(high), low: Number(low), close: Number(close) };
 }
 
-function connectCoreWS(url = 'ws://localhost:9001') {
+function connectCoreWS(url = 'ws://localhost:8080/ws') {
   const ws = new WebSocket(url);
   // buffer for raw incoming messages until user starts processing them
   const msgBuffer = [];
   let started = false;
   // pending speed message to send when WS opens if changed before connect
   let pendingSpeed = null;
+  // whether we've already initiated the full Trading phase on the server
+  let tradingPhaseInitiated = false;
 
   // Global app state: 'initial' | 'planning' | 'trading'
   const GlobalState = {
@@ -514,10 +784,43 @@ function connectCoreWS(url = 'ws://localhost:9001') {
   function flushBuffer() {
     while (msgBuffer.length) {
       const ev = msgBuffer.shift();
-      try {
-        const event = JSON.parse(ev);
+        try {
+          const raw = JSON.parse(ev);
+          let event = raw;
+          // Some servers wrap the payload as { type: 'event', event: {...} }
+          // while others (or relays) send { phase: 'Planning', event: {...} }.
+          // Accept either form: if there's an `event` property, unwrap it.
+          try {
+            if (raw && raw.event) event = raw.event;
+          } catch (_) { event = raw }
         // store by current global state
         try { stateEvents[currentState].push(event); } catch (_) { }
+        // detect order events
+        try {
+          const isOrder = Boolean(event && (event.order || (event.eventType && (typeof event.eventType === 'object' ? Object.keys(event.eventType || {})[0] === 'Order' : String(event.eventType).toLowerCase().includes('order')))));
+          if (isOrder) {
+            try { const ctx = (currentState === GlobalState.TRADING) ? tradeCtx : planCtx; if (ctx) handleOrderEvent(event, ctx); } catch (_) { }
+          }
+        } catch (_) { }
+        // If this is a PhaseComplete event and we're in the TRADING UI state
+        // (which is used while preparing), trigger the actual Trading phase
+        // on the server exactly once.
+        try {
+          const isPhaseComplete = isPhaseCompleteEvent(event);
+          if (isPhaseComplete && currentState === GlobalState.TRADING && !tradingPhaseInitiated) {
+            // send StartPhase 'trading' to the server
+            try {
+              const selectedDate = datePicker ? datePicker.value : '';
+              const options = { tradingDate: selectedDate || '', planningDays: String(days || 0) };
+              const msg = { command: 'startPhase', phase: 'trading', options };
+              if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify(msg));
+                tradingPhaseInitiated = true;
+                if (statusEl) statusEl.textContent = `Connected (state=${currentState}) - trading started`;
+              }
+            } catch (e) { console.warn('failed send trading StartPhase', e); }
+          }
+        } catch (_) { }
         const ctx = (currentState === GlobalState.TRADING) ? tradeCtx : planCtx;
         const isCandle = Boolean(event && (event.candle || (event.eventType && (String(event.eventType).includes('Candle') || event.eventType === 'Candle'))));
         if (isCandle) {
@@ -572,10 +875,41 @@ function connectCoreWS(url = 'ws://localhost:9001') {
       return;
     }
     try {
-      const event = JSON.parse(ev.data);
+      // server messages are wrapped as ServerMessage with a `type` field
+      // parse the wrapper and extract the inner event when present
+      const raw = JSON.parse(ev.data);
+      let event = raw;
+      try {
+        // Accept wrapped messages that include an `event` property and unwrap
+        try { if (raw && raw.event) event = raw.event; } catch (_) { event = raw }
+      } catch (_) { event = raw }
       // store incoming events per current state
       try { stateEvents[currentState].push(event); } catch (_) { }
+      // If this is a PhaseComplete event and we're in the TRADING UI state
+      // (preparing), initiate the real Trading phase on the server once.
+      try {
+        const isPhaseComplete = isPhaseCompleteEvent(event);
+        if (isPhaseComplete && currentState === GlobalState.TRADING && !tradingPhaseInitiated) {
+          try {
+            const selectedDate = datePicker ? datePicker.value : '';
+            const options = { tradingDate: selectedDate || '', planningDays: String(days || 0) };
+            const msg = { command: 'startPhase', phase: 'trading', options };
+            if (ws && ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify(msg));
+              tradingPhaseInitiated = true;
+              if (statusEl) statusEl.textContent = `Connected (state=${currentState}) - trading started`;
+            }
+          } catch (e) { console.warn('failed send trading StartPhase', e); }
+        }
+      } catch (_) { }
       const ctx = (currentState === GlobalState.TRADING) ? tradeCtx : planCtx;
+      // detect order events in live path
+      try {
+        const isOrder = Boolean(event && (event.order || (event.eventType && (typeof event.eventType === 'object' ? Object.keys(event.eventType || {})[0] === 'Order' : String(event.eventType).toLowerCase().includes('order')))));
+        if (isOrder) {
+          try { if (ctx) handleOrderEvent(event, ctx); } catch (_) { }
+        }
+      } catch (_) { }
       const isCandle = Boolean(event && (event.candle || (event.eventType && (String(event.eventType).includes('Candle') || event.eventType === 'Candle'))));
       if (isCandle) {
         const bar = toBarFromCandle(event);
@@ -614,8 +948,10 @@ function connectCoreWS(url = 'ws://localhost:9001') {
     // if websocket not open yet, ignore
     try {
       const selectedDate = datePicker ? datePicker.value : '';
-      const msg = { cmd: 'PLAN', date: selectedDate, days };
-      ws.send(JSON.stringify(msg));
+      // send StartPhase with options matching the new protocol
+      const options = { tradingDate: selectedDate || '', planningDays: String(days || 0) };
+      const msg = { command: 'startPhase', phase: 'planning', options };
+      if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
       statusEl.textContent = `Planned ${selectedDate || ''} days=${days} @ ${replaySpeed}x`;
       // ensure state becomes planning and start processing incoming events
       currentState = GlobalState.PLANNING;
@@ -641,23 +977,32 @@ function connectCoreWS(url = 'ws://localhost:9001') {
       showTradeView();
       return;
     }
+    // If not yet in TRADING, the first Trade click should start the preparing phase
     try {
       const selectedDate = datePicker ? datePicker.value : '';
-      const msg = { cmd: 'TRADE', date: selectedDate, days };
-      ws.send(JSON.stringify(msg));
-      // switch global state to trading and start processing incoming events
+      const options = { tradingDate: selectedDate || '', planningDays: String(days || 0) };
+      const msg = { command: 'startPhase', phase: 'preparing', options };
+      if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
+      // Ensure the trade chart/context exists before we switch state so
+      // incoming Preparing-phase events (PlanZone, etc.) are applied to it.
+      if (!tradeCtx) {
+        try {
+          tradeChart = createChart(tradeView);
+          tradeCtx = makeViewContext(tradeView, tradeChart);
+        } catch (e) { tradeCtx = null; console.warn('failed creating trade chart', e); }
+      }
+      // switch to trading-like UI state but do not start the actual Trading phase
       currentState = GlobalState.TRADING;
       started = true;
-      // per new behavior: enable both buttons, but their handlers will be no-ops while trading
       if (planBtn) planBtn.disabled = false;
       if (tradeBtn) tradeBtn.disabled = false;
       if (speedSlider) speedSlider.disabled = false;
-      // flush any buffered messages
+      // flush buffered messages now that tradeCtx may be available
       flushBuffer();
-      // show the Trade chart when we first enter TRADING
+      // show the Trade chart when we first enter the trading view
       showTradeView();
       statusEl.textContent = `Connected (state=${currentState})`;
-    } catch (e) { console.warn('failed send TRADE', e); }
+    } catch (e) { console.warn('failed send preparing StartPhase', e); }
   });
 
   // Helper to toggle views

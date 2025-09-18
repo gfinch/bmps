@@ -116,6 +116,8 @@ case class PlanZone(planZoneType: PlanZoneType, low: Level, high: Level, startTi
             if ((otherLow < thisHigh && otherHigh > thisLow)) true else false
         } else false
     }
+
+    lazy val isActive = endTime.isEmpty
 }
 
 object PlanZone {
@@ -222,16 +224,26 @@ case class Order(low: Level,
                 this.copy(status = Filled, filledTimestamp = Some(candle.timestamp))
 
             case (Placed, Short) if candle.high.value >= stopLoss && candle.low.value <= takeProfit && candle.isBearish =>
+                println(timestamp + "..." + 1)
                 this.copy(status = Loss, filledTimestamp = Some(candle.timestamp), closeTimestamp = Some(candle.timestamp))
             case (Placed, Short) if candle.high.value >= stopLoss && candle.low.value <= takeProfit && candle.isBullish =>
+                println(timestamp + "..." + 2)
                 this.copy(status = Profit, filledTimestamp = Some(candle.timestamp), closeTimestamp = Some(candle.timestamp))
             case (Placed, Short) if candle.high.value >= entryPoint && candle.low.value <= takeProfit =>
+                println(timestamp + "..." + 3)
+                println(this)
+                println(candle)
                 this.copy(status = Profit, filledTimestamp = Some(candle.timestamp), closeTimestamp = Some(candle.timestamp))
             case (Placed, Short) if candle.low.value <= takeProfit =>
+                println(timestamp + "..." + 4)
+                println(this)
+                println(candle)
                 this.copy(status = Cancelled, closeTimestamp = Some(candle.timestamp))
             case (Placed, Short) if candle.high.value >= stopLoss =>
+                println(timestamp + "..." + 5)
                 this.copy(status = Loss, filledTimestamp = Some(candle.timestamp), closeTimestamp = Some(candle.timestamp))
             case (Placed, Short) if candle.high.value >= entryPoint =>
+                println(timestamp + "..." + 6)
                 this.copy(status = Filled, filledTimestamp = Some(candle.timestamp))
 
             case (Filled, Long) if candle.high.value >= takeProfit && candle.low.value <= stopLoss && candle.isBullish =>
@@ -270,7 +282,7 @@ case class Order(low: Level,
 
         val tenMinutesMillis = Duration.ofMinutes(10).toMillis
 
-        if ((candle.timestamp - closingMillis) <= tenMinutesMillis) {
+        if (closeTimestamp.isEmpty && (closingMillis - candle.timestamp) <= tenMinutesMillis) {
           (status, orderType) match {
             case (Filled, Long) if candle.close.value >= entryPoint =>
                 this.copy(status = Profit, closeTimestamp = Some(candle.timestamp))
@@ -281,14 +293,57 @@ case class Order(low: Level,
             case (Filled, Short) if candle.close.value >= entryPoint =>
                 this.copy(status = Loss, closeTimestamp = Some(candle.timestamp))
             case _ => 
+                println(s"Closing: $closingMillis / ${candle.timestamp} / $tenMinutesMillis / ${closingMillis - candle.timestamp}")
                 this.copy(status = Cancelled, closeTimestamp = Some(candle.timestamp))
           }
         } else this
     }
 }
 
+case class SerializableOrder(low: Level, 
+                             high: Level, 
+                             timestamp: Long, 
+                             orderType: OrderType,
+                             entryType: EntryType, 
+                             status: OrderStatus,
+                             profitMultiplier: Double,
+                             riskDollars: Double,
+                             placedTimestamp: Option[Long],
+                             filledTimestamp: Option[Long],
+                             closeTimestamp: Option[Long],
+                             entryPoint: Double,
+                             stopLoss: Double,
+                             takeProfit: Double,
+                             contracts: Int,
+                             atRisk: Double,
+                             potential: Double
+                     )
+
 object Order {
     def fromCandle(candle: Candle, orderType: OrderType, entryType: EntryType, timestamp: Long) = {
         Order(candle.low, candle.high, timestamp, orderType, entryType)
     }
+}
+
+object SerializableOrder {
+    def fromOrder(order: Order): SerializableOrder =
+      SerializableOrder(
+        low = order.low,
+        high = order.high,
+        timestamp = order.timestamp,
+        orderType = order.orderType,
+        entryType = order.entryType,
+        status = order.status,
+        profitMultiplier = order.profitMultiplier,
+        riskDollars = order.riskDollars,
+        placedTimestamp = order.placedTimestamp,
+        filledTimestamp = order.filledTimestamp,
+        closeTimestamp = order.closeTimestamp,
+        entryPoint = order.entryPoint.toDouble,
+        stopLoss = order.stopLoss.toDouble,
+        takeProfit = order.takeProfit.toDouble,
+        contracts = order.contracts,
+        atRisk = order.atRisk,
+        potential = order.potential
+      )
 }

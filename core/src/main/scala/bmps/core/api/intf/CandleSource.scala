@@ -2,8 +2,8 @@ package bmps.core.api.intf
 
 import cats.effect.IO
 import fs2.Stream
-import bmps.core.models.Candle
+import bmps.core.models.{Candle, SystemState}
 
 trait CandleSource {
-  def candles: Stream[IO, Candle]
+  def candles(state: SystemState): Stream[IO, Candle]
 }

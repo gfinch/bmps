@@ -5,7 +5,7 @@ import cats.implicits._
 import cats.effect.std.Queue
 import fs2.Stream
 import bmps.core.models.SystemStatePhase
-import bmps.core.Event
+import bmps.core.models.Event
 
 /**
  * Broadcaster maintains a per-phase replay buffer and a set of subscriber
