@@ -13,7 +13,9 @@ import org.http4s.server.websocket.WebSocketBuilder2
 import org.http4s.headers.`Content-Type`
 import org.http4s.websocket.WebSocketFrame
 import fs2.Stream
+import scala.concurrent.duration._
 import cats.effect.std.Queue
+import scodec.bits.ByteVector
 import io.circe.syntax._
 import io.circe.parser
 import java.nio.file.{Paths, Files}
@@ -26,7 +28,7 @@ import bmps.core.api.protocol._
 import bmps.core.api.run.Broadcaster
 import bmps.core.api.run.PhaseController
 import bmps.core.models.{SystemStatePhase, SystemState}
-import bmps.core.Event
+import bmps.core.models.Event
 import cats.effect.Ref
 
 object Server {
@@ -73,7 +75,7 @@ object Server {
         logger.debug(s"WebSocket route hit: uri=${req.uri.renderString}")
 
         // per-connection queue used to send frames to client
-        val mkSocket: Resource[IO, Response[IO]] = Resource.make(
+  val mkSocket: Resource[IO, Response[IO]] = Resource.make(
           for {
             q <- Queue.bounded[IO, WebSocketFrame](256)
             fibersRef <- Ref.of[IO, List[cats.effect.Fiber[IO, Throwable, Unit]]](List.empty)
@@ -111,11 +113,31 @@ object Server {
             // send stream dequeues frames
             val sendStream: fs2.Stream[IO, WebSocketFrame] = Stream.repeatEval(q.take)
 
+            // Start a background heartbeat that periodically offers a small
+            // lifecycle/heartbeat message so the connection isn't idle for long
+            // periods. We push the heartbeat into the same queue so ordering is
+            // preserved. The fiber is tracked in `fibersRef` so it will be
+            // cancelled when the connection is released.
+            val heartbeat: IO[Unit] = for {
+              hb <- Stream.awakeEvery[IO](30.seconds).evalMap { _ =>
+                // Use a protocol-level ping frame; clients/browsers will reply
+                // with a pong automatically. Empty payload used here.
+                q.offer(WebSocketFrame.Ping(ByteVector.empty))
+              }.compile.drain.start
+              _ <- fibersRef.update(hb :: _)
+            } yield ()
+
+            // Kick off the heartbeat but don't fail the connection if it cannot
+            // be started for any reason. This keeps the acquire happy.
+            _ <- heartbeat.handleErrorWith(_ => IO.unit)
+
             // Use the server-provided builder to perform the upgrade.
             resp <- wsb.build(sendStream, receive)
           } yield (q, fibersRef, resp)
-        ) { case (_, fibersRef, _) =>
-          // on connection release cancel subscription fibers
+        ) { resources =>
+          // on connection release cancel subscription fibers; `resources`
+          // is the tuple we created above (q, fibersRef, resp).
+          val (_, fibersRef, _) = resources
           fibersRef.get.flatMap(_.traverse_(_.cancel)).handleErrorWith(_ => IO.unit)
         }.map { case (_, _, resp) => resp }
 
@@ -134,11 +156,15 @@ object Server {
     val portVal = Port.fromInt(port).getOrElse(Port.fromInt(8080).get)
     EmberServerBuilder.default[IO]
       .withPort(portVal)
+  // Prevent Ember's default 60s idle timeout from closing long-lived
+  // WebSocket connections. Set to a large finite duration (60 minutes)
+  // instead of Duration.Inf to avoid surprises in some environments.
+  .withIdleTimeout(60.minutes)
       .withHttpWebSocketApp { wsb =>
         val routes = wsRoutes(wsb) <+> staticRoutes
         val baseApp = routes.orNotFound
-  // Log requests/responses minimally (no headers/body)
-  Logger.httpApp(false, false)(baseApp)
+        // Log requests/responses minimally (no headers/body)
+        Logger.httpApp(false, false)(baseApp)
       }
       .build
   }

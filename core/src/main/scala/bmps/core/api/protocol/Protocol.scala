@@ -4,7 +4,7 @@ import io.circe._
 import io.circe.generic.semiauto._
 import io.circe.generic.auto._
 import io.circe.syntax._
-import bmps.core.Event
+import bmps.core.models.Event
 import bmps.core.models.SystemState
 
 sealed trait ClientCommand
@@ -18,10 +18,16 @@ object ClientCommand {
       optJson <- c.downField("options").as[Option[Json]]
       optMap = optJson.flatMap { j =>
         j.asObject.map { obj =>
-          obj.toMap.map { case (k, v) => (k, v.noSpaces) }
+          obj.toMap.map { case (k, v) =>
+            // If the option value is a JSON string, use the raw string value
+            // (avoid keeping surrounding quotes produced by noSpaces). For
+            // other JSON values, fall back to the compact representation.
+            val strVal = v.asString.getOrElse(v.noSpaces)
+            (k, strVal)
+          }
         }.orElse {
           // If options is present but not an object, represent it as a single key "value"
-          Some(Map("value" -> j.noSpaces))
+          Some(Map("value" -> (j.asString.getOrElse(j.noSpaces))))
         }
       }
     } yield StartPhase(phase, optMap)

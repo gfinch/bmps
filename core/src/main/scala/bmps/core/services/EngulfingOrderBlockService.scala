@@ -11,7 +11,7 @@ object EngulfingOrderBlockService {
     def processState(state: SystemState): SystemState = {
         require(state.tradingDirection.isDefined, "The direction for trading has not been set")
         require(state.tradingDirection.get != Direction.Doji, "The trading direction cannot be Doji")
-    require(state.tradingCandles.nonEmpty, "There must be at least one candle in state.")
+        require(state.tradingCandles.nonEmpty, "There must be at least one candle in state.")
 
         state.tradingDirection.get match {
             case Direction.Up => 
