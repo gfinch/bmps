@@ -62,7 +62,7 @@ class PlanningSource extends CandleSource {
         val planningDays = state.planningDays
         val startDate = tradingDay.minusDays(planningDays)
         val startDateTime = ZonedDateTime.of(startDate, LocalTime.of(9, 0), zoneId)
-        val endDateTime = ZonedDateTime.of(tradingDay, LocalTime.of(9, 0), zoneId)
+        val endDateTime = ZonedDateTime.of(tradingDay, LocalTime.of(16, 0), zoneId)
         val startMs = startDateTime.toInstant.toEpochMilli
         val endMs = endDateTime.toInstant.toEpochMilli
         (startMs, endMs, zoneId)

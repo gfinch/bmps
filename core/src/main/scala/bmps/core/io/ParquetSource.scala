@@ -48,6 +48,9 @@ object ParquetSource {
         conn.close()
         val whereClause = if (ttype.toUpperCase.contains("BIGINT") || ttype.toUpperCase.contains("INT") || ttype.toUpperCase.contains("INT64") || ttype.toUpperCase.contains("LONG") || ttype.toUpperCase.contains("DECIMAL") || ttype.toUpperCase.contains("DOUBLE")) {
           s"timestamp >= ${startMs} AND timestamp <= ${endMs}"
+        } else if (ttype.toUpperCase.contains("TIMESTAMP WITH TIME ZONE")) {
+          // For timezone-aware timestamps, use epoch-based filtering to avoid timezone confusion
+          s"(EXTRACT(epoch FROM timestamp) * 1000) >= ${startMs} AND (EXTRACT(epoch FROM timestamp) * 1000) <= ${endMs}"
         } else {
           s"timestamp >= TIMESTAMP '${startStr}' AND timestamp <= TIMESTAMP '${endStr}'"
         }
@@ -75,16 +78,21 @@ object ParquetSource {
       val epochMillis = tsObj match {
         case null => 0L
         case t: java.sql.Timestamp => t.toInstant.toEpochMilli
-        case s: String => Instant.parse(s).toEpochMilli
-        case l: java.lang.Long => l.longValue()
-        case i: java.lang.Integer => i.longValue()
-        case d: java.lang.Double => d.longValue()
-        case bd: java.math.BigDecimal => bd.longValue()
-        case inst: java.time.Instant => inst.toEpochMilli
-        case ldt: java.time.LocalDateTime => ldt.atZone(ZoneId.systemDefault()).toInstant.toEpochMilli
-        case odt: java.time.OffsetDateTime => odt.toInstant.toEpochMilli
+        case odt: java.time.OffsetDateTime => 
+          // DuckDB returns UTC timestamps, but we want the local Eastern time as epoch millis
+          // Convert UTC to Eastern timezone and extract the local date/time components
+          import java.time.{ZoneId, LocalDateTime}
+          val easternZone = ZoneId.of("America/New_York")
+          val utcInstant = odt.toInstant
+          val easternZoned = utcInstant.atZone(easternZone)
+          val easternLocal = easternZoned.toLocalDateTime
+          // Convert the Eastern local time back to epoch millis as if it were UTC
+          // This gives us the "wall clock time" in milliseconds
+          easternLocal.atZone(ZoneId.of("UTC")).toInstant.toEpochMilli
         case other =>
-          0L
+          // The parquet data contains TIMESTAMP WITH TIME ZONE which DuckDB returns as OffsetDateTime
+          // If we get anything else, it's likely a data format issue
+          throw new IllegalArgumentException(s"Unexpected timestamp format: ${other.getClass.getName} with value: $other")
       }
       val open = if (idxOpen > 0) rs.getDouble(idxOpen).toFloat else 0.0f
       val high = if (idxHigh > 0) rs.getDouble(idxHigh).toFloat else 0.0f
