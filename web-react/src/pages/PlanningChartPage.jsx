@@ -1,13 +1,39 @@
 import { useEffect, useRef, useState } from 'react'
 import { createChart, CandlestickSeries } from 'lightweight-charts'
 import { Play, Pause, RotateCcw, SkipBack, SkipForward, Rewind, FastForward, TrendingUp } from 'lucide-react'
+import { useEventStore } from '../stores/eventStore'
 
 export default function PlanningChartPage() {
   const chartContainerRef = useRef()
   const chartRef = useRef()
-  const [isPlaying, setIsPlaying] = useState(false)
-  const [currentTime, setCurrentTime] = useState(0)
+  const candlestickSeriesRef = useRef()
   const [config, setConfig] = useState(null)
+
+  // Get event store data and actions
+  const { 
+    planningPlayback, 
+    getVisiblePlanningCandles, 
+    setPlanningPlaying,
+    stepPlanningForward,
+    stepPlanningBackward,
+    resetPlanningPlayback,
+    fastForwardToEnd
+  } = useEventStore()
+
+  const { isPlaying, currentTime } = planningPlayback
+  const visibleCandles = getVisiblePlanningCandles()
+
+  // Auto-playback effect
+  useEffect(() => {
+    if (!isPlaying) return
+
+    const interval = setInterval(() => {
+      // Step forward automatically during playback
+      stepPlanningForward()
+    }, 1000) // 1 second intervals
+
+    return () => clearInterval(interval)
+  }, [isPlaying, stepPlanningForward])
 
   useEffect(() => {
     // Load configuration
@@ -75,26 +101,8 @@ export default function PlanningChartPage() {
           wickDownColor: '#ef5350',
         })
 
-        // Sample candle data - 15 days of sample data
-        const sampleData = [
-          { time: '2024-01-01', open: 100.0, high: 105.0, low: 98.0, close: 103.0 },
-          { time: '2024-01-02', open: 103.0, high: 108.0, low: 102.0, close: 106.5 },
-          { time: '2024-01-03', open: 106.5, high: 109.0, low: 104.0, close: 104.5 },
-          { time: '2024-01-04', open: 104.5, high: 107.0, low: 103.0, close: 105.5 },
-          { time: '2024-01-05', open: 105.5, high: 110.0, low: 105.0, close: 108.0 },
-          { time: '2024-01-08', open: 108.0, high: 112.0, low: 107.0, close: 111.0 },
-          { time: '2024-01-09', open: 111.0, high: 113.0, low: 109.0, close: 110.0 },
-          { time: '2024-01-10', open: 110.0, high: 112.0, low: 107.0, close: 108.5 },
-          { time: '2024-01-11', open: 108.5, high: 111.0, low: 106.0, close: 109.5 },
-          { time: '2024-01-12', open: 109.5, high: 114.0, low: 109.0, close: 113.0 },
-          { time: '2024-01-15', open: 113.0, high: 116.0, low: 112.0, close: 115.0 },
-          { time: '2024-01-16', open: 115.0, high: 117.0, low: 113.0, close: 114.0 },
-          { time: '2024-01-17', open: 114.0, high: 116.0, low: 111.0, close: 112.5 },
-          { time: '2024-01-18', open: 112.5, high: 115.0, low: 110.0, close: 114.5 },
-          { time: '2024-01-19', open: 114.5, high: 118.0, low: 114.0, close: 117.0 },
-        ]
-
-        candlestickSeries.setData(sampleData)
+        // Store series reference for updates
+        candlestickSeriesRef.current = candlestickSeries
 
         // Store chart reference for cleanup
         chartRef.current = chart
@@ -150,30 +158,47 @@ export default function PlanningChartPage() {
     }
   }, [])
 
+  // Update chart data when visible candles change
+  useEffect(() => {
+    if (!candlestickSeriesRef.current) {
+      console.log('Chart series not ready yet');
+      return;
+    }
+    
+    if (!visibleCandles || visibleCandles.length === 0) {
+      console.log('No visible candles to display yet');
+      return;
+    }
+    
+    try {
+      console.log('Updating chart with', visibleCandles.length, 'candles');
+      console.log('First candle:', visibleCandles[0]);
+      console.log('Last candle:', visibleCandles[visibleCandles.length - 1]);
+      candlestickSeriesRef.current.setData(visibleCandles);
+    } catch (error) {
+      console.error('Error updating chart data:', error);
+    }
+  }, [visibleCandles])
+
   const handlePlayPause = () => {
-    setIsPlaying(!isPlaying)
-    // TODO: Implement playback logic when charts are integrated
-    console.log(`Planning Chart: ${!isPlaying ? 'Playing' : 'Paused'}`)
+    setPlanningPlaying(!isPlaying)
   }
 
   const handleRewind = () => {
-    // TODO: Implement rewind logic when charts are integrated
-    console.log('Planning Chart: Rewind')
+    resetPlanningPlayback()
   }
 
   const handleStepBack = () => {
-    // TODO: Implement step back logic when charts are integrated
-    console.log('Planning Chart: Step Back')
+    stepPlanningBackward()
   }
 
   const handleStepForward = () => {
-    // TODO: Implement step forward logic when charts are integrated
-    console.log('Planning Chart: Step Forward')
+    stepPlanningForward()
   }
 
   const handleFastForward = () => {
-    // TODO: Implement fast forward logic when charts are integrated
-    console.log('Planning Chart: Fast Forward')
+    fastForwardToEnd()
+    console.log('Planning Chart: Fast Forward to End')
   }
 
   return (

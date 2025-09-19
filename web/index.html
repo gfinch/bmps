@@ -1,158 +1,40 @@
-<!doctype html><!doctype html>
-
-<html><html>
-
-<head><head>
-
-  <meta charset="utf-8">  <meta charset="utf-8">
-
-  <meta name="viewport" content="width=device-width,initial-scale=1">  <meta name="viewport" content="width=device-width,initial-scale=1">
-
-  <title>BMPS Trading Platform</title>  <title>BMPS Chart Demo</title>
-
-  <link rel="stylesheet" href="./src/app.css">  <link rel="stylesheet" href="./src/style.css">
-
-</head></head>
-
-<body><body>
-
-  <div id="app">  <div id="app">
-
-    <!-- Tab Navigation -->    <div id="chart" class="chart"></div>
-
-    <nav class="tab-nav">    <div class="controls">
-
-      <button class="tab-btn active" data-tab="config">Configuration</button>      <div class="control-group">
-
-      <button class="tab-btn" data-tab="planning">Planning Chart</button>        <label for="datePicker">Date</label>
-
-      <button class="tab-btn" data-tab="trading">Trading Chart</button>        <input type="date" id="datePicker" />
-
-      <button class="tab-btn" data-tab="results">Results</button>      </div>
-
-    </nav>      <div class="control-group">
-
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>BMPS Chart Demo</title>
+  <link rel="stylesheet" href="./src/style.css">
+</head>
+<body>
+  <div id="app">
+    <div id="chart" class="chart"></div>
+    <div class="controls">
+      <div class="control-group">
+        <label for="datePicker">Date</label>
+        <input type="date" id="datePicker" />
+      </div>
+      <div class="control-group">
         <label for="speedSlider">Speed</label>
-
-    <!-- Page 1: Configuration -->        <input type="range" id="speedSlider" min="0.1" max="5" step="0.1" value="1" />
-
-    <div id="config-page" class="page active">        <span id="speedValue">1x</span>
-
-      <div class="config-container">      </div>
-
-        <div class="config-card">      <div class="control-group">
-
-          <h1>Trading Configuration</h1>        <label for="daysInput">Days</label>
-
-          <form class="config-form">        <input type="number" id="daysInput" min="1" max="30" value="2" />
-
-            <div class="form-group">      </div>
-
-              <label for="trading-date">Trading Date</label>      <div class="control-group">
-
-              <input type="date" id="trading-date" name="trading-date" required>        <button id="planBtn">Plan</button>
-
-            </div>        <button id="tradeBtn">Trade</button>
-
-                    <span id="status" class="note">Disconnected</span>
-
-            <div class="form-group">      </div>
-
-              <label for="planning-days">Planning Days</label>    </div>
-
-              <input type="number" id="planning-days" name="planning-days"   </div>
-
-                     min="1" max="30" value="2" required>
-
-              <small>Number of days to analyze before trading date</small>  <!-- Load the standalone UMD bundle first (provides `LightweightCharts` global),
-
-            </div>    then load our module which will use that global. This avoids browser errors
-
-                for bare module specifiers inside the library. -->
-
-            <button type="submit" class="start-btn">Start Planning</button>  <script src="https://unpkg.com/lightweight-charts@3.8.0/dist/lightweight-charts.standalone.production.js"></script>
-
-          </form>  <script type="module" src="./src/main.js"></script>
-
-        </div></body>
-
-      </div></html>
-
-    </div>
-
-    <!-- Page 2: Planning Chart -->
-    <div id="planning-page" class="page">
-      <div class="chart-container">
-        <div class="chart-header">
-          <h2>Planning Chart</h2>
-          <div class="status-indicator">
-            <span class="status-dot"></span>
-            <span>Connected</span>
-          </div>
-        </div>
-        <div class="chart-area" id="planning-chart">
-          <!-- Chart will be rendered here -->
-        </div>
-        <div class="chart-controls">
-          <button class="control-btn" title="Rewind to start">⏮</button>
-          <button class="control-btn" title="Step backward">⏪</button>
-          <button class="control-btn play-pause" title="Play/Pause">▶</button>
-          <button class="control-btn" title="Step forward">⏩</button>
-          <button class="control-btn" title="Fast forward to end">⏭</button>
-          <div class="control-info">
-            <span class="time-display">00:00:00</span>
-            <span class="speed-display">1.0x</span>
-          </div>
-        </div>
+        <input type="range" id="speedSlider" min="0.1" max="5" step="0.1" value="1" />
+        <span id="speedValue">1x</span>
       </div>
-    </div>
-
-    <!-- Page 3: Trading Chart -->
-    <div id="trading-page" class="page">
-      <div class="chart-container">
-        <div class="chart-header">
-          <h2>Trading Chart</h2>
-          <div class="status-indicator">
-            <span class="status-dot"></span>
-            <span>Connected</span>
-          </div>
-        </div>
-        <div class="chart-area" id="trading-chart">
-          <!-- Chart will be rendered here -->
-        </div>
-        <div class="chart-controls">
-          <button class="control-btn" title="Rewind to start">⏮</button>
-          <button class="control-btn" title="Step backward">⏪</button>
-          <button class="control-btn play-pause" title="Play/Pause">▶</button>
-          <button class="control-btn" title="Step forward">⏩</button>
-          <button class="control-btn" title="Fast forward to end">⏭</button>
-          <div class="control-info">
-            <span class="time-display">00:00:00</span>
-            <span class="speed-display">1.0x</span>
-          </div>
-        </div>
+      <div class="control-group">
+        <label for="daysInput">Days</label>
+        <input type="number" id="daysInput" min="1" max="30" value="2" />
       </div>
-    </div>
-
-    <!-- Page 4: Results -->
-    <div id="results-page" class="page">
-      <div class="results-container">
-        <div class="results-card">
-          <h1>Trading Results</h1>
-          <div class="results-placeholder">
-            <div class="placeholder-icon">📊</div>
-            <p>Results will be displayed here once trading is complete.</p>
-            <p class="placeholder-subtitle">Coming soon...</p>
-          </div>
-        </div>
+      <div class="control-group">
+        <button id="planBtn">Plan</button>
+        <button id="tradeBtn">Trade</button>
+        <span id="status" class="note">Disconnected</span>
       </div>
     </div>
   </div>
 
-  <!-- Load LightweightCharts library -->
+  <!-- Load the standalone UMD bundle first (provides `LightweightCharts` global),
+    then load our module which will use that global. This avoids browser errors
+    for bare module specifiers inside the library. -->
   <script src="https://unpkg.com/lightweight-charts@3.8.0/dist/lightweight-charts.standalone.production.js"></script>
-  
-  <!-- Load our new app -->
-  <script type="module" src="./src/app.js"></script>
+  <script type="module" src="./src/main.js"></script>
 </body>
 </html>
