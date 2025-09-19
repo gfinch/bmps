@@ -18,7 +18,7 @@ object EventType {
 
 case class Event(
     eventType: EventType, 
-    timestamp: Long, 
+    timestamp: Long,
     candle: Option[Candle] = None,
     swingPoint: Option[SwingPoint] = None,
     planZone: Option[PlanZone] = None,

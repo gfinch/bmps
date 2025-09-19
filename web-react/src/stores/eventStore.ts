@@ -5,12 +5,7 @@ import { devtools } from 'zustand/middleware';
 import { 
   PhaseEvent, 
   Event, 
-  Candle, 
-  SwingPoint, 
-  PlanZone, 
   extractEventType,
-  extractCandleDuration,
-  CandleDuration 
 } from '../types/events';
 import { ConnectionStatus } from '../services/websocket';
 
@@ -111,20 +106,6 @@ const createInitialPlaybackState = (): PlaybackState => ({
   startTime: 0,
   endTime: 0,
 });
-
-// Helper function to determine candle duration step interval in milliseconds
-function getCandleDurationMs(duration: CandleDuration): number {
-  switch (duration) {
-    case CandleDuration.OneMinute: return 60 * 1000;
-    case CandleDuration.TwoMinute: return 2 * 60 * 1000;
-    case CandleDuration.FiveMinute: return 5 * 60 * 1000;
-    case CandleDuration.FifteenMinute: return 15 * 60 * 1000;
-    case CandleDuration.ThirtyMinute: return 30 * 60 * 1000;
-    case CandleDuration.OneHour: return 60 * 60 * 1000;
-    case CandleDuration.OneDay: return 24 * 60 * 60 * 1000;
-    default: return 60 * 60 * 1000; // Default to 1 hour
-  }
-}
 
 export const useEventStore = create<EventStore>()(
   devtools(
@@ -347,7 +328,7 @@ function reprocessPlanningEvents(state: EventStore): EventStore {
           const existingZoneIndex = zones.findIndex(z => 
             z.startTime === event.planZone!.startTime && z.type === type
           );
-          
+
           const newZone: ProcessedPlanZone = {
             timestamp: event.timestamp,
             startTime: event.planZone.startTime,
@@ -383,7 +364,7 @@ function reprocessPlanningEvents(state: EventStore): EventStore {
           const existingExtremeIndex = daytimeExtremes.findIndex(e => 
             e.description === description
           );
-          
+
           const newExtreme: ProcessedDaytimeExtreme = {
             timestamp: event.timestamp,
             endTime: event.daytimeExtreme.endTime,

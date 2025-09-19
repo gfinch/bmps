@@ -151,27 +151,21 @@ object Server {
     // provided WebSocketBuilder2 (wsb) which is wired into Ember's upgrade
     // machinery.
 
-    // (Removed Sec-WebSocket-Extensions header-stripping middleware.)
-
     val portVal = Port.fromInt(port).getOrElse(Port.fromInt(8080).get)
     EmberServerBuilder.default[IO]
       .withPort(portVal)
-  // Prevent Ember's default 60s idle timeout from closing long-lived
-  // WebSocket connections. Set to a large finite duration (60 minutes)
-  // instead of Duration.Inf to avoid surprises in some environments.
-  .withIdleTimeout(60.minutes)
+      .withIdleTimeout(60.minutes)
       .withHttpWebSocketApp { wsb =>
         val routes = wsRoutes(wsb) <+> staticRoutes
         val baseApp = routes.orNotFound
-        // Log requests/responses minimally (no headers/body)
         Logger.httpApp(false, false)(baseApp)
       }
       .build
   }
 
-  // Helper to convert Event to ServerMessage and then to websocket frames
-  def eventToFrame(phase: SystemStatePhase, ev: Event): WebSocketFrame.Text =
+  def eventToFrame(phase: SystemStatePhase, ev: Event): WebSocketFrame.Text = {
     WebSocketFrame.Text(ServerMessage.PhaseEvent(phase.toString, ev).asJson.noSpaces)
+  }
 
 }
 

@@ -21,7 +21,7 @@ object AppLauncher extends IOApp.Simple {
     * runners map is left empty; populate when wiring real CandleSource/
     * EventGenerator implementations.
     */
-  def createResource(webRoot: String = "web", port: Int = 8080): Resource[IO, (Ref[IO, SystemState], Broadcaster, PhaseController, org.http4s.server.Server)] = for {
+  def createResource(webRoot: String = "web-react/dist", port: Int = 8080): Resource[IO, (Ref[IO, SystemState], Broadcaster, PhaseController, org.http4s.server.Server)] = for {
     stateRef <- Resource.eval(Ref.of[IO, SystemState](SystemState()))
     broadcaster <- Resource.eval(Broadcaster.create(Some(10000)))
     sem <- Resource.eval(Semaphore[IO](1))
