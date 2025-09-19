@@ -1,18 +1,28 @@
 import { useEffect, useRef, useState } from 'react'
-import { createChart, CandlestickSeries } from 'lightweight-charts'
+import { createChart, CandlestickSeries, createSeriesMarkers } from 'lightweight-charts'
 import { Play, Pause, RotateCcw, SkipBack, SkipForward, Rewind, FastForward, TrendingUp } from 'lucide-react'
 import { useEventStore } from '../stores/eventStore'
+import { WorkPlanSeries, createWorkPlanData } from '../components/WorkPlanSeries'
+import { DaytimeExtremeSeries, createDaytimeExtremeData } from '../components/DaytimeExtremeSeries'
+import { WorkPlanType } from '../types/workplan'
 
 export default function PlanningChartPage() {
   const chartContainerRef = useRef()
   const chartRef = useRef()
   const candlestickSeriesRef = useRef()
+  const workPlanSeriesRef = useRef()
+  const extremeHighSeriesRef = useRef() // Store custom series for high extremes
+  const extremeLowSeriesRef = useRef()  // Store custom series for low extremes
+  const markersPluginRef = useRef()
   const [config, setConfig] = useState(null)
 
   // Get event store data and actions
   const { 
     planningPlayback, 
     getVisiblePlanningCandles, 
+    getVisiblePlanningZones,
+    getVisiblePlanningSwingPoints,
+    getVisiblePlanningDaytimeExtremes,
     setPlanningPlaying,
     stepPlanningForward,
     stepPlanningBackward,
@@ -22,6 +32,9 @@ export default function PlanningChartPage() {
 
   const { isPlaying, currentTime } = planningPlayback
   const visibleCandles = getVisiblePlanningCandles()
+  const visibleZones = getVisiblePlanningZones()
+  const visibleSwingPoints = getVisiblePlanningSwingPoints()
+  const visibleExtremes = getVisiblePlanningDaytimeExtremes()
 
   // Auto-playback effect
   useEffect(() => {
@@ -104,6 +117,61 @@ export default function PlanningChartPage() {
         // Store series reference for updates
         candlestickSeriesRef.current = candlestickSeries
 
+        // Create markers plugin for swing points
+        const markersPlugin = createSeriesMarkers(candlestickSeries)
+        markersPluginRef.current = markersPlugin
+
+        // Create WorkPlan series for Supply and Demand zones
+        const workPlanSeriesInstance = new WorkPlanSeries({
+          workPlanColors: {
+            supply: {
+              fill: 'rgba(255, 0, 0, 0.15)',    // Light red shading
+              topLine: '#ff0000',               // Red top line
+              bottomLine: '#00ff00',            // Green bottom line
+              sides: '#000000',                 // Black sides
+            },
+            demand: {
+              fill: 'rgba(0, 255, 0, 0.15)',   // Light green shading
+              topLine: '#00ff00',               // Green top line
+              bottomLine: '#ff0000',            // Red bottom line
+              sides: '#000000',                 // Black sides
+            },
+            ended: {
+              fill: 'rgba(128, 128, 128, 0.15)', // Light gray shading for ended zones
+            },
+          },
+        })
+
+        // Add WorkPlan custom series to chart
+        const workPlanSeries = chart.addCustomSeries(workPlanSeriesInstance)
+        workPlanSeriesRef.current = workPlanSeries
+
+        // Initialize with empty data - will be updated from event store
+        workPlanSeries.setData([])
+
+        // Add DaytimeExtreme custom series to chart (separate series for highs and lows)
+        const extremeHighSeriesInstance = new DaytimeExtremeSeries({
+          lineColor: '#000000',
+          lineWidth: 1,
+          labelColor: '#000000',
+          labelSize: 10,
+        })
+        const extremeHighSeries = chart.addCustomSeries(extremeHighSeriesInstance)
+        extremeHighSeriesRef.current = extremeHighSeries
+
+        const extremeLowSeriesInstance = new DaytimeExtremeSeries({
+          lineColor: '#000000',
+          lineWidth: 1,
+          labelColor: '#000000',
+          labelSize: 10,
+        })
+        const extremeLowSeries = chart.addCustomSeries(extremeLowSeriesInstance)
+        extremeLowSeriesRef.current = extremeLowSeries
+
+        // Initialize with empty data - will be updated from event store
+        extremeHighSeries.setData([])
+        extremeLowSeries.setData([])
+
         // Store chart reference for cleanup
         chartRef.current = chart
 
@@ -179,6 +247,189 @@ export default function PlanningChartPage() {
       console.error('Error updating chart data:', error);
     }
   }, [visibleCandles])
+
+  // Update WorkPlan zones when visible zones change
+  useEffect(() => {
+    if (!workPlanSeriesRef.current) {
+      console.log('WorkPlan series not ready yet');
+      return;
+    }
+    
+    if (!visibleZones || visibleZones.length === 0) {
+      console.log('No visible zones to display yet');
+      workPlanSeriesRef.current.setData([]);
+      return;
+    }
+    
+    try {
+      console.log('Updating WorkPlan zones with', visibleZones.length, 'zones');
+      console.log('Zones:', visibleZones);
+      
+      // Convert ProcessedPlanZone to WorkPlanEvent format
+      const workPlanData = visibleZones.map(zone => {
+        const workPlanEvent = {
+          id: zone.id,
+          type: zone.type === 'Supply' ? WorkPlanType.Supply : WorkPlanType.Demand,
+          startTime: zone.startTime,
+          endTime: zone.endTime,
+          high: zone.high,
+          low: zone.low,
+        };
+        
+        return createWorkPlanData(workPlanEvent);
+      });
+      
+      workPlanSeriesRef.current.setData(workPlanData);
+      console.log('WorkPlan zones updated successfully');
+    } catch (error) {
+      console.error('Error updating WorkPlan zones:', error);
+    }
+  }, [visibleZones])
+
+  // Update swing point markers when visible swing points change
+  useEffect(() => {
+    if (!markersPluginRef.current) {
+      console.log('Markers plugin not ready for swing points yet');
+      return;
+    }
+    
+    if (!visibleSwingPoints || visibleSwingPoints.length === 0) {
+      console.log('No visible swing points to display yet');
+      // Clear existing markers
+      markersPluginRef.current.setMarkers([]);
+      return;
+    }
+    
+    try {
+      console.log('Updating swing points with', visibleSwingPoints.length, 'points');
+      console.log('Swing points:', visibleSwingPoints);
+      
+      // Convert ProcessedSwingPoint to Lightweight Charts markers
+      const markers = visibleSwingPoints.map(point => {
+        // In trading: 
+        // - Swing Low: Price makes a low point and turns up (we mark below with up arrow)
+        // - Swing High: Price makes a high point and turns down (we mark above with down arrow)
+        // The direction indicates the next move after the swing point
+        const isSwingLow = point.direction === 'Up';   // Price was going down, now going up = swing low
+        const isSwingHigh = point.direction === 'Down'; // Price was going up, now going down = swing high
+        
+        console.log(`Swing point: ${point.direction} at level ${point.level}, treating as ${isSwingLow ? 'Low' : 'High'}`);
+        
+        return {
+          time: Math.floor(point.timestamp / 1000), // Convert to TradingView time format
+          position: isSwingLow ? 'belowBar' : 'aboveBar',
+          color: isSwingLow ? '#26a69a' : '#ef5350', // Teal for lows, red for highs (match candle colors)
+          shape: isSwingLow ? 'arrowUp' : 'arrowDown',
+          size: 1,
+        };
+      });
+      
+      markersPluginRef.current.setMarkers(markers);
+      console.log('Swing point markers updated successfully');
+    } catch (error) {
+      console.error('Error updating swing point markers:', error);
+    }
+  }, [visibleSwingPoints])
+
+  // Update daytime extremes when visible extremes change
+  // Daytime Extremes effect - using separate custom series for highs and lows
+  useEffect(() => {
+    if (!extremeHighSeriesRef.current || !extremeLowSeriesRef.current) {
+      console.log('Extreme series not ready yet');
+      return;
+    }
+    
+    if (!visibleExtremes || visibleExtremes.length === 0) {
+      console.log('No visible extremes to display yet');
+      extremeHighSeriesRef.current.setData([]);
+      extremeLowSeriesRef.current.setData([]);
+      return;
+    }
+    
+    try {
+      console.log('Updating daytime extremes with', visibleExtremes.length, 'extremes');
+      console.log('Extremes:', visibleExtremes);
+      
+      // Separate extremes into highs and lows based on description
+      const highExtremes = [];
+      const lowExtremes = [];
+      
+      visibleExtremes.forEach(extreme => {
+        const description = extreme.description || '';
+        const isHigh = description.toLowerCase().includes('high');
+        const isLow = description.toLowerCase().includes('low');
+        
+        const extremeData = createDaytimeExtremeData({
+          session: description,
+          level: extreme.level,
+          startTime: extreme.timestamp,
+          endTime: extreme.endTime || undefined,
+        });
+        
+        if (isHigh) {
+          highExtremes.push(extremeData);
+        } else if (isLow) {
+          lowExtremes.push(extremeData);
+        } else {
+          // Default to low if we can't determine
+          console.warn('Could not determine if extreme is high or low, defaulting to low:', description);
+          lowExtremes.push(extremeData);
+        }
+      });
+      
+      // Sort each series by time
+      highExtremes.sort((a, b) => a.time - b.time);
+      lowExtremes.sort((a, b) => a.time - b.time);
+      
+      // Update both series
+      extremeHighSeriesRef.current.setData(highExtremes);
+      extremeLowSeriesRef.current.setData(lowExtremes);
+      
+      console.log(`Daytime extremes updated: ${highExtremes.length} highs, ${lowExtremes.length} lows`);
+      
+    } catch (error) {
+      console.error('Error updating daytime extremes:', error);
+    }
+  }, [visibleExtremes])
+
+  // WorkPlan management functions
+  const addSupplyZone = (high, low, startTime, endTime = null) => {
+    if (!workPlanSeriesRef.current) return;
+    
+    const newWorkPlan = {
+      id: `supply-${Date.now()}`,
+      type: WorkPlanType.Supply,
+      startTime: startTime || Date.now(),
+      endTime: endTime,
+      high: high,
+      low: low,
+    };
+    
+    console.log('Adding Supply zone:', newWorkPlan);
+    // In a real implementation, you would maintain a list of all zones and update the series
+    // For now, this is just a demonstration of the function signature
+  };
+
+  const addDemandZone = (high, low, startTime, endTime = null) => {
+    if (!workPlanSeriesRef.current) return;
+    
+    const newWorkPlan = {
+      id: `demand-${Date.now()}`,
+      type: WorkPlanType.Demand,
+      startTime: startTime || Date.now(),
+      endTime: endTime,
+      high: high,
+      low: low,
+    };
+    
+    console.log('Adding Demand zone:', newWorkPlan);
+    // In a real implementation, you would maintain a list of all zones and update the series
+  };
+
+  const endWorkPlanZone = (zoneId, endTime = null) => {
+    console.log(`Ending WorkPlan zone ${zoneId} at ${endTime || Date.now()}`);
+    // In a real implementation, you would update the zone with an endTime and refresh the series data
+  };
 
   const handlePlayPause = () => {
     setPlanningPlaying(!isPlaying)

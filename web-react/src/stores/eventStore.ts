@@ -38,8 +38,18 @@ export interface ProcessedPlanZone {
   low: number;
   high: number;
   type: 'Supply' | 'Demand';
-  id: string; // Unique identifier for chart rectangles
-  isActive: boolean;
+  id: string; // Unique identifier for the zone
+  isActive: boolean; // Whether the zone is still active (no end time)
+}
+
+export interface ProcessedDaytimeExtreme {
+  timestamp: number;
+  endTime?: number;
+  level: number;
+  extremeType: 'High' | 'Low';
+  description: string;
+  abbreviation: string; // NY, L, A
+  id: string; // Unique identifier
 }
 
 export interface PlaybackState {
@@ -64,6 +74,7 @@ export interface EventStore {
   planningCandles: ProcessedCandle[];
   planningSwingPoints: ProcessedSwingPoint[];
   planningZones: ProcessedPlanZone[];
+  planningDaytimeExtremes: ProcessedDaytimeExtreme[];
   
   tradingCandles: ProcessedCandle[];
   // Trading events will be added later
@@ -89,6 +100,7 @@ export interface EventStore {
   getVisiblePlanningCandles: () => ProcessedCandle[];
   getVisiblePlanningSwingPoints: () => ProcessedSwingPoint[];
   getVisiblePlanningZones: () => ProcessedPlanZone[];
+  getVisiblePlanningDaytimeExtremes: () => ProcessedDaytimeExtreme[];
 }
 
 const createInitialPlaybackState = (): PlaybackState => ({
@@ -127,6 +139,7 @@ export const useEventStore = create<EventStore>()(
       planningCandles: [],
       planningSwingPoints: [],
       planningZones: [],
+      planningDaytimeExtremes: [],
       
       tradingCandles: [],
       
@@ -178,6 +191,7 @@ export const useEventStore = create<EventStore>()(
             planningCandles: [],
             planningSwingPoints: [],
             planningZones: [],
+            planningDaytimeExtremes: [],
             planningPlayback: createInitialPlaybackState(),
           };
         }
@@ -278,6 +292,11 @@ export const useEventStore = create<EventStore>()(
         const { planningZones, planningPlayback } = get();
         return planningZones.filter(zone => zone.timestamp <= planningPlayback.currentTime);
       },
+      
+      getVisiblePlanningDaytimeExtremes: () => {
+        const { planningDaytimeExtremes, planningPlayback } = get();
+        return planningDaytimeExtremes.filter(extreme => extreme.timestamp <= planningPlayback.currentTime);
+      },
     }),
     {
       name: 'event-store',
@@ -290,6 +309,7 @@ function reprocessPlanningEvents(state: EventStore): EventStore {
   const candles: ProcessedCandle[] = [];
   const swingPoints: ProcessedSwingPoint[] = [];
   const zones: ProcessedPlanZone[] = [];
+  const daytimeExtremes: ProcessedDaytimeExtreme[] = [];
   
   // Process events in chronological order
   state.planningEvents.forEach((event, index) => {
@@ -347,6 +367,41 @@ function reprocessPlanningEvents(state: EventStore): EventStore {
           }
         }
         break;
+        
+      case 'DaytimeExtreme':
+        if (event.daytimeExtreme) {
+          const extremeType = Object.keys(event.daytimeExtreme.extremeType)[0] as 'High' | 'Low';
+          const description = event.daytimeExtreme.description;
+          
+          // Generate abbreviation from description (NY, L, A)
+          let abbreviation = '';
+          if (description.toLowerCase().includes('new york')) abbreviation = 'NY';
+          else if (description.toLowerCase().includes('london')) abbreviation = 'L';
+          else if (description.toLowerCase().includes('asia')) abbreviation = 'A';
+          else abbreviation = description.charAt(0).toUpperCase();
+          
+          const existingExtremeIndex = daytimeExtremes.findIndex(e => 
+            e.description === description
+          );
+          
+          const newExtreme: ProcessedDaytimeExtreme = {
+            timestamp: event.timestamp,
+            endTime: event.daytimeExtreme.endTime,
+            level: event.daytimeExtreme.level.value,
+            extremeType,
+            description,
+            abbreviation,
+            id: `extreme-${event.daytimeExtreme.timestamp}-${extremeType}`,
+          };
+          
+          if (existingExtremeIndex >= 0) {
+            // Replace existing extreme (out-of-order update)
+            daytimeExtremes[existingExtremeIndex] = newExtreme;
+          } else {
+            daytimeExtremes.push(newExtreme);
+          }
+        }
+        break;
     }
   });
   
@@ -360,6 +415,7 @@ function reprocessPlanningEvents(state: EventStore): EventStore {
     planningCandles: candles,
     planningSwingPoints: swingPoints,
     planningZones: zones,
+    planningDaytimeExtremes: daytimeExtremes,
     planningPlayback: {
       ...state.planningPlayback,
       startTime,
