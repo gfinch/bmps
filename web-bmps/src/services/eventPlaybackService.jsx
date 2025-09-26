@@ -4,6 +4,7 @@
  */
 
 import eventBufferManager from './eventBuffer.jsx'
+import { extractEventType, filterEventsByType } from '../utils/eventTypeUtils.js'
 
 /**
  * Event Playback Service - handles timeline navigation and event publishing
@@ -306,6 +307,7 @@ class EventPlaybackService {
 
   /**
    * Get sorted array of unique timestamps for phase
+   * Only considers events with eventType 'Candle' for timeline navigation
    * @param {string} phase - Phase to get timestamps for
    * @returns {Array<number>} Sorted unique timestamps
    */
@@ -313,7 +315,13 @@ class EventPlaybackService {
     const buffer = eventBufferManager.getBuffer(phase)
     const events = buffer.getEvents()
     
-    const uniqueTimestamps = [...new Set(events.map(event => event.timestamp))]
+    // Filter events to only include Candle events for timeline navigation
+    const candleEvents = filterEventsByType(events, 'Candle')
+    
+    const uniqueTimestamps = [...new Set(candleEvents.map(event => {
+      const actualEvent = event.event || event
+      return actualEvent.timestamp
+    }))]
     return uniqueTimestamps.sort((a, b) => a - b)
   }
 

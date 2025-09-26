@@ -91,8 +91,14 @@ class ChartRenderingService {
     
     // Update each renderer with its relevant events
     this.renderers.forEach((renderer, eventType) => {
-      const events = eventsByType.get(eventType) || []
-      renderer.update(events)
+      if (eventType === 'Candle') {
+        // CandlestickRenderer gets ALL events to handle both candles and swing points
+        renderer.update(visibleEvents)
+      } else {
+        // Other renderers get only their specific event type
+        const events = eventsByType.get(eventType) || []
+        renderer.update(events)
+      }
     })
   }
 

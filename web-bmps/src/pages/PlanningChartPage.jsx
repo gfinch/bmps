@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect } from 'react'
-import { createChart, CandlestickSeries } from 'lightweight-charts'
+import { createChart } from 'lightweight-charts'
 import { Play, Pause, SkipBack, SkipForward, Rewind, FastForward } from 'lucide-react'
 import { useEventPlayback } from '../hooks/useEventPlayback.jsx'
 import { ChartRenderingService } from '../services/chartRenderingService.jsx'
@@ -58,7 +58,16 @@ export default function PlanningChartPage() {
 
         // Initialize chart rendering service
         chartServiceRef.current = new ChartRenderingService(chart, 'planning')
-        chartServiceRef.current.addRenderer('Candle', new CandlestickRenderer(chart))
+        
+        // Create candlestick renderer with swing point options
+        const candlestickRenderer = new CandlestickRenderer(chart, {
+          showSwingPoints: true, // Enable swing point markers
+          swingPointColors: {
+            up: '#26a69a',   // Green for up swings (swing lows)
+            down: '#ef5350'  // Red for down swings (swing highs)  
+          }
+        })
+        chartServiceRef.current.addRenderer('Candle', candlestickRenderer)
 
         // Handle resize
         const handleResize = () => {
