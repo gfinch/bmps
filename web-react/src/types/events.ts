@@ -180,11 +180,16 @@ export interface StartPhase {
   options?: { [key: string]: string };
 }
 
+export interface SubscribePhase {
+  command: 'subscribePhase';
+  phase: string;
+}
+
 export interface Status {
   command: 'status';
 }
 
-export type ClientCommand = StartPhase | Status;
+export type ClientCommand = StartPhase | SubscribePhase | Status;
 
 // Legacy interface for backward compatibility (remove if not needed)
 export interface LegacyServerMessage {

@@ -79,13 +79,13 @@ class WorkPlanRenderer implements ICustomSeriesPaneRenderer {
     // Calculate coordinates
     const startX = barItem.x;
     
-    // Calculate end X coordinate
+    // Calculate end X coordinate using proper time-to-coordinate conversion
     let endX: number;
     if (workPlan.endTime) {
-      // Zone has an end time - calculate the end position
-      // For now, we'll extend it by a fixed width (this could be improved)
-      // In a real implementation, you'd need access to the time scale to convert endTime to X coordinate
-      endX = startX + 100; // Placeholder: should be calculated based on endTime
+      // Zone has an end time - find the bar with the corresponding end time
+      const endTimeSeconds = Math.floor(workPlan.endTime / 1000) as Time;
+      const endBar = this._data!.bars.find((b: any) => b.originalData.time >= endTimeSeconds);
+      endX = endBar ? endBar.x : this._data!.bars[this._data!.bars.length - 1].x;
     } else {
       // Infinite zone - extend to the right edge of the visible area
       endX = scope.mediaSize.width;

@@ -78,6 +78,17 @@ object ParquetSource {
       val epochMillis = tsObj match {
         case null => 0L
         case t: java.sql.Timestamp => t.toInstant.toEpochMilli
+        case l: java.lang.Long => 
+          // Handle BIGINT timestamps from parquet (stored as UTC epoch millis)
+          // Convert UTC to Eastern timezone and extract the local date/time components
+          import java.time.{ZoneId, LocalDateTime}
+          val easternZone = ZoneId.of("America/New_York")
+          val utcInstant = java.time.Instant.ofEpochMilli(l.longValue())
+          val easternZoned = utcInstant.atZone(easternZone)
+          val easternLocal = easternZoned.toLocalDateTime
+          // Convert the Eastern local time back to epoch millis as if it were UTC
+          // This gives us the "wall clock time" in milliseconds
+          easternLocal.atZone(ZoneId.of("UTC")).toInstant.toEpochMilli
         case odt: java.time.OffsetDateTime => 
           // DuckDB returns UTC timestamps, but we want the local Eastern time as epoch millis
           // Convert UTC to Eastern timezone and extract the local date/time components
@@ -140,9 +151,18 @@ object ParquetSource {
         def nextRow: IO[Option[Candle]] = IO.blocking {
         try {
           if (rs.next()) {
-            try Some(candleFromRow(rs, md)) catch { case _: Throwable => None }
-          } else None
-        } catch { case _: Throwable => None }
+            try {
+              val candle = candleFromRow(rs, md)
+              Some(candle)
+            } catch { 
+              case _: Throwable => None 
+            }
+          } else {
+            None
+          }
+        } catch { 
+          case _: Throwable => None 
+        }
       }
 
       Stream.unfoldEval(()) { _ => nextRow.map(_.map(c => (c, ()))) }

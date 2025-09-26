@@ -10,6 +10,7 @@ import bmps.core.models.SystemState
 sealed trait ClientCommand
 object ClientCommand {
   case class StartPhase(phase: String, options: Option[Map[String, String]] = None) extends ClientCommand
+  case class SubscribePhase(phase: String) extends ClientCommand
   case object Status extends ClientCommand
 
   implicit val startPhaseDecoder: Decoder[StartPhase] = Decoder.instance { c =>
@@ -33,6 +34,10 @@ object ClientCommand {
     } yield StartPhase(phase, optMap)
   }
 
+  implicit val subscribePhaseDecoder: Decoder[SubscribePhase] = Decoder.instance { c =>
+    c.downField("phase").as[String].map(SubscribePhase(_))
+  }
+
   implicit val startPhaseEncoder: Encoder[StartPhase] = Encoder.instance { sp =>
     val base = Json.obj("phase" -> Json.fromString(sp.phase))
     sp.options match {
@@ -41,9 +46,14 @@ object ClientCommand {
     }
   }
 
+  implicit val subscribePhaseEncoder: Encoder[SubscribePhase] = Encoder.instance { sp =>
+    Json.obj("phase" -> Json.fromString(sp.phase))
+  }
+
   implicit val commandDecoder: Decoder[ClientCommand] = Decoder.instance { c =>
     c.downField("command").as[String].flatMap {
       case "startPhase" => c.as[StartPhase]
+      case "subscribePhase" => c.as[SubscribePhase]
       case "status" => Right(Status)
       case other => Left(DecodingFailure(s"Unknown command $other", c.history))
     }
@@ -51,6 +61,7 @@ object ClientCommand {
 
   implicit val commandEncoder: Encoder[ClientCommand] = Encoder.instance {
     case sp: StartPhase => sp.asJson deepMerge Json.obj("command" -> Json.fromString("startPhase"))
+    case sp: SubscribePhase => sp.asJson deepMerge Json.obj("command" -> Json.fromString("subscribePhase"))
     case Status => Json.obj("command" -> Json.fromString("status"))
   }
 }

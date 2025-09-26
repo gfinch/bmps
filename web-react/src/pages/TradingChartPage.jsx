@@ -1,13 +1,50 @@
 import { useEffect, useRef, useState } from 'react'
-import { createChart, CandlestickSeries } from 'lightweight-charts'
+import { createChart, CandlestickSeries, createSeriesMarkers } from 'lightweight-charts'
 import { Play, Pause, RotateCcw, SkipBack, SkipForward, Rewind, FastForward, LineChart } from 'lucide-react'
+import { useEventStore } from '../stores/eventStore'
+import { WorkPlanSeries, createWorkPlanData } from '../components/WorkPlanSeries'
+import { DaytimeExtremeSeries, createDaytimeExtremeData } from '../components/DaytimeExtremeSeries'
+import { OrderSeries, createOrderData } from '../components/OrderSeries'
+import { WorkPlanType } from '../types/workplan'
 
 export default function TradingChartPage() {
   const chartContainerRef = useRef()
   const chartRef = useRef()
-  const [isPlaying, setIsPlaying] = useState(false)
-  const [currentTime, setCurrentTime] = useState(0)
+  const candlestickSeriesRef = useRef()
+  const workPlanSeriesRef = useRef()
+  const extremeHighSeriesRef = useRef() // Store custom series for high extremes
+  const extremeLowSeriesRef = useRef()  // Store custom series for low extremes
+  const orderSeriesRef = useRef() // Store custom series for orders
+  const markersPluginRef = useRef()
   const [config, setConfig] = useState(null)
+  
+  // Get data and playback controls from event store
+  const {
+    tradingPlayback,
+    getVisibleTradingCandles,
+    getVisibleTradingSwingPoints,
+    getVisibleTradingZones,
+    getVisibleTradingDaytimeExtremes,
+    getVisibleTradingOrders,
+    setTradingPlaying,
+    setTradingCurrentTime,
+    stepTradingForward,
+    stepTradingBackward,
+    resetTradingPlayback,
+    fastForwardTradingToEnd,
+  } = useEventStore()
+
+  // Auto-playback effect
+  useEffect(() => {
+    if (!tradingPlayback.isPlaying) return
+
+    const interval = setInterval(() => {
+      // Step forward automatically during playback
+      stepTradingForward()
+    }, 1000) // 1 second intervals
+
+    return () => clearInterval(interval)
+  }, [tradingPlayback.isPlaying, stepTradingForward])
 
   useEffect(() => {
     // Load configuration
@@ -75,29 +112,96 @@ export default function TradingChartPage() {
           wickDownColor: '#ef5350',
         })
 
-        // Sample candle data - 15 days of sample data (Trading session data)
-        const sampleData = [
-          { time: '2024-01-15', open: 113.0, high: 115.0, low: 112.0, close: 114.0 },
-          { time: '2024-01-16', open: 114.0, high: 118.0, low: 113.5, close: 117.2 },
-          { time: '2024-01-17', open: 117.2, high: 119.0, low: 116.0, close: 116.5 },
-          { time: '2024-01-18', open: 116.5, high: 118.5, low: 115.0, close: 118.0 },
-          { time: '2024-01-19', open: 118.0, high: 120.0, low: 117.5, close: 119.5 },
-          { time: '2024-01-22', open: 119.5, high: 122.0, low: 119.0, close: 121.0 },
-          { time: '2024-01-23', open: 121.0, high: 123.0, low: 120.0, close: 120.5 },
-          { time: '2024-01-24', open: 120.5, high: 122.0, low: 118.0, close: 119.0 },
-          { time: '2024-01-25', open: 119.0, high: 121.0, low: 117.0, close: 120.0 },
-          { time: '2024-01-26', open: 120.0, high: 124.0, low: 119.5, close: 123.0 },
-          { time: '2024-01-29', open: 123.0, high: 126.0, low: 122.0, close: 125.0 },
-          { time: '2024-01-30', open: 125.0, high: 127.0, low: 123.0, close: 124.0 },
-          { time: '2024-01-31', open: 124.0, high: 126.0, low: 121.0, close: 122.5 },
-          { time: '2024-02-01', open: 122.5, high: 125.0, low: 120.0, close: 124.5 },
-          { time: '2024-02-02', open: 124.5, high: 128.0, low: 124.0, close: 127.0 },
-        ]
+        // Store series reference for updates
+        candlestickSeriesRef.current = candlestickSeries
 
-        candlestickSeries.setData(sampleData)
+        // Create markers plugin for swing points
+        const markersPlugin = createSeriesMarkers(candlestickSeries)
+        markersPluginRef.current = markersPlugin
+
+        // Create WorkPlan series for Supply and Demand zones
+        const workPlanSeriesInstance = new WorkPlanSeries({
+          workPlanColors: {
+            supply: {
+              fill: 'rgba(255, 0, 0, 0.15)',    // Light red shading
+              topLine: '#ff0000',               // Red top line
+              bottomLine: '#00ff00',            // Green bottom line
+              sides: '#000000',                 // Black sides
+            },
+            demand: {
+              fill: 'rgba(0, 255, 0, 0.15)',   // Light green shading
+              topLine: '#00ff00',               // Green top line
+              bottomLine: '#ff0000',            // Red bottom line
+              sides: '#000000',                 // Black sides
+            },
+            ended: {
+              fill: 'rgba(128, 128, 128, 0.15)', // Light gray shading for ended zones
+            },
+          },
+        })
+
+        // Add WorkPlan custom series to chart
+        const workPlanSeries = chart.addCustomSeries(workPlanSeriesInstance)
+        workPlanSeriesRef.current = workPlanSeries
+
+        // Initialize with empty data - will be updated from event store
+        workPlanSeries.setData([])
+
+        // Add DaytimeExtreme custom series to chart (separate series for highs and lows)
+        const extremeHighSeriesInstance = new DaytimeExtremeSeries({
+          lineColor: '#000000',
+          lineWidth: 1,
+          labelColor: '#000000',
+          labelSize: 10,
+        })
+        const extremeHighSeries = chart.addCustomSeries(extremeHighSeriesInstance)
+        extremeHighSeriesRef.current = extremeHighSeries
+
+        const extremeLowSeriesInstance = new DaytimeExtremeSeries({
+          lineColor: '#000000',
+          lineWidth: 1,
+          labelColor: '#000000',
+          labelSize: 10,
+        })
+        const extremeLowSeries = chart.addCustomSeries(extremeLowSeriesInstance)
+        extremeLowSeriesRef.current = extremeLowSeries
+
+        // Initialize with empty data - will be updated from event store
+        extremeHighSeries.setData([])
+        extremeLowSeries.setData([])
+
+        // Add Order custom series to chart
+        const orderSeriesInstance = new OrderSeries({
+          orderColors: {
+            plannedLine: '#2563eb',      // Blue
+            placedLine: '#7c3aed',       // Purple
+            filledLine: '#7c3aed',       // Purple
+            profitBox: {
+              fill: 'rgba(34, 197, 94, 0.15)',   // Green with transparency
+              stroke: '#22c55e'
+            },
+            lossBox: {
+              fill: 'rgba(239, 68, 68, 0.15)',   // Red with transparency
+              stroke: '#ef4444'
+            },
+            greyBox: {
+              fill: 'rgba(107, 114, 128, 0.12)', // Grey with transparency
+              stroke: '#6b7280'
+            },
+            cancelledLine: '#6b7280'     // Grey
+          },
+        })
+        const orderSeries = chart.addCustomSeries(orderSeriesInstance)
+        orderSeriesRef.current = orderSeries
+
+        // Initialize with empty data - will be updated from event store
+        orderSeries.setData([])
 
         // Store chart reference for cleanup
         chartRef.current = chart
+        
+        // Store candlestick series for updates
+        chart.candlestickSeries = candlestickSeries
 
         // Handle resize
         const handleResize = () => {
@@ -150,29 +254,231 @@ export default function TradingChartPage() {
     }
   }, [])
 
+  // Update chart data when visible data changes
+  useEffect(() => {
+    if (!chartRef.current?.candlestickSeries) {
+      console.log('Trading chart series not ready yet');
+      return;
+    }
+    
+    const visibleCandles = getVisibleTradingCandles();
+    
+    if (!visibleCandles || visibleCandles.length === 0) {
+      console.log('No visible trading candles to display yet');
+      return;
+    }
+    
+    try {
+      console.log('Updating trading chart with', visibleCandles.length, 'candles');
+      console.log('First candle:', visibleCandles[0]);
+      console.log('Last candle:', visibleCandles[visibleCandles.length - 1]);
+      chartRef.current.candlestickSeries.setData(visibleCandles);
+    } catch (error) {
+      console.error('Error updating trading chart data:', error);
+    }
+  }, [tradingPlayback.currentTime, getVisibleTradingCandles])
+
+  // Update WorkPlan zones when visible zones change
+  useEffect(() => {
+    if (!workPlanSeriesRef.current) {
+      console.log('Trading WorkPlan series not ready yet');
+      return;
+    }
+    
+    const visibleZones = getVisibleTradingZones();
+    
+    if (!visibleZones || visibleZones.length === 0) {
+      console.log('No visible trading zones to display yet');
+      workPlanSeriesRef.current.setData([]);
+      return;
+    }
+    
+    try {
+      console.log('Updating trading WorkPlan zones with', visibleZones.length, 'zones');
+      console.log('Trading zones:', visibleZones);
+      
+      // Convert ProcessedPlanZone to WorkPlanEvent format
+      const workPlanData = visibleZones.map(zone => {
+        const workPlanEvent = {
+          id: zone.id,
+          type: zone.type === 'Supply' ? WorkPlanType.Supply : WorkPlanType.Demand,
+          startTime: zone.startTime,
+          endTime: zone.endTime,
+          high: zone.high,
+          low: zone.low,
+        };
+        
+        return createWorkPlanData(workPlanEvent);
+      });
+      
+      workPlanSeriesRef.current.setData(workPlanData);
+      console.log('Trading WorkPlan zones updated successfully');
+    } catch (error) {
+      console.error('Error updating trading WorkPlan zones:', error);
+    }
+  }, [tradingPlayback.currentTime, getVisibleTradingZones])
+
+  // Update swing point markers when visible swing points change
+  useEffect(() => {
+    if (!markersPluginRef.current) {
+      console.log('Trading markers plugin not ready for swing points yet');
+      return;
+    }
+    
+    const visibleSwingPoints = getVisibleTradingSwingPoints();
+    
+    if (!visibleSwingPoints || visibleSwingPoints.length === 0) {
+      console.log('No visible trading swing points to display yet');
+      // Clear existing markers
+      markersPluginRef.current.setMarkers([]);
+      return;
+    }
+    
+    try {
+      console.log('Updating trading swing points with', visibleSwingPoints.length, 'points');
+      console.log('Trading swing points:', visibleSwingPoints);
+      
+      // Convert ProcessedSwingPoint to Lightweight Charts markers
+      const markers = visibleSwingPoints.map(point => {
+        // In trading: 
+        // - Swing Low: Price makes a low point and turns up (we mark below with up arrow)
+        // - Swing High: Price makes a high point and turns down (we mark above with down arrow)
+        // The direction indicates the next move after the swing point
+        const isSwingLow = point.direction === 'Up';   // Price was going down, now going up = swing low
+        const isSwingHigh = point.direction === 'Down'; // Price was going up, now going down = swing high
+        
+        console.log(`Trading swing point: ${point.direction} at level ${point.level}, treating as ${isSwingLow ? 'Low' : 'High'}`);
+        
+        return {
+          time: Math.floor(point.timestamp / 1000), // Convert to TradingView time format
+          position: isSwingLow ? 'belowBar' : 'aboveBar',
+          color: isSwingLow ? '#26a69a' : '#ef5350', // Teal for lows, red for highs (match candle colors)
+          shape: isSwingLow ? 'arrowUp' : 'arrowDown',
+          size: 1,
+        };
+      });
+      
+      markersPluginRef.current.setMarkers(markers);
+      console.log('Trading swing point markers updated successfully');
+    } catch (error) {
+      console.error('Error updating trading swing point markers:', error);
+    }
+  }, [tradingPlayback.currentTime, getVisibleTradingSwingPoints])
+
+  // Update daytime extremes when visible extremes change
+  // Daytime Extremes effect - using separate custom series for highs and lows
+  useEffect(() => {
+    if (!extremeHighSeriesRef.current || !extremeLowSeriesRef.current) {
+      console.log('Trading extreme series not ready yet');
+      return;
+    }
+    
+    const visibleExtremes = getVisibleTradingDaytimeExtremes();
+    
+    if (!visibleExtremes || visibleExtremes.length === 0) {
+      console.log('No visible trading extremes to display yet');
+      extremeHighSeriesRef.current.setData([]);
+      extremeLowSeriesRef.current.setData([]);
+      return;
+    }
+    
+    try {
+      console.log('Updating trading daytime extremes with', visibleExtremes.length, 'extremes');
+      console.log('Trading extremes:', visibleExtremes);
+      
+      // Separate extremes into highs and lows based on description
+      const highExtremes = [];
+      const lowExtremes = [];
+      
+      visibleExtremes.forEach(extreme => {
+        const description = extreme.description || '';
+        const isHigh = description.toLowerCase().includes('high');
+        const isLow = description.toLowerCase().includes('low');
+        
+        const extremeData = createDaytimeExtremeData({
+          session: description,
+          level: extreme.level,
+          startTime: extreme.timestamp,
+          endTime: extreme.endTime || undefined,
+        });
+        
+        if (isHigh) {
+          highExtremes.push(extremeData);
+        } else if (isLow) {
+          lowExtremes.push(extremeData);
+        } else {
+          // Default to low if we can't determine
+          console.warn('Could not determine if trading extreme is high or low, defaulting to low:', description);
+          lowExtremes.push(extremeData);
+        }
+      });
+      
+      // Sort each series by time
+      highExtremes.sort((a, b) => a.time - b.time);
+      lowExtremes.sort((a, b) => a.time - b.time);
+      
+      // Update both series
+      extremeHighSeriesRef.current.setData(highExtremes);
+      extremeLowSeriesRef.current.setData(lowExtremes);
+      
+      console.log(`Trading daytime extremes updated: ${highExtremes.length} highs, ${lowExtremes.length} lows`);
+      
+    } catch (error) {
+      console.error('Error updating trading daytime extremes:', error);
+    }
+  }, [tradingPlayback.currentTime, getVisibleTradingDaytimeExtremes])
+
+  // Update orders when visible orders change
+  useEffect(() => {
+    if (!orderSeriesRef.current) {
+      console.log('Trading order series not ready yet');
+      return;
+    }
+    
+    const visibleOrders = getVisibleTradingOrders();
+    
+    if (!visibleOrders || visibleOrders.length === 0) {
+      console.log('No visible trading orders to display yet');
+      orderSeriesRef.current.setData([]);
+      return;
+    }
+    
+    try {
+      console.log('Updating trading orders with', visibleOrders.length, 'orders');
+      console.log('Trading orders:', visibleOrders);
+      
+      // Convert ProcessedOrder to OrderData format
+      const orderData = visibleOrders.map(order => createOrderData(order));
+      
+      orderSeriesRef.current.setData(orderData);
+      console.log('Trading orders updated successfully');
+    } catch (error) {
+      console.error('Error updating trading orders:', error);
+    }
+  }, [tradingPlayback.currentTime, getVisibleTradingOrders])
+
   const handlePlayPause = () => {
-    setIsPlaying(!isPlaying)
-    // TODO: Implement playback logic when charts are integrated
-    console.log(`Trading Chart: ${!isPlaying ? 'Playing' : 'Paused'}`)
+    setTradingPlaying(!tradingPlayback.isPlaying)
+    console.log(`Trading Chart: ${!tradingPlayback.isPlaying ? 'Playing' : 'Paused'}`)
   }
 
   const handleRewind = () => {
-    // TODO: Implement rewind logic when charts are integrated
+    resetTradingPlayback()
     console.log('Trading Chart: Rewind')
   }
 
   const handleStepBack = () => {
-    // TODO: Implement step back logic when charts are integrated
+    stepTradingBackward()
     console.log('Trading Chart: Step Back')
   }
 
   const handleStepForward = () => {
-    // TODO: Implement step forward logic when charts are integrated
+    stepTradingForward()
     console.log('Trading Chart: Step Forward')
   }
 
   const handleFastForward = () => {
-    // TODO: Implement fast forward logic when charts are integrated
+    fastForwardTradingToEnd()
     console.log('Trading Chart: Fast Forward')
   }
 
@@ -203,9 +509,9 @@ export default function TradingChartPage() {
           <button
             onClick={handlePlayPause}
             className="p-3 btn-primary"
-            title={isPlaying ? 'Pause' : 'Play'}
+            title={tradingPlayback.isPlaying ? 'Pause' : 'Play'}
           >
-            {isPlaying ? (
+            {tradingPlayback.isPlaying ? (
               <Pause className="w-5 h-5" />
             ) : (
               <Play className="w-5 h-5" />

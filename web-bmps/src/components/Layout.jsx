@@ -1,6 +1,6 @@
 import { NavLink, useLocation } from 'react-router-dom'
 import { Settings, TrendingUp, LineChart, BarChart3 } from 'lucide-react'
-import { useEventStore } from '../stores/eventStore'
+import { useWebSocket } from '../hooks/useWebSocket.jsx'
 
 const navItems = [
   { path: '/config', label: 'Configuration', icon: Settings },
@@ -11,7 +11,7 @@ const navItems = [
 
 export default function Layout({ children }) {
   const location = useLocation()
-  const { isPlanningPhaseComplete } = useEventStore()
+  const { isConnected } = useWebSocket()
   
   // Pages that should use full viewport height without padding
   const fullHeightPages = ['/planning', '/trading']
@@ -22,35 +22,35 @@ export default function Layout({ children }) {
       {/* Navigation Tabs */}
       <nav className="bg-white border-b flex-shrink-0">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex space-x-8">
-            {navItems.map(({ path, label, icon: Icon }) => {
-              const isDisabled = path === '/trading' && !isPlanningPhaseComplete;
-              
-              return (
+          <div className="flex space-x-8 items-center justify-between">
+            <div className="flex space-x-8">
+              {navItems.map(({ path, label, icon: Icon }) => (
                 <NavLink
                   key={path}
                   to={path}
                   className={({ isActive }) => 
                     `flex items-center px-1 py-4 text-sm font-medium border-b-2 transition-colors ${
-                      isDisabled 
-                        ? 'text-gray-300 border-transparent cursor-not-allowed'
-                        : isActive
-                          ? 'text-blue-600 border-blue-600'
-                          : 'text-gray-500 border-transparent hover:text-gray-700 hover:border-gray-300'
+                      isActive
+                        ? 'text-blue-600 border-blue-600'
+                        : 'text-gray-500 border-transparent hover:text-gray-700 hover:border-gray-300'
                     }`
                   }
-                  onClick={(e) => {
-                    if (isDisabled) {
-                      e.preventDefault();
-                    }
-                  }}
-                  title={isDisabled ? 'Available after planning phase completes' : ''}
                 >
                   <Icon className="w-4 h-4 mr-2" />
                   {label}
                 </NavLink>
-              )
-            })}
+              ))}
+            </div>
+            
+            {/* Connection Status Indicator */}
+            <div className="flex items-center">
+              <div 
+                className={`w-2 h-2 rounded-full ${
+                  isConnected ? 'bg-green-500' : 'bg-red-500'
+                }`}
+                title={isConnected ? 'Connected to server' : 'Disconnected from server'}
+              />
+            </div>
           </div>
         </div>
       </nav>
@@ -61,8 +61,10 @@ export default function Layout({ children }) {
           {children}
         </main>
       ) : (
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          {children}
+        <main className="flex-1 py-6">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            {children}
+          </div>
         </main>
       )}
     </div>

@@ -40,6 +40,13 @@ object Server {
   // and uses the provided controller and broadcaster to start phases and
   // stream events back to the client.
   def resource(stateRef: Ref[IO, SystemState], controller: PhaseController, broadcaster: Broadcaster, webRoot: String, port: Int): Resource[IO, org.http4s.server.Server] = {
+    
+    Resource.eval(Ref.of[IO, Set[SystemStatePhase]](Set.empty)).flatMap { startedPhasesRef =>
+      buildServer(stateRef, controller, broadcaster, startedPhasesRef, webRoot, port)
+    }
+  }
+
+  private def buildServer(stateRef: Ref[IO, SystemState], controller: PhaseController, broadcaster: Broadcaster, startedPhasesRef: Ref[IO, Set[SystemStatePhase]], webRoot: String, port: Int): Resource[IO, org.http4s.server.Server] = {
     // Serve static files from the `webRoot` directory. Keep simple custom handler
     // but do not shadow the /ws websocket endpoint - wsRoutes must be tried first.
     val staticRoutes = HttpRoutes.of[IO] {
@@ -79,12 +86,14 @@ object Server {
           for {
             q <- Queue.bounded[IO, WebSocketFrame](256)
             fibersRef <- Ref.of[IO, List[cats.effect.Fiber[IO, Throwable, Unit]]](List.empty)
+            // Track current subscription phase for this client (only one phase at a time)
+            currentSubscriptionRef <- Ref.of[IO, Option[SystemStatePhase]](None)
 
             // receive pipe: handle incoming frames using circe JSON parsing
             val receive: fs2.Pipe[IO, WebSocketFrame, Unit] = { in: fs2.Stream[IO, WebSocketFrame] =>
               in.evalMap {
                 case WebSocketFrame.Text(msg, _) =>
-                  IO.fromEither(io.circe.parser.parse(msg).leftMap(err => new Exception(err))).flatMap { json =>
+                  IO.fromEither(parser.parse(msg).leftMap(err => new Exception(err))).flatMap { json =>
                     IO.fromEither(json.as[ClientCommand].leftMap(err => new Exception(err))).flatMap {
                       case ClientCommand.StartPhase(phaseStr, options) =>
                         val phaseOpt = phaseStr.toLowerCase match {
@@ -94,10 +103,38 @@ object Server {
                           case _ => None
                         }
                         phaseOpt.fold(IO.unit) { p =>
-                          controller.startPhase(p, options).start.flatMap { _ =>
-                            val sub = broadcaster.subscribe(p).map(ev => WebSocketFrame.Text(ServerMessage.PhaseEvent(p.toString, ev).asJson.noSpaces)).evalMap(q.offer)
-                            sub.compile.drain.start.flatMap(sf => fibersRef.update(sf :: _))
+                          // Check if this phase has already been started
+                          startedPhasesRef.get.flatMap { startedPhases =>
+                            if (startedPhases.contains(p)) {
+                              // Phase already started, ignore this request
+                              IO.unit
+                            } else {
+                              // Mark phase as started and start processing
+                              startedPhasesRef.update(_ + p) *>
+                              controller.startPhase(p, options).start.void
+                            }
                           }
+                        }
+                      case ClientCommand.SubscribePhase(phaseStr) =>
+                        val phaseOpt = phaseStr.toLowerCase match {
+                          case "planning" => Some(SystemStatePhase.Planning)
+                          case "preparing" => Some(SystemStatePhase.Preparing)
+                          case "trading" => Some(SystemStatePhase.Trading)
+                          case _ => None
+                        }
+                        phaseOpt.fold(IO.unit) { p =>
+                          for {
+                            // Cancel any existing subscription fibers
+                            existingFibers <- fibersRef.get
+                            _ <- existingFibers.traverse_(_.cancel).handleErrorWith(_ => IO.unit)
+                            _ <- fibersRef.set(List.empty)
+                            // Update current subscription
+                            _ <- currentSubscriptionRef.set(Some(p))
+                            // Start new subscription
+                            sub = broadcaster.subscribe(p).map(ev => WebSocketFrame.Text(ServerMessage.PhaseEvent(p.toString, ev).asJson.noSpaces)).evalMap(q.offer)
+                            subFiber <- sub.compile.drain.start
+                            _ <- fibersRef.update(subFiber :: _)
+                          } yield ()
                         }
                       case ClientCommand.Status =>
                         for {

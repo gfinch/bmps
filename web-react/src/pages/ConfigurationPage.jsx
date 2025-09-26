@@ -30,6 +30,7 @@ export default function ConfigurationPage() {
     console.log('WebSocket.OPEN constant:', WebSocket.OPEN)
     
     if (window.globalWebSocket && window.globalWebSocket.readyState === WebSocket.OPEN) {
+      // First, start the planning phase (this triggers processing)
       const startCommand = {
         command: 'startPhase',
         phase: 'planning',
@@ -41,6 +42,15 @@ export default function ConfigurationPage() {
       
       console.log('Sending start command:', startCommand)
       window.globalWebSocket.send(JSON.stringify(startCommand))
+      
+      // Then, subscribe to planning phase events (this starts receiving events)
+      const subscribeCommand = {
+        command: 'subscribePhase',
+        phase: 'planning'
+      }
+      
+      console.log('Sending subscribe command:', subscribeCommand)
+      window.globalWebSocket.send(JSON.stringify(subscribeCommand))
       
       // Navigate to Planning page
       navigate('/planning')
