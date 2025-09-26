@@ -1,11 +1,14 @@
 import { useRef, useState, useEffect } from 'react'
 import { createChart, CandlestickSeries } from 'lightweight-charts'
 import { Play, Pause, SkipBack, SkipForward, Rewind, FastForward } from 'lucide-react'
+import { useEventPlayback } from '../hooks/useEventPlayback.jsx'
 
 export default function PlanningChartPage() {
   const chartContainerRef = useRef()
   const chartRef = useRef()
-  const [isPlaying, setIsPlaying] = useState(false)
+  
+  // Use event playback hook for planning phase
+  const playback = useEventPlayback('planning')
 
   // Initialize chart
   useEffect(() => {
@@ -87,26 +90,30 @@ export default function PlanningChartPage() {
     return cleanup
   }, [])
 
-  // Stubbed handlers - no functionality yet
+  // Event handlers using playback service
   const handlePlay = () => {
-    setIsPlaying(!isPlaying)
-    console.log('Play/Pause clicked - no functionality yet')
+    playback.togglePlayPause()
+    console.log(`Playback ${playback.isPlaying ? 'paused' : 'playing'}`)
   }
 
   const handleStepBackward = () => {
-    console.log('Step backward clicked - no functionality yet')
+    playback.stepBackward()
+    console.log(`Stepped backward to timestamp: ${playback.currentTimestamp}`)
   }
 
   const handleStepForward = () => {
-    console.log('Step forward clicked - no functionality yet')
+    playback.stepForward()
+    console.log(`Stepped forward to timestamp: ${playback.currentTimestamp}`)
   }
 
   const handleRewind = () => {
-    console.log('Rewind clicked - no functionality yet')
+    playback.rewind()
+    console.log(`Rewound to timestamp: ${playback.currentTimestamp}`)
   }
 
   const handleFastForward = () => {
-    console.log('Fast forward clicked - no functionality yet')
+    playback.fastForward()
+    console.log(`Fast forwarded to timestamp: ${playback.currentTimestamp}`)
   }
 
   return (
@@ -117,6 +124,27 @@ export default function PlanningChartPage() {
           ref={chartContainerRef} 
           className="w-full h-full min-h-[300px]"
         />
+      </div>
+
+      {/* Playback Info Panel - for testing */}
+      <div className="flex-shrink-0 px-4 py-2 bg-gray-50 border-t border-gray-200">
+        <div className="flex items-center justify-center space-x-6 text-sm text-gray-600">
+          <div>
+            <span className="font-medium">Timestamp:</span> {playback.currentTimestamp || 'None'}
+          </div>
+          <div>
+            <span className="font-medium">Visible Events:</span> {playback.visibleEvents.length}
+          </div>
+          <div>
+            <span className="font-medium">Total Timestamps:</span> {playback.totalTimestamps}
+          </div>
+          <div>
+            <span className="font-medium">Status:</span> {playback.isPlaying ? 'Playing' : 'Paused'}
+          </div>
+          <div>
+            <span className="font-medium">Position:</span> {playback.getPositionPercent().toFixed(1)}%
+          </div>
+        </div>
       </div>
 
       {/* Media Controls - fixed at bottom */}
@@ -139,9 +167,9 @@ export default function PlanningChartPage() {
           <button
             onClick={handlePlay}
             className="p-3 btn-primary"
-            title={isPlaying ? 'Pause' : 'Play'}
+            title={playback.isPlaying ? 'Pause' : 'Play'}
           >
-            {isPlaying ? (
+            {playback.isPlaying ? (
               <Pause className="w-5 h-5" />
             ) : (
               <Play className="w-5 h-5" />
