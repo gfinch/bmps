@@ -3,7 +3,7 @@ import { createChart, CandlestickSeries } from 'lightweight-charts'
 import { Play, Pause, SkipBack, SkipForward, Rewind, FastForward } from 'lucide-react'
 import { useEventPlayback } from '../hooks/useEventPlayback.jsx'
 import { ChartRenderingService } from '../services/chartRenderingService.jsx'
-import { CandlestickRenderer } from '../renderers/index.js'
+import { CandlestickRenderer, DaytimeExtremeRenderer } from '../renderers/index.js'
 
 export default function TradingChartPage() {
   const chartContainerRef = useRef()
@@ -73,6 +73,16 @@ export default function TradingChartPage() {
           }
         })
         chartServiceRef.current.addRenderer('Candle', candlestickRenderer)
+
+        // Create daytime extreme renderer for horizontal lines with labels
+        const daytimeExtremeRenderer = new DaytimeExtremeRenderer(chart, {
+          lineColor: '#000000',    // Black lines
+          lineWidth: 2,
+          labelColor: '#000000',   // Black labels
+          labelSize: 12,
+          labelOffset: 15
+        })
+        chartServiceRef.current.addRenderer('DaytimeExtreme', daytimeExtremeRenderer)
 
         // Store chart reference
         chartRef.current = chart

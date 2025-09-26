@@ -3,3 +3,4 @@
  */
 
 export { default as CandlestickRenderer } from './CandlestickRenderer.jsx'
+export { default as DaytimeExtremeRenderer } from './DaytimeExtremeRenderer.jsx'
