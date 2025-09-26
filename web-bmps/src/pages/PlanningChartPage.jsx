@@ -2,10 +2,13 @@ import { useRef, useState, useEffect } from 'react'
 import { createChart, CandlestickSeries } from 'lightweight-charts'
 import { Play, Pause, SkipBack, SkipForward, Rewind, FastForward } from 'lucide-react'
 import { useEventPlayback } from '../hooks/useEventPlayback.jsx'
+import { ChartRenderingService } from '../services/chartRenderingService.jsx'
+import { CandlestickRenderer } from '../renderers/index.js'
 
 export default function PlanningChartPage() {
   const chartContainerRef = useRef()
   const chartRef = useRef()
+  const chartServiceRef = useRef()
   
   // Use event playback hook for planning phase
   const playback = useEventPlayback('planning')
@@ -50,17 +53,12 @@ export default function PlanningChartPage() {
           },
         })
 
-        // Create candlestick series (empty for now)
-        const candlestickSeries = chart.addSeries(CandlestickSeries, {
-          upColor: '#26a69a',
-          downColor: '#ef5350',
-          borderVisible: false,
-          wickUpColor: '#26a69a',
-          wickDownColor: '#ef5350',
-        })
-
         // Store chart reference
         chartRef.current = chart
+
+        // Initialize chart rendering service
+        chartServiceRef.current = new ChartRenderingService(chart, 'planning')
+        chartServiceRef.current.addRenderer('Candle', new CandlestickRenderer(chart))
 
         // Handle resize
         const handleResize = () => {
@@ -76,6 +74,10 @@ export default function PlanningChartPage() {
 
         return () => {
           window.removeEventListener('resize', handleResize)
+          if (chartServiceRef.current) {
+            chartServiceRef.current.destroy()
+            chartServiceRef.current = null
+          }
           if (chart) {
             chart.remove()
           }
@@ -89,6 +91,13 @@ export default function PlanningChartPage() {
     const cleanup = initChart()
     return cleanup
   }, [])
+
+  // Update chart when visible events change
+  useEffect(() => {
+    if (chartServiceRef.current) {
+      chartServiceRef.current.updateVisibleEvents(playback.visibleEvents)
+    }
+  }, [playback.visibleEvents])
 
   // Event handlers using playback service
   const handlePlay = () => {

@@ -2,13 +2,24 @@ import { useRef, useState, useEffect } from 'react'
 import { createChart, CandlestickSeries } from 'lightweight-charts'
 import { Play, Pause, SkipBack, SkipForward, Rewind, FastForward } from 'lucide-react'
 import { useEventPlayback } from '../hooks/useEventPlayback.jsx'
+import { ChartRenderingService } from '../services/chartRenderingService.jsx'
+import { CandlestickRenderer } from '../renderers/index.js'
 
 export default function TradingChartPage() {
   const chartContainerRef = useRef()
   const chartRef = useRef()
+  const chartServiceRef = useRef()
   
   // Use event playback hook for trading phase
   const playback = useEventPlayback('trading')
+
+  // Initialize playback to first timestamp when page loads
+  useEffect(() => {
+    // Only rewind if we don't already have a current timestamp
+    if (playback.currentTimestamp === null && playback.totalTimestamps > 0) {
+      playback.rewind()
+    }
+  }, [playback.totalTimestamps]) // Depend on totalTimestamps to trigger when events are available
 
   // Initialize chart
   useEffect(() => {
@@ -59,6 +70,10 @@ export default function TradingChartPage() {
           wickDownColor: '#ef5350',
         })
 
+        // Create chart rendering service
+        chartServiceRef.current = new ChartRenderingService(chart, 'trading')
+        chartServiceRef.current.addRenderer('Candle', new CandlestickRenderer(chart))
+
         // Store chart reference
         chartRef.current = chart
 
@@ -76,6 +91,10 @@ export default function TradingChartPage() {
 
         return () => {
           window.removeEventListener('resize', handleResize)
+          if (chartServiceRef.current) {
+            chartServiceRef.current.destroy()
+            chartServiceRef.current = null
+          }
           if (chart) {
             chart.remove()
           }
@@ -89,6 +108,13 @@ export default function TradingChartPage() {
     const cleanup = initChart()
     return cleanup
   }, [])
+
+  // Update chart when visible events change
+  useEffect(() => {
+    if (chartServiceRef.current) {
+      chartServiceRef.current.updateVisibleEvents(playback.visibleEvents)
+    }
+  }, [playback.visibleEvents])
 
   // Event handlers using playback service
   const handlePlay = () => {
