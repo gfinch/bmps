@@ -97,21 +97,37 @@ export default function PlanningChartPage() {
   }
 
   const handleStepBackward = () => {
+    // Pause if currently playing
+    if (playback.isPlaying) {
+      playback.pause()
+    }
     playback.stepBackward()
     console.log(`Stepped backward to timestamp: ${playback.currentTimestamp}`)
   }
 
   const handleStepForward = () => {
+    // Pause if currently playing
+    if (playback.isPlaying) {
+      playback.pause()
+    }
     playback.stepForward()
     console.log(`Stepped forward to timestamp: ${playback.currentTimestamp}`)
   }
 
   const handleRewind = () => {
+    // Pause if currently playing
+    if (playback.isPlaying) {
+      playback.pause()
+    }
     playback.rewind()
     console.log(`Rewound to timestamp: ${playback.currentTimestamp}`)
   }
 
   const handleFastForward = () => {
+    // Pause if currently playing
+    if (playback.isPlaying) {
+      playback.pause()
+    }
     playback.fastForward()
     console.log(`Fast forwarded to timestamp: ${playback.currentTimestamp}`)
   }
@@ -124,27 +140,6 @@ export default function PlanningChartPage() {
           ref={chartContainerRef} 
           className="w-full h-full min-h-[300px]"
         />
-      </div>
-
-      {/* Playback Info Panel - for testing */}
-      <div className="flex-shrink-0 px-4 py-2 bg-gray-50 border-t border-gray-200">
-        <div className="flex items-center justify-center space-x-6 text-sm text-gray-600">
-          <div>
-            <span className="font-medium">Timestamp:</span> {playback.currentTimestamp || 'None'}
-          </div>
-          <div>
-            <span className="font-medium">Visible Events:</span> {playback.visibleEvents.length}
-          </div>
-          <div>
-            <span className="font-medium">Total Timestamps:</span> {playback.totalTimestamps}
-          </div>
-          <div>
-            <span className="font-medium">Status:</span> {playback.isPlaying ? 'Playing' : 'Paused'}
-          </div>
-          <div>
-            <span className="font-medium">Position:</span> {playback.getPositionPercent().toFixed(1)}%
-          </div>
-        </div>
       </div>
 
       {/* Media Controls - fixed at bottom */}

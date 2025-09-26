@@ -1,11 +1,14 @@
 import { useRef, useState, useEffect } from 'react'
 import { createChart, CandlestickSeries } from 'lightweight-charts'
 import { Play, Pause, SkipBack, SkipForward, Rewind, FastForward } from 'lucide-react'
+import { useEventPlayback } from '../hooks/useEventPlayback.jsx'
 
 export default function TradingChartPage() {
   const chartContainerRef = useRef()
   const chartRef = useRef()
-  const [isPlaying, setIsPlaying] = useState(false)
+  
+  // Use event playback hook for trading phase
+  const playback = useEventPlayback('trading')
 
   // Initialize chart
   useEffect(() => {
@@ -87,26 +90,46 @@ export default function TradingChartPage() {
     return cleanup
   }, [])
 
-  // Stubbed handlers - no functionality yet
+  // Event handlers using playback service
   const handlePlay = () => {
-    setIsPlaying(!isPlaying)
-    console.log('Play/Pause clicked - no functionality yet')
+    playback.togglePlayPause()
+    console.log(`Trading playback ${playback.isPlaying ? 'paused' : 'playing'}`)
   }
 
   const handleStepBackward = () => {
-    console.log('Step backward clicked - no functionality yet')
+    // Pause if currently playing
+    if (playback.isPlaying) {
+      playback.pause()
+    }
+    playback.stepBackward()
+    console.log(`Trading stepped backward to timestamp: ${playback.currentTimestamp}`)
   }
 
   const handleStepForward = () => {
-    console.log('Step forward clicked - no functionality yet')
+    // Pause if currently playing
+    if (playback.isPlaying) {
+      playback.pause()
+    }
+    playback.stepForward()
+    console.log(`Trading stepped forward to timestamp: ${playback.currentTimestamp}`)
   }
 
   const handleRewind = () => {
-    console.log('Rewind clicked - no functionality yet')
+    // Pause if currently playing
+    if (playback.isPlaying) {
+      playback.pause()
+    }
+    playback.rewind()
+    console.log(`Trading rewound to timestamp: ${playback.currentTimestamp}`)
   }
 
   const handleFastForward = () => {
-    console.log('Fast forward clicked - no functionality yet')
+    // Pause if currently playing
+    if (playback.isPlaying) {
+      playback.pause()
+    }
+    playback.fastForward()
+    console.log(`Trading fast forwarded to timestamp: ${playback.currentTimestamp}`)
   }
 
   return (
@@ -139,9 +162,9 @@ export default function TradingChartPage() {
           <button
             onClick={handlePlay}
             className="p-3 btn-primary"
-            title={isPlaying ? 'Pause' : 'Play'}
+            title={playback.isPlaying ? 'Pause' : 'Play'}
           >
-            {isPlaying ? (
+            {playback.isPlaying ? (
               <Pause className="w-5 h-5" />
             ) : (
               <Play className="w-5 h-5" />
