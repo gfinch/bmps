@@ -81,8 +81,16 @@ class EventPlaybackService {
         this.publishVisibleEvents(phase)
       }
     } else {
-      // If no current position, don't auto-follow - wait for user to start playback
-      console.debug(`${phase} buffer updated but no current position set`)
+      // Initialize to first timestamp when buffer is first populated
+      const uniqueTimestamps = this.getUniqueTimestamps(phase)
+      if (uniqueTimestamps.length > 0) {
+        const firstTimestamp = uniqueTimestamps[0]
+        console.debug(`Initializing ${phase} to first timestamp: ${firstTimestamp}`)
+        this.currentTimestamp[phase] = firstTimestamp
+        this.publishVisibleEvents(phase)
+      } else {
+        console.debug(`${phase} buffer updated but no events with valid timestamps`)
+      }
     }
   }
 
