@@ -61,18 +61,18 @@ export default function TradingChartPage() {
           },
         })
 
-        // Create candlestick series (empty for now)
-        const candlestickSeries = chart.addSeries(CandlestickSeries, {
-          upColor: '#26a69a',
-          downColor: '#ef5350',
-          borderVisible: false,
-          wickUpColor: '#26a69a',
-          wickDownColor: '#ef5350',
-        })
-
         // Create chart rendering service
         chartServiceRef.current = new ChartRenderingService(chart, 'trading')
-        chartServiceRef.current.addRenderer('Candle', new CandlestickRenderer(chart))
+        
+        // Create candlestick renderer with swing point options
+        const candlestickRenderer = new CandlestickRenderer(chart, {
+          showSwingPoints: true, // Enable swing point markers
+          swingPointColors: {
+            up: '#26a69a',   // Green for up swings (swing lows)
+            down: '#ef5350'  // Red for down swings (swing highs)  
+          }
+        })
+        chartServiceRef.current.addRenderer('Candle', candlestickRenderer)
 
         // Store chart reference
         chartRef.current = chart
