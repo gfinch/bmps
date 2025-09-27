@@ -12,6 +12,7 @@ object ClientCommand {
   case class StartPhase(phase: String, options: Option[Map[String, String]] = None) extends ClientCommand
   case class SubscribePhase(phase: String) extends ClientCommand
   case object Status extends ClientCommand
+  case object Reset extends ClientCommand
 
   implicit val startPhaseDecoder: Decoder[StartPhase] = Decoder.instance { c =>
     for {
@@ -55,6 +56,7 @@ object ClientCommand {
       case "startPhase" => c.as[StartPhase]
       case "subscribePhase" => c.as[SubscribePhase]
       case "status" => Right(Status)
+      case "reset" => Right(Reset)
       case other => Left(DecodingFailure(s"Unknown command $other", c.history))
     }
   }
@@ -63,6 +65,7 @@ object ClientCommand {
     case sp: StartPhase => sp.asJson deepMerge Json.obj("command" -> Json.fromString("startPhase"))
     case sp: SubscribePhase => sp.asJson deepMerge Json.obj("command" -> Json.fromString("subscribePhase"))
     case Status => Json.obj("command" -> Json.fromString("status"))
+    case Reset => Json.obj("command" -> Json.fromString("reset"))
   }
 }
 

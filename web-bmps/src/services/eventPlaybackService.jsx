@@ -414,6 +414,41 @@ class EventPlaybackService {
   // Cleanup
 
   /**
+   * Reset playback state (used during application resets)
+   */
+  resetPlaybackState() {
+    console.debug('Resetting event playback service state')
+    
+    // Stop all playback first
+    Object.keys(this.isPlaying).forEach(phase => {
+      this.pause(phase)
+    })
+    
+    // Reset timestamps to null
+    this.currentTimestamp = {
+      planning: null,
+      trading: null
+    }
+    
+    // Reset playing states (pause() should have handled this, but be explicit)
+    this.isPlaying = {
+      planning: false,
+      trading: false
+    }
+    
+    // Clear any remaining intervals (pause() should have cleared these)
+    this.playIntervals = {
+      planning: null,
+      trading: null
+    }
+    
+    // Notify listeners of the reset
+    this.notifyListeners({ reset: true })
+    
+    console.debug('Event playback service reset complete')
+  }
+
+  /**
    * Clean up resources
    */
   destroy() {
