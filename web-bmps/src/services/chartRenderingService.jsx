@@ -81,9 +81,11 @@ class ChartRenderingService {
   /**
    * Update chart with new visible events
    * @param {Array} visibleEvents - Events visible at current playback position
+   * @param {number} currentTimestamp - Current playback timestamp (optional)
    */
-  updateVisibleEvents(visibleEvents) {
+  updateVisibleEvents(visibleEvents, currentTimestamp = null) {
     this.currentVisibleEvents = visibleEvents
+    this.currentTimestamp = currentTimestamp
     
 
     // Group events by type
@@ -93,11 +95,11 @@ class ChartRenderingService {
     this.renderers.forEach((renderer, eventType) => {
       if (eventType === 'Candle') {
         // CandlestickRenderer gets ALL events to handle both candles and swing points
-        renderer.update(visibleEvents)
+        renderer.update(visibleEvents, currentTimestamp)
       } else {
         // Other renderers get only their specific event type
         const events = eventsByType.get(eventType) || []
-        renderer.update(events)
+        renderer.update(events, currentTimestamp)
       }
     })
   }

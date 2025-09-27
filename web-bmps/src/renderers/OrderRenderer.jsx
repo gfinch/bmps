@@ -42,7 +42,7 @@ class OrderRenderer extends BaseRenderer {
     }
   }
 
-  update(events) {
+  update(events, currentTimestamp = null) {
     if (!this.primitive) {
       console.debug('OrderRenderer: Primitive not initialized, skipping update')
       return
@@ -50,9 +50,16 @@ class OrderRenderer extends BaseRenderer {
 
     console.debug(`OrderRenderer: Updating with ${events.length} events`)
 
-    // Filter and deduplicate events
+    // Filter events by validity and current playback timestamp
     const validEvents = events.filter(event => this.isValidEvent(event))
-    const deduplicatedEvents = this.deduplicateByTimestamp(validEvents)
+    const timeFilteredEvents = currentTimestamp 
+      ? validEvents.filter(event => this.isOrderVisibleAtTime(event, currentTimestamp))
+      : validEvents
+    
+    console.debug(`OrderRenderer: After time filtering: ${timeFilteredEvents.length} events (currentTime: ${currentTimestamp})`)
+    
+    // Deduplicate the time-filtered events
+    const deduplicatedEvents = this.deduplicateByTimestamp(timeFilteredEvents)
     
     console.debug(`OrderRenderer: After deduplication: ${deduplicatedEvents.length} events`)
 
@@ -63,6 +70,39 @@ class OrderRenderer extends BaseRenderer {
 
     // Update the primitive with new order data
     this.primitive.updateOrders(this.orders)
+  }
+
+  /**
+   * Check if an order should be visible at the given timestamp
+   * An order is visible if ALL its non-null timestamps are <= currentTimestamp
+   * @param {Object} event - Order event
+   * @param {number} currentTimestamp - Current playback timestamp
+   * @returns {boolean} True if order should be visible
+   */
+  isOrderVisibleAtTime(event, currentTimestamp) {
+    const actualEvent = event.event || event
+    const order = actualEvent.order
+    
+    // List of all possible timestamps in an order
+    const timestamps = [
+      actualEvent.timestamp,
+      order.placedTimestamp,
+      order.filledTimestamp,
+      order.closeTimestamp
+    ].filter(ts => ts !== null && ts !== undefined)
+    
+    // All timestamps must be <= currentTimestamp
+    const isVisible = timestamps.every(ts => ts <= currentTimestamp)
+    
+    if (!isVisible) {
+      console.debug(`OrderRenderer: Filtering out order with future timestamp(s):`, {
+        orderTimestamps: timestamps,
+        currentTimestamp,
+        futureTimestamps: timestamps.filter(ts => ts > currentTimestamp)
+      })
+    }
+    
+    return isVisible
   }
 
   /**

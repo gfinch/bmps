@@ -150,12 +150,10 @@ export default function TradingChartPage() {
     return cleanup
   }, [])
 
-  // Update chart when visible events change
-  useEffect(() => {
+      // Update chart with visible events
     if (chartServiceRef.current) {
-      chartServiceRef.current.updateVisibleEvents(playback.visibleEvents)
+      chartServiceRef.current.updateVisibleEvents(playback.visibleEvents, playback.currentTimestamp)
     }
-  }, [playback.visibleEvents])
 
   // Event handlers using playback service
   const handlePlay = () => {
