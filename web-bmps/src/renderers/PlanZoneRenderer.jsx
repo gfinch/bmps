@@ -35,7 +35,7 @@ class PlanZoneRenderer extends BaseRenderer {
     }
   }
 
-  update(events) {
+  update(events, currentTimestamp = null) {
     if (!this.primitive) {
       console.debug('PlanZoneRenderer: Primitive not initialized, skipping update')
       return

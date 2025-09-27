@@ -33,7 +33,7 @@ class DaytimeExtremeRenderer extends BaseRenderer {
     }
   }
 
-  update(events) {
+  update(events, currentTimestamp = null) {
     if (!this.primitive) {
       console.debug('DaytimeExtremeRenderer: Primitive not initialized, skipping update')
       return
