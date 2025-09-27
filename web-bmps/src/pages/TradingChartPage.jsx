@@ -3,7 +3,7 @@ import { createChart, CandlestickSeries } from 'lightweight-charts'
 import { Play, Pause, SkipBack, SkipForward, Rewind, FastForward } from 'lucide-react'
 import { useEventPlayback } from '../hooks/useEventPlayback.jsx'
 import { ChartRenderingService } from '../services/chartRenderingService.jsx'
-import { CandlestickRenderer, DaytimeExtremeRenderer } from '../renderers/index.js'
+import { CandlestickRenderer, DaytimeExtremeRenderer, PlanZoneRenderer } from '../renderers/index.js'
 
 export default function TradingChartPage() {
   const chartContainerRef = useRef()
@@ -83,6 +83,18 @@ export default function TradingChartPage() {
           labelOffset: 15
         })
         chartServiceRef.current.addRenderer('DaytimeExtreme', daytimeExtremeRenderer)
+
+        // Create plan zone renderer for demand/supply zones
+        const planZoneRenderer = new PlanZoneRenderer(chart, {
+          demandColor: '#22C55E',  // Green for demand zones
+          supplyColor: '#EF4444',  // Red for supply zones
+          grayColor: '#6B7280',    // Gray for secondary lines
+          lineWidth: 2,
+          labelColor: '#374151',
+          labelSize: 12,
+          labelOffset: 15
+        })
+        chartServiceRef.current.addRenderer('PlanZone', planZoneRenderer)
 
         // Store chart reference
         chartRef.current = chart

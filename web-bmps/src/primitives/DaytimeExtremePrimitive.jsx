@@ -3,6 +3,13 @@
  * Draws horizontal lines with labels from startTime to endTime (or infinity)
  */
 
+import { 
+  drawHorizontalLine, 
+  drawLabel, 
+  getTimeCoordinate, 
+  getPriceCoordinate 
+} from '../utils/drawingUtils.js'
+
 /**
  * TradingView Series Primitive for drawing horizontal lines with labels
  */
@@ -128,75 +135,45 @@ class DaytimeExtremePaneRenderer {
   }
 
   drawHorizontalLine(ctx, line, scope) {
-    // Get price coordinate through the series that this primitive is attached to
-    let priceY = null
+    // Get price coordinate
+    const priceY = getPriceCoordinate(line.level, this.series, this.chart)
     
-    try {
-      // Try to get the price coordinate from the series
-      if (this.series && this.series.priceToCoordinate) {
-        priceY = this.series.priceToCoordinate(line.level)
-      }
-      // Alternative: try chart's price scale  
-      else if (this.chart && this.chart.priceScale) {
-        priceY = this.chart.priceScale().priceToCoordinate(line.level)
-      }
-    } catch (error) {
-      console.warn('Error converting price to coordinate:', error)
-    }
-    
-    // If we still don't have a coordinate, skip this line
+    // If we can't get a coordinate, skip this line
     if (priceY === null || priceY === undefined) {
       console.warn('Could not convert price to coordinate for level:', line.level)
       return
     }
 
     // Get time coordinates 
-    const startX = this.getTimeCoordinate(line.startTime, scope)
+    const startX = getTimeCoordinate(line.startTime, this.chart)
     if (startX === null) return
 
     const endX = line.endTime 
-      ? this.getTimeCoordinate(line.endTime, scope)
-      : scope.mediaSize.width // Infinite line to right edge
+      ? getTimeCoordinate(line.endTime, this.chart)
+      : null // null means infinite line to right edge
 
-    // Draw the horizontal line
-    ctx.strokeStyle = line.style.lineColor
-    ctx.lineWidth = line.style.lineWidth
-    ctx.beginPath()
-    ctx.moveTo(startX, priceY)
-    ctx.lineTo(endX || scope.mediaSize.width, priceY)
-    ctx.stroke()
+    // Draw the horizontal line using shared utility
+    drawHorizontalLine(ctx, {
+      startX,
+      endX,
+      y: priceY,
+      color: line.style.lineColor,
+      width: line.style.lineWidth,
+      lineDash: 'solid',
+      canvasWidth: scope.mediaSize.width
+    })
 
-    // Draw the label
-    this.drawLabel(ctx, line, startX, priceY)
-  }
-
-  drawLabel(ctx, line, x, y) {
-    if (!line.label) return
-
-    ctx.font = `${line.style.labelSize}px Arial`
-    ctx.fillStyle = line.style.labelColor
-    ctx.textBaseline = 'middle'
-    ctx.textAlign = 'right'
-
-    // Position label to the left of start time
-    const labelX = x - this.options.labelOffset
-    ctx.fillText(line.label, labelX, y)
-  }
-
-  getTimeCoordinate(timestamp, scope) {
-    if (!this.chart) return null
-    
-    try {
-      // Convert timestamp to TradingView time coordinate
-      // TradingView expects time in seconds
-      const timeInSeconds = Math.floor(timestamp / 1000)
-      
-      // Use the chart's time scale to convert to coordinate
-      const logicalIndex = this.chart.timeScale().timeToCoordinate(timeInSeconds)
-      return logicalIndex !== null && logicalIndex !== undefined ? logicalIndex : null
-    } catch (error) {
-      console.warn('Error converting time coordinate:', error)
-      return null
+    // Draw the label using shared utility
+    if (line.label) {
+      drawLabel(ctx, {
+        text: line.label,
+        x: startX - this.options.labelOffset,
+        y: priceY,
+        color: line.style.labelColor,
+        size: line.style.labelSize,
+        align: 'right',
+        baseline: 'middle'
+      })
     }
   }
 }
