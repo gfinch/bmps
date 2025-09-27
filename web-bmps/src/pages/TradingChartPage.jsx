@@ -13,6 +13,13 @@ export default function TradingChartPage() {
   // Use event playback hook for trading phase
   const playback = useEventPlayback('trading')
 
+  // Layer visibility state
+  const [layerVisibility, setLayerVisibility] = useState({
+    planZones: true,
+    daytimeExtremes: true,
+    orders: true,
+  })
+
   // Initialize playback to first timestamp when page loads
   useEffect(() => {
     // Only rewind if we don't already have a current timestamp
@@ -150,10 +157,28 @@ export default function TradingChartPage() {
     return cleanup
   }, [])
 
-      // Update chart with visible events
+  // Update chart when visible events change
+  useEffect(() => {
     if (chartServiceRef.current) {
       chartServiceRef.current.updateVisibleEvents(playback.visibleEvents, playback.currentTimestamp)
     }
+  }, [playback.visibleEvents, playback.currentTimestamp])
+
+  // Update renderer visibility when layer visibility state changes
+  useEffect(() => {
+    if (chartServiceRef.current) {
+      // Update plan zones visibility
+      chartServiceRef.current.setRendererVisibility('PlanZone', layerVisibility.planZones)
+      
+      // Update daytime extremes visibility
+      chartServiceRef.current.setRendererVisibility('DaytimeExtreme', layerVisibility.daytimeExtremes)
+      
+      // Update orders visibility
+      chartServiceRef.current.setRendererVisibility('Order', layerVisibility.orders)
+      
+      console.log('Trading chart layer visibility updated:', layerVisibility)
+    }
+  }, [layerVisibility])
 
   // Event handlers using playback service
   const handlePlay = () => {
@@ -205,6 +230,57 @@ export default function TradingChartPage() {
           ref={chartContainerRef} 
           className="w-full h-full min-h-[300px]"
         />
+      </div>
+
+      {/* Layer Controls - between chart and media controls */}
+      <div className="flex-shrink-0 py-2 border-b border-gray-200">
+        <div className="flex items-center justify-center space-x-4">
+          <label className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              checked={layerVisibility.planZones}
+              onChange={(e) => {
+                const newVisibility = {
+                  ...layerVisibility,
+                  planZones: e.target.checked
+                }
+                setLayerVisibility(newVisibility)
+              }}
+              className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+            />
+            <span className="text-sm font-medium text-gray-700">Plan Zones</span>
+          </label>
+          <label className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              checked={layerVisibility.daytimeExtremes}
+              onChange={(e) => {
+                const newVisibility = {
+                  ...layerVisibility,
+                  daytimeExtremes: e.target.checked
+                }
+                setLayerVisibility(newVisibility)
+              }}
+              className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+            />
+            <span className="text-sm font-medium text-gray-700">Extreme Lines</span>
+          </label>
+          <label className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              checked={layerVisibility.orders}
+              onChange={(e) => {
+                const newVisibility = {
+                  ...layerVisibility,
+                  orders: e.target.checked
+                }
+                setLayerVisibility(newVisibility)
+              }}
+              className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+            />
+            <span className="text-sm font-medium text-gray-700">Orders</span>
+          </label>
+        </div>
       </div>
 
       {/* Media Controls - fixed at bottom */}

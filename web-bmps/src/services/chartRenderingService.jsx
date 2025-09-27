@@ -9,6 +9,7 @@
 class BaseRenderer {
   constructor(chart) {
     this.chart = chart
+    this.visible = true // Default to visible
   }
 
   /**
@@ -26,6 +27,26 @@ class BaseRenderer {
    */
   update(events) {
     throw new Error('update() must be implemented by subclass')
+  }
+
+  /**
+   * Set the visibility of this renderer
+   * @param {boolean} visible - Whether the renderer should be visible
+   */
+  setVisibility(visible) {
+    this.visible = visible
+    // Trigger an update with current events to apply visibility change
+    if (this.lastEvents) {
+      this.update(this.lastEvents, this.lastTimestamp)
+    }
+  }
+
+  /**
+   * Get the current visibility state
+   * @returns {boolean} Current visibility state
+   */
+  isVisible() {
+    return this.visible
   }
 
   /**
@@ -76,6 +97,31 @@ class ChartRenderingService {
       renderer.destroy()
       this.renderers.delete(eventType)
     }
+  }
+
+  /**
+   * Set the visibility of a specific renderer
+   * @param {string} eventType - The event type renderer to control
+   * @param {boolean} visible - Whether the renderer should be visible
+   */
+  setRendererVisibility(eventType, visible) {
+    const renderer = this.renderers.get(eventType)
+    if (renderer) {
+      renderer.setVisibility(visible)
+      console.debug(`ChartRenderingService: Set ${eventType} renderer visibility to ${visible}`)
+    } else {
+      console.warn(`ChartRenderingService: No renderer found for event type '${eventType}'`)
+    }
+  }
+
+  /**
+   * Get the visibility state of a specific renderer
+   * @param {string} eventType - The event type renderer to check
+   * @returns {boolean|null} Visibility state, or null if renderer not found
+   */
+  getRendererVisibility(eventType) {
+    const renderer = this.renderers.get(eventType)
+    return renderer ? renderer.isVisible() : null
   }
 
   /**

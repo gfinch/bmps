@@ -39,6 +39,17 @@ class DaytimeExtremeRenderer extends BaseRenderer {
       return
     }
 
+    // Store events and timestamp for potential visibility changes
+    this.lastEvents = events
+    this.lastTimestamp = currentTimestamp
+
+    // If not visible, pass empty lines to hide all extreme lines
+    if (!this.visible) {
+      this.primitive.updateLines([])
+      console.debug('DaytimeExtremeRenderer: Hidden, updating with empty lines')
+      return
+    }
+
     console.debug(`DaytimeExtremeRenderer: Updating with ${events.length} events`)
 
     // Filter and deduplicate events by description, keeping only the latest for each
