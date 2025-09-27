@@ -3,7 +3,7 @@ import { createChart, CandlestickSeries } from 'lightweight-charts'
 import { Play, Pause, SkipBack, SkipForward, Rewind, FastForward } from 'lucide-react'
 import { useEventPlayback } from '../hooks/useEventPlayback.jsx'
 import { ChartRenderingService } from '../services/chartRenderingService.jsx'
-import { CandlestickRenderer, DaytimeExtremeRenderer, PlanZoneRenderer } from '../renderers/index.js'
+import { CandlestickRenderer, DaytimeExtremeRenderer, PlanZoneRenderer, OrderRenderer } from '../renderers/index.js'
 
 export default function TradingChartPage() {
   const chartContainerRef = useRef()
@@ -95,6 +95,25 @@ export default function TradingChartPage() {
           labelOffset: 15
         })
         chartServiceRef.current.addRenderer('PlanZone', planZoneRenderer)
+
+        // Create order renderer for trading orders
+        const orderRenderer = new OrderRenderer(chart, {
+          plannedColor: '#7C3AED',    // Purple for planned state
+          placedColor: '#2563EB',     // Blue for placed state
+          filledColor: '#2563EB',     // Blue for filled state  
+          profitBoxFill: 'rgba(34, 197, 94, 0.15)',   // Green with transparency
+          profitBoxStroke: '#22C55E',  // Green stroke
+          lossBoxFill: 'rgba(239, 68, 68, 0.15)',     // Red with transparency  
+          lossBoxStroke: '#EF4444',    // Red stroke
+          greyBoxFill: 'rgba(107, 114, 128, 0.12)',   // Grey with transparency
+          greyBoxStroke: '#6B7280',    // Grey stroke
+          cancelledColor: '#6B7280',   // Grey for cancelled
+          lineWidth: 2,
+          labelColor: '#374151',
+          labelSize: 12,
+          labelOffset: 15
+        })
+        chartServiceRef.current.addRenderer('Order', orderRenderer)
 
         // Store chart reference
         chartRef.current = chart

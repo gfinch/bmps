@@ -101,6 +101,51 @@ export function drawLabel(ctx, options) {
 }
 
 /**
+ * Draw a filled rectangle on the canvas
+ * @param {CanvasRenderingContext2D} ctx - Canvas context
+ * @param {Object} options - Drawing options
+ * @param {number} options.startX - Start X coordinate
+ * @param {number} options.endX - End X coordinate (or null for infinity)
+ * @param {number} options.topY - Top Y coordinate
+ * @param {number} options.bottomY - Bottom Y coordinate
+ * @param {string} options.fillColor - Fill color (with transparency)
+ * @param {string} options.strokeColor - Stroke color
+ * @param {number} options.strokeWidth - Stroke width
+ * @param {number} options.canvasWidth - Canvas width for infinite rectangles
+ */
+export function drawRectangle(ctx, options) {
+  const { 
+    startX, 
+    endX, 
+    topY, 
+    bottomY, 
+    fillColor, 
+    strokeColor, 
+    strokeWidth = 1, 
+    canvasWidth 
+  } = options
+  
+  const rectEndX = endX || canvasWidth
+  const rectWidth = rectEndX - startX
+  const rectHeight = Math.abs(bottomY - topY)
+  const rectY = Math.min(topY, bottomY)
+  
+  // Fill rectangle
+  if (fillColor) {
+    ctx.fillStyle = fillColor
+    ctx.fillRect(startX, rectY, rectWidth, rectHeight)
+  }
+  
+  // Stroke rectangle
+  if (strokeColor) {
+    ctx.strokeStyle = strokeColor
+    ctx.lineWidth = strokeWidth
+    ctx.setLineDash([]) // Solid lines for rectangles
+    ctx.strokeRect(startX, rectY, rectWidth, rectHeight)
+  }
+}
+
+/**
  * Convert timestamp to coordinate using chart's time scale
  * @param {number} timestamp - Timestamp in milliseconds
  * @param {Object} chart - TradingView chart instance
