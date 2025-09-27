@@ -48,6 +48,17 @@ class OrderRenderer extends BaseRenderer {
       return
     }
 
+    // Store events and timestamp for potential visibility changes
+    this.lastEvents = events
+    this.lastTimestamp = currentTimestamp
+
+    // If not visible, pass empty orders to hide all orders
+    if (!this.visible) {
+      this.primitive.updateOrders([])
+      console.debug('OrderRenderer: Hidden, updating with empty orders')
+      return
+    }
+
     console.debug(`OrderRenderer: Updating with ${events.length} events`)
 
     // Filter events by validity and current playback timestamp

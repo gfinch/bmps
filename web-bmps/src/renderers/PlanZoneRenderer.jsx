@@ -41,6 +41,17 @@ class PlanZoneRenderer extends BaseRenderer {
       return
     }
 
+    // Store events and timestamp for potential visibility changes
+    this.lastEvents = events
+    this.lastTimestamp = currentTimestamp
+
+    // If not visible, pass empty zones to hide all plan zones
+    if (!this.visible) {
+      this.primitive.updateZones([])
+      console.debug('PlanZoneRenderer: Hidden, updating with empty zones')
+      return
+    }
+
     console.debug(`PlanZoneRenderer: Updating with ${events.length} events`)
 
     // Filter and deduplicate events

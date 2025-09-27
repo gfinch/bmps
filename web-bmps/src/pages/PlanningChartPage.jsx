@@ -13,6 +13,14 @@ export default function PlanningChartPage() {
   // Use event playback hook for planning phase
   const playback = useEventPlayback('planning')
 
+  // Layer visibility state
+  const [layerVisibility, setLayerVisibility] = useState({
+    planZones: true,
+    daytimeExtremes: true,
+    // Future layers can be added here
+    // swingPoints: true,
+  })
+
   // Initialize chart
   useEffect(() => {
     if (!chartContainerRef.current || chartRef.current) return
@@ -130,6 +138,19 @@ export default function PlanningChartPage() {
     }
   }, [playback.visibleEvents])
 
+  // Update renderer visibility when layer visibility state changes
+  useEffect(() => {
+    if (chartServiceRef.current) {
+      // Update plan zones visibility
+      chartServiceRef.current.setRendererVisibility('PlanZone', layerVisibility.planZones)
+      
+      // Update daytime extremes visibility
+      chartServiceRef.current.setRendererVisibility('DaytimeExtreme', layerVisibility.daytimeExtremes)
+      
+      console.log('Layer visibility updated:', layerVisibility)
+    }
+  }, [layerVisibility])
+
   // Event handlers using playback service
   const handlePlay = () => {
     playback.togglePlayPause()
@@ -180,6 +201,42 @@ export default function PlanningChartPage() {
           ref={chartContainerRef} 
           className="w-full h-full min-h-[300px]"
         />
+      </div>
+
+      {/* Layer Controls - between chart and media controls */}
+      <div className="flex-shrink-0 py-2 border-b border-gray-200">
+        <div className="flex items-center justify-center space-x-4">
+          <label className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              checked={layerVisibility.planZones}
+              onChange={(e) => {
+                const newVisibility = {
+                  ...layerVisibility,
+                  planZones: e.target.checked
+                }
+                setLayerVisibility(newVisibility)
+              }}
+              className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+            />
+            <span className="text-sm font-medium text-gray-700">Plan Zones</span>
+          </label>
+          <label className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              checked={layerVisibility.daytimeExtremes}
+              onChange={(e) => {
+                const newVisibility = {
+                  ...layerVisibility,
+                  daytimeExtremes: e.target.checked
+                }
+                setLayerVisibility(newVisibility)
+              }}
+              className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+            />
+            <span className="text-sm font-medium text-gray-700">Extreme Lines</span>
+          </label>
+        </div>
       </div>
 
       {/* Media Controls - fixed at bottom */}
