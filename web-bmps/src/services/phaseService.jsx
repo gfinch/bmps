@@ -5,6 +5,7 @@
 
 import websocketService from './websocketService.jsx'
 import eventBufferManager from './eventBuffer.jsx'
+import eventPlaybackService from './eventPlaybackService.jsx'
 
 /**
  * @typedef {Object} PlanningConfig
@@ -93,7 +94,18 @@ class PhaseService {
   async sendPlanningCommands(config) {
     console.debug('Sending planning phase commands')
     
-    // First, start the planning phase (this triggers processing)
+    // First, send reset command to clear all event buffers
+    const resetCommand = {
+      command: 'reset'
+    }
+    
+    console.debug('Sending reset command:', resetCommand)
+    websocketService.send(resetCommand)
+    
+    // Small delay to ensure reset command is processed
+    await new Promise(resolve => setTimeout(resolve, 200))
+    
+    // Then, start the planning phase (this triggers processing)
     const startCommand = {
       command: 'startPhase',
       phase: 'planning',
@@ -109,7 +121,7 @@ class PhaseService {
     // Small delay to ensure start command is processed
     await new Promise(resolve => setTimeout(resolve, 100))
     
-    // Then, subscribe to planning phase events (this starts receiving events)
+    // Finally, subscribe to planning phase events (this starts receiving events)
     const subscribeCommand = {
       command: 'subscribePhase',
       phase: 'planning'
@@ -262,8 +274,16 @@ class PhaseService {
     console.debug('Phase service received message:', message)
     console.debug('Message type check - isPhaseEvent:', this.isPhaseEvent(message))
     console.debug('Message type check - isPhaseCompleteEvent:', this.isPhaseCompleteEvent(message))
+    console.debug('Message type check - isResetEvent:', this.isResetEvent(message))
     console.debug('Message type check - isLifecycleEvent:', this.isLifecycleEvent(message))
     console.debug('Message type check - isErrorMessage:', this.isErrorMessage(message))
+    
+    // Handle reset events - clear event buffers but preserve results
+    if (this.isResetEvent(message)) {
+      console.debug('Reset event received - clearing event buffers')
+      this.handleResetEvent()
+      return
+    }
     
     // Handle phase complete events for automatic transitions
     if (this.isPhaseCompleteEvent(message)) {
@@ -338,6 +358,37 @@ class PhaseService {
     console.debug('Phase service WebSocket connected')
   }
 
+  /**
+   * Handle reset event - clear event buffers but preserve results
+   * @private
+   */
+  handleResetEvent() {
+    console.debug('Phase service handling reset event')
+    
+    try {
+      // Reset playback service state (current timestamps, playing state, etc.)
+      eventPlaybackService.resetPlaybackState()
+      console.debug('Reset event playback service state')
+      
+      // Clear planning buffer
+      eventBufferManager.clearPhase('planning')
+      console.debug('Cleared planning event buffer')
+      
+      // Clear trading buffer  
+      eventBufferManager.clearPhase('trading')
+      console.debug('Cleared trading event buffer')
+      
+      // Reset internal state
+      this.isInitialized = false
+      this.isInitializing = false
+      this.currentConfig = null
+      
+      console.debug('Phase service state reset complete')
+    } catch (error) {
+      console.error('Error handling reset event:', error)
+    }
+  }
+
   // Message type detection helpers
 
   /**
@@ -365,6 +416,20 @@ class PhaseService {
            message.event.eventType &&
            (message.event.eventType === 'PhaseComplete' || 
             (typeof message.event.eventType === 'object' && 'PhaseComplete' in message.event.eventType))
+  }
+
+  /**
+   * Check if message is a reset event
+   * @param {Object} message - Message to check
+   * @returns {boolean}
+   * @private
+   */
+  isResetEvent(message) {
+    return message && 
+           message.event && 
+           message.event.eventType &&
+           (message.event.eventType === 'Reset' || 
+            (typeof message.event.eventType === 'object' && 'Reset' in message.event.eventType))
   }
 
   /**

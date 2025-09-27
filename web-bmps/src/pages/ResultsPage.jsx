@@ -1,35 +1,48 @@
-import { useState } from 'react'
-import { BarChart3, TrendingUp, TrendingDown, DollarSign, Clock, Target } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { BarChart3, TrendingUp, TrendingDown, DollarSign, Clock } from 'lucide-react'
+import resultsService from '../services/resultsService.jsx'
+import PerformanceChart from '../components/PerformanceChart.jsx'
 
 export default function ResultsPage() {
   const [activeTab, setActiveTab] = useState('overview')
+  const [results, setResults] = useState(null)
 
-  // Mock data for display purposes
-  const tradingResults = {
-    totalTrades: 8,
-    winningTrades: 6,
-    losingTrades: 2,
-    winRate: 75,
-    totalPnL: 4250,
-    totalReturn: 3.8,
-    avgWin: 850,
-    avgLoss: -125,
-    maxDrawdown: -250,
-    sharpeRatio: 1.42
+  // Subscribe to results service updates
+  useEffect(() => {
+    // Get initial results
+    setResults(resultsService.getResults())
+
+    // Listen for updates
+    const handleResultsUpdate = (newResults) => {
+      setResults(newResults)
+    }
+
+    resultsService.addListener(handleResultsUpdate)
+
+    return () => {
+      resultsService.removeListener(handleResultsUpdate)
+    }
+  }, [])
+
+  // Use results data or fallback to empty state
+  const tradingResults = results || {
+    totalPnL: 0,
+    totalTrades: 0,
+    winningTrades: 0,
+    losingTrades: 0,
+    winRate: 0,
+    avgWin: 0,
+    avgLoss: 0,
+    totalReturn: 0,
+    maxDrawdown: 0,
+    sharpeRatio: 0
   }
 
-  const trades = [
-    { id: 1, time: '09:42:15', type: 'Buy', price: 115.20, quantity: 100, pnl: +850, status: 'closed' },
-    { id: 2, time: '10:15:30', type: 'Sell', price: 117.80, quantity: 50, pnl: +420, status: 'closed' },
-    { id: 3, time: '10:45:12', type: 'Buy', price: 116.50, quantity: 75, pnl: -125, status: 'closed' },
-    { id: 4, time: '11:20:45', type: 'Sell', price: 118.20, quantity: 100, pnl: +980, status: 'closed' },
-    { id: 5, time: '11:55:08', type: 'Buy', price: 117.10, quantity: 200, pnl: +1200, status: 'closed' },
-  ]
+  const trades = results ? resultsService.getTradeHistory() : []
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: BarChart3 },
-    { id: 'trades', label: 'Trade History', icon: Clock },
-    { id: 'analysis', label: 'Analysis', icon: Target }
+    { id: 'trades', label: 'Trade History', icon: Clock }
   ]
 
   const handleTabClick = (tabId) => {
@@ -61,7 +74,7 @@ export default function ResultsPage() {
                 {tradingResults.winRate}%
               </p>
             </div>
-            <Target className="w-8 h-8 text-blue-500" />
+            <TrendingUp className="w-8 h-8 text-blue-500" />
           </div>
         </div>
 
@@ -100,8 +113,8 @@ export default function ResultsPage() {
                 onClick={() => handleTabClick(id)}
                 className={`flex items-center py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
                   activeTab === id
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    ? 'border-blue-500 text-blue-600 bg-white'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 bg-white'
                 }`}
               >
                 <Icon className="w-4 h-4 mr-2" />
@@ -144,12 +157,21 @@ export default function ResultsPage() {
                   </div>
                 </div>
               </div>
-              <div className="bg-gray-50 rounded-lg p-4 flex items-center justify-center">
-                <div className="text-center">
-                  <BarChart3 className="w-12 h-12 text-gray-300 mx-auto mb-2" />
-                  <p className="text-gray-500">Performance Chart</p>
-                  <p className="text-sm text-gray-400">Coming soon</p>
-                </div>
+              <div className="bg-gray-50 rounded-lg p-4">
+                <h4 className="text-sm font-medium text-gray-900 mb-4">P&L Performance</h4>
+                {results && results.pnlHistory.length > 0 ? (
+                  <div className="h-48">
+                    <PerformanceChart data={results.pnlHistory} />
+                  </div>
+                ) : (
+                  <div className="h-48 flex items-center justify-center">
+                    <div className="text-center">
+                      <BarChart3 className="w-12 h-12 text-gray-300 mx-auto mb-2" />
+                      <p className="text-gray-500">No trading data yet</p>
+                      <p className="text-sm text-gray-400">P&L chart will appear when trades are executed</p>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -157,52 +179,52 @@ export default function ResultsPage() {
           {activeTab === 'trades' && (
             <div>
               <h3 className="text-lg font-medium text-gray-900 mb-4">Trade History</h3>
-              <div className="overflow-x-auto">
-                <table className="min-w-full">
-                  <thead>
-                    <tr className="border-b border-gray-200">
-                      <th className="text-left py-3 px-4 font-medium text-gray-900">Time</th>
-                      <th className="text-left py-3 px-4 font-medium text-gray-900">Type</th>
-                      <th className="text-left py-3 px-4 font-medium text-gray-900">Price</th>
-                      <th className="text-left py-3 px-4 font-medium text-gray-900">Quantity</th>
-                      <th className="text-left py-3 px-4 font-medium text-gray-900">P&L</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {trades.map((trade) => (
-                      <tr key={trade.id} className="border-b border-gray-100">
-                        <td className="py-3 px-4 text-sm text-gray-600">{trade.time}</td>
-                        <td className="py-3 px-4 text-sm">
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                            trade.type === 'Buy' 
-                              ? 'bg-green-100 text-green-800' 
-                              : 'bg-red-100 text-red-800'
-                          }`}>
-                            {trade.type}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 text-sm text-gray-900">${trade.price}</td>
-                        <td className="py-3 px-4 text-sm text-gray-900">{trade.quantity}</td>
-                        <td className="py-3 px-4 text-sm">
-                          <span className={`font-medium ${
-                            trade.pnl >= 0 ? 'text-green-600' : 'text-red-600'
-                          }`}>
-                            ${trade.pnl > 0 ? '+' : ''}{trade.pnl}
-                          </span>
-                        </td>
+              {trades.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full">
+                    <thead>
+                      <tr className="border-b border-gray-200">
+                        <th className="text-left py-3 px-4 font-medium text-gray-900">Time</th>
+                        <th className="text-left py-3 px-4 font-medium text-gray-900">Type</th>
+                        <th className="text-left py-3 px-4 font-medium text-gray-900">Entry Price</th>
+                        <th className="text-left py-3 px-4 font-medium text-gray-900">Contracts</th>
+                        <th className="text-left py-3 px-4 font-medium text-gray-900">P&L</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'analysis' && (
-            <div className="text-center py-12">
-              <Target className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-500 mb-2">Advanced Analysis</h3>
-              <p className="text-gray-400">Detailed trading analysis will be implemented here</p>
+                    </thead>
+                    <tbody>
+                      {trades.map((trade) => (
+                        <tr key={trade.id} className="border-b border-gray-100">
+                          <td className="py-3 px-4 text-sm text-gray-600">{trade.time}</td>
+                          <td className="py-3 px-4 text-sm">
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium bg-white border ${
+                              trade.type === 'Long' 
+                                ? 'border-green-200 text-green-800' 
+                                : 'border-red-200 text-red-800'
+                            }`}>
+                              {trade.type}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-sm text-gray-900">${trade.price.toFixed(2)}</td>
+                          <td className="py-3 px-4 text-sm text-gray-900">{trade.quantity}</td>
+                          <td className="py-3 px-4 text-sm">
+                            <span className={`font-medium ${
+                              trade.pnl >= 0 ? 'text-green-600' : 'text-red-600'
+                            }`}>
+                              ${trade.pnl > 0 ? '+' : ''}{Math.round(trade.pnl)}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <Clock className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-500 mb-2">No Completed Trades</h3>
+                  <p className="text-gray-400">Trade history will appear when orders are filled and closed</p>
+                </div>
+              )}
             </div>
           )}
         </div>

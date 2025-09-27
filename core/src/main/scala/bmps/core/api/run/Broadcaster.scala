@@ -51,6 +51,25 @@ class Broadcaster private (
 
       Stream.eval(register) *> (replay ++ live).onFinalize(unregister)
     }
+
+  /** Reset all event buffers and broadcast reset event to all subscribers.
+    * This clears all phase buffers and notifies all currently connected clients
+    * to reset their local state.
+    */
+  def resetBuffers(): IO[Unit] = for {
+    // Clear all buffers
+    _ <- bufferRef.set(Map.empty)
+    
+    // Get current timestamp for reset event
+    currentTime = System.currentTimeMillis()
+    resetEvent = Event.reset(currentTime)
+    
+    // Get all current subscribers
+    subs <- subscribersRef.get
+    
+    // Broadcast reset event to ALL subscribers regardless of phase
+    _ <- subs.traverse_ { case (_, q) => q.offer(resetEvent) }
+  } yield ()
 }
 
 object Broadcaster {

@@ -23,28 +23,3 @@ lazy val core = (project in file("core"))
       "org.typelevel" %% "cats-effect-testing-scalatest" % "1.5.0" % Test
     )
   )
-
-lazy val web = (project in file("web"))
-  .dependsOn(core)
-  .settings(
-    name := "bmps-web",
-    libraryDependencies ++= Seq(
-      // web is a static frontend; no http4s deps here
-      "io.circe" %% "circe-generic" % "0.14.6",
-      "com.typesafe" % "config" % "1.4.3",
-      "org.scalatest" %% "scalatest" % "3.2.17" % Test,
-      "org.typelevel" %% "cats-effect-testing-scalatest" % "1.5.0" % Test
-    )
-  )
-
-lazy val console = (project in file("console"))
-  .dependsOn(core)
-  .settings(
-    name := "bmps-console",
-    libraryDependencies ++= Seq(
-      "io.circe" %% "circe-generic" % "0.14.6",
-      "com.typesafe" % "config" % "1.4.3",
-      "org.scalatest" %% "scalatest" % "3.2.17" % Test,
-      "org.typelevel" %% "cats-effect-testing-scalatest" % "1.5.0" % Test
-    )
-  )

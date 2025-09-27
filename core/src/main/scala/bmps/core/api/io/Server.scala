@@ -107,11 +107,26 @@ object Server {
                           startedPhasesRef.get.flatMap { startedPhases =>
                             if (startedPhases.contains(p)) {
                               // Phase already started, ignore this request
-                              IO.unit
+                              IO(println(s"[DEBUG] Phase $p already started, ignoring request"))
                             } else {
                               // Mark phase as started and start processing
+                              IO(println(s"[DEBUG] Starting phase $p with options: $options")) *>
                               startedPhasesRef.update(_ + p) *>
-                              controller.startPhase(p, options).start.void
+                              controller.startPhase(p, options).start.flatMap { fiber =>
+                                // Track the fiber and log any errors
+                                fiber.join.flatMap {
+                                  case cats.effect.kernel.Outcome.Succeeded(_) =>
+                                    IO(println(s"[DEBUG] Phase $p completed successfully"))
+                                  case cats.effect.kernel.Outcome.Errored(err) =>
+                                    IO(println(s"[ERROR] Phase $p failed: ${err.getMessage}")) *>
+                                    IO(err.printStackTrace())
+                                  case cats.effect.kernel.Outcome.Canceled() =>
+                                    IO(println(s"[DEBUG] Phase $p was canceled"))
+                                }.start.void // Track the outcome monitoring in background
+                              }.handleErrorWith { err =>
+                                IO(println(s"[ERROR] Failed to start phase $p: ${err.getMessage}")) *>
+                                IO(err.printStackTrace())
+                              }
                             }
                           }
                         }
@@ -123,24 +138,58 @@ object Server {
                           case _ => None
                         }
                         phaseOpt.fold(IO.unit) { p =>
-                          for {
+                          IO(println(s"[DEBUG] Subscribing to phase $p")) *>
+                          (for {
                             // Cancel any existing subscription fibers
                             existingFibers <- fibersRef.get
+                            _ <- if (existingFibers.nonEmpty) IO(println(s"[DEBUG] Canceling ${existingFibers.length} existing subscription fibers")) else IO.unit
                             _ <- existingFibers.traverse_(_.cancel).handleErrorWith(_ => IO.unit)
                             _ <- fibersRef.set(List.empty)
                             // Update current subscription
                             _ <- currentSubscriptionRef.set(Some(p))
                             // Start new subscription
                             sub = broadcaster.subscribe(p).map(ev => WebSocketFrame.Text(ServerMessage.PhaseEvent(p.toString, ev).asJson.noSpaces)).evalMap(q.offer)
+                            _ <- IO(println(s"[DEBUG] Starting subscription stream for $p"))
                             subFiber <- sub.compile.drain.start
                             _ <- fibersRef.update(subFiber :: _)
-                          } yield ()
+                            _ <- IO(println(s"[DEBUG] Subscription active for $p"))
+                          } yield ()).handleErrorWith { err =>
+                            IO(println(s"[ERROR] Subscription to $p failed: ${err.getMessage}")) *>
+                            IO(err.printStackTrace())
+                          }
                         }
                       case ClientCommand.Status =>
                         for {
                           st <- stateRef.get
                           _ <- q.offer(WebSocketFrame.Text(ServerMessage.Lifecycle(st.systemStatePhase.toString, "status").asJson.noSpaces))
                         } yield ()
+                      case ClientCommand.Reset =>
+                        IO(println("[DEBUG] Processing reset command")) *>
+                        (for {
+                          currentState <- stateRef.get
+                          _ <- IO(println(s"[DEBUG] State before reset - phase: ${currentState.systemStatePhase}, tradingDay: ${currentState.tradingDay}, planningDays: ${currentState.planningDays}"))
+                          _ <- IO(println(s"[DEBUG] State before reset - planningCandles: ${currentState.planningCandles.size}, planningSwingPoints: ${currentState.planningSwingPoints.size}"))
+                          _ <- IO(println(s"[DEBUG] State before reset - planZones: ${currentState.planZones.size}, daytimeExtremes: ${currentState.daytimeExtremes.size}"))
+                          _ <- IO(println("[DEBUG] Clearing started phases tracking"))
+                          _ <- startedPhasesRef.set(Set.empty) // Clear started phases tracking
+                          
+                          // Create completely fresh state with only config preserved
+                          freshState = SystemState(
+                            tradingDay = currentState.tradingDay,
+                            planningDays = currentState.planningDays,
+                            systemStatePhase = SystemStatePhase.Planning
+                            // All other fields default to empty (List.empty, None, etc.)
+                          )
+                          _ <- stateRef.set(freshState)
+                          _ <- IO(println("[DEBUG] Reset system state to completely fresh state"))
+                          resetState <- stateRef.get
+                          _ <- IO(println(s"[DEBUG] State after reset - phase: ${resetState.systemStatePhase}, tradingDay: ${resetState.tradingDay}, planningDays: ${resetState.planningDays}"))
+                          _ <- broadcaster.resetBuffers()
+                          _ <- IO(println("[DEBUG] Reset broadcaster buffers"))
+                        } yield ()).handleErrorWith { err =>
+                          IO(println(s"[ERROR] Reset command failed: ${err.getMessage}")) *>
+                          IO(err.printStackTrace())
+                        }
                     }
                   }.handleErrorWith(_ => IO.unit)
                 case _ => IO.unit

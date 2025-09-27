@@ -14,6 +14,7 @@ object EventType {
     case object Order extends EventType
     case object PhaseComplete extends EventType
     case object PhaseErrored extends EventType
+    case object Reset extends EventType
 }
 
 case class Event(
@@ -34,4 +35,5 @@ object Event {
     def fromOrder(order: Order): Event = Event(EventType.Order, order.timestamp, order = Some(SerializableOrder.fromOrder(order)))
     def phaseComplete(timestamp: Long): Event = Event(EventType.PhaseComplete, timestamp)
     def phaseErrored(timestamp: Long): Event = Event(EventType.PhaseErrored, timestamp)
+    def reset(timestamp: Long): Event = Event(EventType.Reset, timestamp)
 }
