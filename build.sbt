@@ -1,7 +1,7 @@
 ThisBuild / scalaVersion := "2.13.12"
 
 lazy val root = (project in file("."))
-  .aggregate(core, web, console)
+  .aggregate(core)
   .settings(
     name := "bmps"
   )

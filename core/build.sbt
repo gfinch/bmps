@@ -13,7 +13,14 @@ libraryDependencies ++= Seq(
   "org.duckdb" % "duckdb_jdbc" % "1.1.0",
   // For plotting
   "org.scalanlp" %% "breeze" % "2.1.0",
-  "org.scalanlp" %% "breeze-viz" % "2.1.0"
+  "org.scalanlp" %% "breeze-viz" % "2.1.0",
+  // AWS SDK for S3 access
+  "software.amazon.awssdk" % "s3" % "2.27.21",
+  "software.amazon.awssdk" % "auth" % "2.27.21",
+  // HTTP client for Polygon.io REST API calls
+  "com.squareup.okhttp3" % "okhttp" % "4.12.0",
+  "com.fasterxml.jackson.core" % "jackson-databind" % "2.15.2",
+  "com.fasterxml.jackson.module" %% "jackson-module-scala" % "2.15.2"
 )
 
 // Embedded websocket server for single-process frontend + core
