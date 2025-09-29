@@ -169,13 +169,14 @@ class EventBufferManager {
   constructor() {
     this.buffers = {
       planning: new EventBuffer('planning'),
-      trading: new EventBuffer('trading')
+      trading: new EventBuffer('trading'),
+      results: new EventBuffer('results')  // Order-only buffer for results tracking
     }
   }
 
   /**
    * Get buffer for a specific phase
-   * @param {string} phase - Phase name ('planning' or 'trading')
+   * @param {string} phase - Phase name ('planning', 'trading', or 'results')
    * @returns {EventBuffer} Event buffer for the phase
    */
   getBuffer(phase) {
@@ -212,6 +213,33 @@ class EventBufferManager {
     } else {
       console.warn(`Unknown phase '${event.phase}' (normalized: '${normalizedPhase}') for event:`, event)
     }
+    
+    // NEW: Also add order events to results buffer for efficient results tracking
+    if (this.isOrderEvent(event)) {
+      const resultsEvent = {
+        ...event,
+        phase: 'results'  // Mark as results event
+      }
+      console.debug('Adding order event to results buffer:', resultsEvent)
+      this.buffers.results.addEvent(resultsEvent)
+    }
+  }
+
+  /**
+   * Check if event is an Order event
+   * @param {Object} event - Event to check
+   * @returns {boolean}
+   * @private
+   */
+  isOrderEvent(event) {
+    // Handle nested event structure (event.event.eventType)
+    const actualEvent = event.event || event
+    
+    return (actualEvent.eventType === 'Order' || 
+           (typeof actualEvent.eventType === 'object' && 
+            actualEvent.eventType && 
+            Object.keys(actualEvent.eventType).includes('Order'))) &&
+           actualEvent.order !== null && actualEvent.order !== undefined
   }
 
   /**
@@ -221,6 +249,13 @@ class EventBufferManager {
   clearPhase(phase) {
     // Normalize phase name to lowercase
     const normalizedPhase = phase ? phase.toLowerCase() : phase
+    
+    // Protect results buffer from being cleared - it should persist across resets
+    if (normalizedPhase === 'results') {
+      console.debug('Skipping clear of results buffer - results should persist across resets')
+      return
+    }
+    
     const buffer = this.buffers[normalizedPhase]
     if (buffer) {
       buffer.clearEvents()
@@ -231,7 +266,22 @@ class EventBufferManager {
    * Clear all events from all phases
    */
   clearAll() {
-    Object.values(this.buffers).forEach(buffer => buffer.clearEvents())
+    // Clear phase buffers but preserve results buffer
+    Object.entries(this.buffers).forEach(([phase, buffer]) => {
+      if (phase !== 'results') {
+        buffer.clearEvents()
+      } else {
+        console.debug('Preserving results buffer during clearAll()')
+      }
+    })
+  }
+
+  /**
+   * Clear results buffer specifically (for manual reset of results)
+   */
+  clearResults() {
+    console.debug('Manually clearing results buffer')
+    this.buffers.results.clearEvents()
   }
 
   /**

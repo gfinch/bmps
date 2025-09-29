@@ -11,6 +11,8 @@ import bmps.core.api.intf.EventGenerator
 import bmps.core.api.intf.CandleSource
 import bmps.core.api.impl.PhaseRunner
 import bmps.core.models.SystemStatePhase
+import bmps.core.io.PolygonAPISource
+import bmps.core.models.CandleDuration
 
 class PreparingEventGenerator(swingService: SwingService = new SwingService(1)) extends EventGenerator with TradingDate {
 
@@ -44,11 +46,14 @@ class PreparingEventGenerator(swingService: SwingService = new SwingService(1)) 
 }
 
 class PreparingSource extends CandleSource {
-    lazy val parquetPath = "core/src/main/resources/samples/es_futures_5min_60days.parquet"
+    // lazy val parquetPath = "core/src/main/resources/samples/es_futures_5min_60days.parquet"
+    // lazy val parquetSource = new ParquetSource(parquetPath)
+    lazy val apiSource = new PolygonAPISource(CandleDuration.OneMinute)
 
     def candles(state: SystemState): Stream[IO, Candle] = {
         val (startMs, endMs, zoneId) = computePreparingWindow(state)
-        ParquetSource.readParquetAsCandlesInRangeStream(parquetPath, startMs, endMs, zoneId)
+        // parquetSource.candlesInRangeStream(startMs, endMs, zoneId)
+        apiSource.candlesInRangeStream(startMs, endMs, zoneId)
     }
 
     private def computePreparingWindow(state: SystemState): (Long, Long, java.time.ZoneId) = {

@@ -1,325 +1,130 @@
 /**
  * Results Service for tracking trading performance
- * Watches trading events, manages order state, and calculates P&L
+ * Simplified design: listen → deduplicate → update UI
  */
 
 import eventBufferManager from './eventBuffer.jsx'
 
 /**
  * Trading Results Service
- * Maintains in-memory state of orders and trading performance
+ * Listens to the results buffer which contains only order events
  */
 class ResultsService {
   constructor() {
     // Order state - keyed by timestamp for deduplication
     this.orders = new Map()
     
-    // Performance tracking
-    this.dailyResults = {
-      totalPnL: 0,
-      totalTrades: 0,
-      winningTrades: 0,
-      losingTrades: 0,
-      totalWinAmount: 0,
-      totalLossAmount: 0,
-      pnlHistory: [], // [{timestamp, pnl, cumulativePnL}]
-      tradingDayComplete: false
-    }
-    
     // Listeners for real-time updates
     this.listeners = new Set()
     
-    // Set up event buffer watching
-    this.setupEventWatching()
-    
-    console.debug('ResultsService: Initialized')
+    // Set up event listening
+    this.setupEventListener()
   }
 
   /**
-   * Set up listening to trading event buffer
+   * Set up listening to the results buffer for order events
    * @private
    */
-  setupEventWatching() {
-    const tradingBuffer = eventBufferManager.getBuffer('trading')
+  setupEventListener() {
+    const resultsBuffer = eventBufferManager.getBuffer('results')
     
-    // Listen for new events
-    const eventListener = () => {
-      this.processNewEvents()
-    }
+    // Listen for new order events
+    resultsBuffer.addListener(() => {
+      this.processOrderUpdates()
+    })
     
-    tradingBuffer.addListener(eventListener)
-    
-    // Initial processing of existing events
-    this.processAllEvents()
+    // Process any existing order events
+    this.processOrderUpdates()
   }
 
   /**
-   * Process all existing events in the trading buffer
+   * Process order updates from the results buffer
    * @private
    */
-  processAllEvents() {
-    const tradingBuffer = eventBufferManager.getBuffer('trading')
-    const events = tradingBuffer.getEvents()
+  processOrderUpdates() {
+    const resultsBuffer = eventBufferManager.getBuffer('results')
+    const events = resultsBuffer.getEvents()
     
-    console.debug(`ResultsService: Processing ${events.length} existing events`)
+    const deduplicatedOrders = this.deduplicateOrders(events)
+    const hasChanges = this.updateOrdersMap(deduplicatedOrders)
     
-    // Reset state
-    this.orders.clear()
-    this.resetDailyResults()
-    
-    // Process each event
-    events.forEach(event => this.processEvent(event))
-    
-    // Notify listeners
-    this.notifyListeners()
-  }
-
-  /**
-   * Process new events that have been added to buffer
-   * @private
-   */
-  processNewEvents() {
-    const tradingBuffer = eventBufferManager.getBuffer('trading')
-    const events = tradingBuffer.getEvents()
-    
-    // If buffer is empty, it might have been cleared by a reset
-    // In that case, don't reset our results - just return
-    if (events.length === 0) {
-      console.debug('ResultsService: Buffer is empty (possibly due to reset) - preserving results')
-      return
-    }
-    
-    // If we have fewer events than before, the buffer was likely cleared and repopulated
-    // In this case, we should reprocess from scratch
-    const currentOrderCount = this.orders.size
-    
-    // Check if this looks like a buffer reset by seeing if we have orders but no events
-    if (currentOrderCount > 0 && events.length > 0) {
-      // Check if any of our existing orders are missing from the new events
-      const eventTimestamps = new Set(events.map(e => (e.event || e).timestamp))
-      const hasOrphanedOrders = Array.from(this.orders.keys()).some(timestamp => !eventTimestamps.has(timestamp))
-      
-      if (hasOrphanedOrders) {
-        console.debug('ResultsService: Detected buffer reset with new events - reprocessing from scratch')
-        this.orders.clear()
-        this.resetDailyResults()
-      }
-    }
-    
-    // Process any events we haven't seen yet
-    events.forEach(event => this.processEvent(event))
-    
-    // Only notify if we actually processed new orders
-    if (this.orders.size !== currentOrderCount) {
-      console.debug(`ResultsService: Processed new events, now have ${this.orders.size} orders`)
+    if (hasChanges) {
       this.notifyListeners()
     }
   }
 
   /**
-   * Process a single event
-   * @param {Object} event - Event to process
+   * Deduplicate orders by timestamp, keeping the one with most timestamps
+   * @param {Array} events - Order events from results buffer
+   * @returns {Map} Map of timestamp -> order
    * @private
    */
-  processEvent(event) {
-    const actualEvent = event.event || event
+  deduplicateOrders(events) {
+    const ordersByTimestamp = new Map()
     
-    // Handle Reset events - do NOT clear results data, just ignore
-    if (this.isResetEvent(actualEvent)) {
-      console.debug('ResultsService: Reset event received - preserving results data')
-      return
+    events.forEach(event => {
+      const actualEvent = event.event || event
+      const order = actualEvent.order
+      const mainTimestamp = actualEvent.timestamp
+      
+      if (!order) return
+      
+      const existing = ordersByTimestamp.get(mainTimestamp)
+      if (!existing || this.hasMoreTimestamps(order, existing)) {
+        ordersByTimestamp.set(mainTimestamp, { ...order, eventTimestamp: mainTimestamp })
+      }
+    })
+    
+    return ordersByTimestamp
+  }
+
+  /**
+   * Check if new order has more timestamp fields than existing order
+   * @param {Object} newOrder - New order to compare
+   * @param {Object} existingOrder - Existing order to compare
+   * @returns {boolean} True if new order has more timestamps
+   * @private
+   */
+  hasMoreTimestamps(newOrder, existingOrder) {
+    const countTimestamps = (order) => {
+      return [
+        order.placedTimestamp,
+        order.filledTimestamp,
+        order.closeTimestamp
+      ].filter(ts => ts != null).length
     }
     
-    // Handle Order events
-    if (this.isOrderEvent(actualEvent)) {
-      this.processOrderEvent(actualEvent)
+    return countTimestamps(newOrder) > countTimestamps(existingOrder)
+  }
+
+  /**
+   * Update the orders map with deduplicated orders
+   * @param {Map} deduplicatedOrders - New deduplicated orders
+   * @returns {boolean} True if there were changes
+   * @private
+   */
+  updateOrdersMap(deduplicatedOrders) {
+    const oldSize = this.orders.size
+    const oldKeys = new Set(this.orders.keys())
+    const newKeys = new Set(deduplicatedOrders.keys())
+    
+    // Check if there are any changes
+    if (oldSize !== deduplicatedOrders.size || 
+        ![...oldKeys].every(key => newKeys.has(key))) {
+      this.orders = deduplicatedOrders
+      return true
     }
     
-    // Handle PhaseComplete events for trading phase
-    if (this.isPhaseCompleteEvent(actualEvent)) {
-      this.handleTradingDayComplete()
-    }
-  }
-
-  /**
-   * Check if event is an Order event
-   * @param {Object} event - Event to check
-   * @returns {boolean}
-   * @private
-   */
-  isOrderEvent(event) {
-    return (event.eventType === 'Order' || 
-           (typeof event.eventType === 'object' && 
-            event.eventType && 
-            Object.keys(event.eventType).includes('Order'))) &&
-           event.order !== null && event.order !== undefined
-  }
-
-  /**
-   * Check if event is a PhaseComplete event
-   * @param {Object} event - Event to check
-   * @returns {boolean}
-   * @private
-   */
-  isPhaseCompleteEvent(event) {
-    return event.eventType === 'PhaseComplete' || 
-           (typeof event.eventType === 'object' && 
-            event.eventType && 
-            Object.keys(event.eventType).includes('PhaseComplete'))
-  }
-
-  /**
-   * Check if event is a Reset event
-   * @param {Object} event - Event to check
-   * @returns {boolean}
-   * @private
-   */
-  isResetEvent(event) {
-    return event.eventType === 'Reset' || 
-           (typeof event.eventType === 'object' && 
-            event.eventType && 
-            Object.keys(event.eventType).includes('Reset'))
-  }
-
-  /**
-   * Process an order event (deduplicate by timestamp)
-   * @param {Object} event - Order event
-   * @private
-   */
-  processOrderEvent(event) {
-    const order = event.order
-    const timestamp = event.timestamp
-    
-    // Validate required order data
-    if (!this.isValidOrder(order)) {
-      console.warn('ResultsService: Invalid order data:', order)
-      return
-    }
-    
-    // Store/update order (deduplication by timestamp)
-    const existingOrder = this.orders.get(timestamp)
-    this.orders.set(timestamp, { ...order, eventTimestamp: timestamp })
-    
-    // If this is an update to an existing order, recalculate from scratch
-    if (existingOrder) {
-      console.debug(`ResultsService: Updated order at timestamp ${timestamp}`)
-      this.recalculateResults()
-    } else {
-      console.debug(`ResultsService: Added new order at timestamp ${timestamp}`)
-      this.updateResultsForOrder(order)
-    }
-  }
-
-  /**
-   * Validate order has required fields
-   * @param {Object} order - Order to validate
-   * @returns {boolean}
-   * @private
-   */
-  isValidOrder(order) {
-    return order &&
-           typeof order.entryPoint === 'number' &&
-           typeof order.takeProfit === 'number' &&
-           typeof order.stopLoss === 'number' &&
-           order.status &&
-           typeof order.potential === 'number' &&
-           typeof order.atRisk === 'number'
-  }
-
-  /**
-   * Extract status string from order status object
-   * @param {Object|string} status - Order status
-   * @returns {string}
-   * @private
-   */
-  getOrderStatus(status) {
-    if (typeof status === 'string') return status
-    if (typeof status === 'object' && status) {
-      const statusKeys = Object.keys(status)
-      if (statusKeys.length > 0) {
-        return statusKeys[0] // Take first key (Profit, Loss, Planned, etc.)
+    // Check if any existing orders have been updated
+    for (const [timestamp, newOrder] of deduplicatedOrders) {
+      const existingOrder = this.orders.get(timestamp)
+      if (!existingOrder || JSON.stringify(existingOrder) !== JSON.stringify(newOrder)) {
+        this.orders = deduplicatedOrders
+        return true
       }
     }
-    return 'Unknown'
-  }
-
-  /**
-   * Update results for a single order
-   * @param {Object} order - Order to process
-   * @private
-   */
-  updateResultsForOrder(order) {
-    const status = this.getOrderStatus(order.status)
     
-    if (status === 'Profit') {
-      this.dailyResults.totalTrades++
-      this.dailyResults.winningTrades++
-      this.dailyResults.totalPnL += order.potential
-      this.dailyResults.totalWinAmount += order.potential
-      
-      // Add to P&L history
-      this.dailyResults.pnlHistory.push({
-        timestamp: order.eventTimestamp,
-        pnl: order.potential,
-        cumulativePnL: this.dailyResults.totalPnL
-      })
-      
-    } else if (status === 'Loss') {
-      this.dailyResults.totalTrades++
-      this.dailyResults.losingTrades++
-      this.dailyResults.totalPnL -= order.atRisk
-      this.dailyResults.totalLossAmount += order.atRisk
-      
-      // Add to P&L history  
-      this.dailyResults.pnlHistory.push({
-        timestamp: order.eventTimestamp,
-        pnl: -order.atRisk,
-        cumulativePnL: this.dailyResults.totalPnL
-      })
-    }
-    
-    // Other statuses (Planned, Placed, Filled, Cancelled) don't affect P&L
-  }
-
-  /**
-   * Recalculate all results from scratch
-   * @private
-   */
-  recalculateResults() {
-    this.resetDailyResults()
-    
-    // Process all orders in chronological order
-    const ordersArray = Array.from(this.orders.values())
-      .sort((a, b) => a.eventTimestamp - b.eventTimestamp)
-    
-    ordersArray.forEach(order => this.updateResultsForOrder(order))
-  }
-
-  /**
-   * Reset daily results to initial state
-   * @private
-   */
-  resetDailyResults() {
-    this.dailyResults = {
-      totalPnL: 0,
-      totalTrades: 0,
-      winningTrades: 0,
-      losingTrades: 0,
-      totalWinAmount: 0,
-      totalLossAmount: 0,
-      pnlHistory: [],
-      tradingDayComplete: false
-    }
-  }
-
-  /**
-   * Handle trading day completion
-   * @private
-   */
-  handleTradingDayComplete() {
-    console.debug('ResultsService: Trading day completed')
-    this.dailyResults.tradingDayComplete = true
-    this.notifyListeners()
+    return false
   }
 
   /**
@@ -328,6 +133,13 @@ class ResultsService {
    */
   addListener(listener) {
     this.listeners.add(listener)
+    
+    // Immediately call the new listener with current results
+    try {
+      listener(this.getResults())
+    } catch (error) {
+      console.error('ResultsService: Error calling new listener:', error)
+    }
   }
 
   /**
@@ -343,9 +155,10 @@ class ResultsService {
    * @private
    */
   notifyListeners() {
+    const results = this.getResults()
     this.listeners.forEach(listener => {
       try {
-        listener(this.getResults())
+        listener(results)
       } catch (error) {
         console.error('ResultsService: Error in listener:', error)
       }
@@ -353,15 +166,52 @@ class ResultsService {
   }
 
   /**
-   * Get current results
+   * Get current results (calculated on-demand)
    * @returns {Object} Current trading results
    */
   getResults() {
-    const { totalTrades, winningTrades, losingTrades, totalWinAmount, totalLossAmount } = this.dailyResults
+    const orders = Array.from(this.orders.values())
+    const completedOrders = orders.filter(order => {
+      const status = this.getOrderStatus(order.status)
+      return status === 'Profit' || status === 'Loss'
+    })
+    
+    // Calculate metrics
+    const totalTrades = completedOrders.length
+    const winningTrades = completedOrders.filter(order => this.getOrderStatus(order.status) === 'Profit').length
+    const losingTrades = totalTrades - winningTrades
+    
+    const totalWinAmount = completedOrders
+      .filter(order => this.getOrderStatus(order.status) === 'Profit')
+      .reduce((sum, order) => sum + (order.potential || 0), 0)
+    
+    const totalLossAmount = completedOrders
+      .filter(order => this.getOrderStatus(order.status) === 'Loss')
+      .reduce((sum, order) => sum + (order.atRisk || 0), 0)
+    
+    const totalPnL = totalWinAmount - totalLossAmount
+    
+    // Create P&L history
+    const pnlHistory = []
+    let cumulativePnL = 0
+    
+    completedOrders
+      .sort((a, b) => a.eventTimestamp - b.eventTimestamp)
+      .forEach(order => {
+        const status = this.getOrderStatus(order.status)
+        const pnl = status === 'Profit' ? (order.potential || 0) : -(order.atRisk || 0)
+        cumulativePnL += pnl
+        
+        pnlHistory.push({
+          timestamp: order.eventTimestamp,
+          pnl,
+          cumulativePnL
+        })
+      })
     
     return {
       // Basic stats
-      totalPnL: this.dailyResults.totalPnL,
+      totalPnL: Math.round(totalPnL),
       totalTrades,
       winningTrades,
       losingTrades,
@@ -373,32 +223,33 @@ class ResultsService {
       
       // Additional metrics
       totalReturn: 0, // TODO: Calculate based on account size
-      maxDrawdown: this.calculateMaxDrawdown(),
+      maxDrawdown: this.calculateMaxDrawdown(pnlHistory),
       sharpeRatio: 0, // TODO: Calculate if needed
       
       // Historical data
-      pnlHistory: [...this.dailyResults.pnlHistory],
+      pnlHistory,
       
       // Status
-      tradingDayComplete: this.dailyResults.tradingDayComplete,
+      tradingDayComplete: false,
       
       // Raw orders for detailed analysis
-      orders: Array.from(this.orders.values())
+      orders
     }
   }
 
   /**
-   * Calculate maximum drawdown
+   * Calculate maximum drawdown from P&L history
+   * @param {Array} pnlHistory - P&L history array
    * @returns {number} Max drawdown amount
    * @private
    */
-  calculateMaxDrawdown() {
-    if (this.dailyResults.pnlHistory.length === 0) return 0
+  calculateMaxDrawdown(pnlHistory) {
+    if (pnlHistory.length === 0) return 0
     
     let maxDrawdown = 0
     let peak = 0
     
-    this.dailyResults.pnlHistory.forEach(entry => {
+    pnlHistory.forEach(entry => {
       if (entry.cumulativePnL > peak) {
         peak = entry.cumulativePnL
       }
@@ -408,7 +259,7 @@ class ResultsService {
       }
     })
     
-    return maxDrawdown
+    return Math.round(maxDrawdown)
   }
 
   /**
@@ -432,10 +283,27 @@ class ResultsService {
           type: orderType,
           price: order.entryPoint,
           quantity: order.contracts || 1,
-          pnl: status === 'Profit' ? order.potential : -order.atRisk,
+          pnl: status === 'Profit' ? (order.potential || 0) : -(order.atRisk || 0),
           status: 'closed'
         }
       })
+  }
+
+  /**
+   * Extract status string from order status object
+   * @param {Object|string} status - Order status
+   * @returns {string}
+   * @private
+   */
+  getOrderStatus(status) {
+    if (typeof status === 'string') return status
+    if (typeof status === 'object' && status) {
+      const statusKeys = Object.keys(status)
+      if (statusKeys.length > 0) {
+        return statusKeys[0] // Take first key (Profit, Loss, Planned, etc.)
+      }
+    }
+    return 'Unknown'
   }
 
   /**
@@ -454,16 +322,14 @@ class ResultsService {
   }
 
   /**
-   * Format timestamp for display (timestamp is already in Eastern time but needs to be treated as UTC)
-   * @param {number} timestamp - Timestamp in milliseconds (already Eastern time)
+   * Format timestamp for display
+   * @param {number} timestamp - Timestamp in milliseconds
    * @returns {string} Formatted date and time
    * @private
    */
   formatTimestamp(timestamp) {
     const date = new Date(timestamp)
     
-    // Format as "Aug 22 '25 09:55" treating the timestamp as UTC to display correctly
-    // since the timestamp values are already shifted for Eastern timezone
     const options = {
       month: 'short',
       day: 'numeric',
@@ -481,9 +347,8 @@ class ResultsService {
    * Clear all results (for testing/reset)
    */
   clearResults() {
-    console.debug('ResultsService: Clearing all results')
     this.orders.clear()
-    this.resetDailyResults()
+    eventBufferManager.clearResults()
     this.notifyListeners()
   }
 }

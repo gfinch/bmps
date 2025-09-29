@@ -201,6 +201,8 @@ case class Order(low: Level,
     lazy val atRisk = atRiskPerContract * contracts
     lazy val potential = potentialPerContract * contracts
     lazy val isViable = contracts <= MaxContracts
+    lazy val isActive = (status == OrderStatus.Placed || status == OrderStatus.Filled)
+    lazy val direction: Direction = if (orderType == OrderType.Long) Direction.Up else Direction.Down
 
     def adjustState(candle: Candle): Order = {
         (status, orderType)  match {

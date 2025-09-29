@@ -12,7 +12,7 @@ import java.time.format.DateTimeFormatter
  * ParquetSource encapsulates reading candles from a Parquet file using DuckDB JDBC.
  * This keeps CoreService independent of how data is sourced (parquet, websocket, etc.).
  */
-object ParquetSource {
+class ParquetSource(path: String) extends DataSource {
 
   private def timeframeToDuration(tf: String): CandleDuration = tf match {
     case "1m" | "1min"  => CandleDuration.OneMinute
@@ -30,9 +30,9 @@ object ParquetSource {
    */
   // Streaming version of range-read: emits matching candles lazily.
   // This is the single public API exposed by ParquetSource now.
-  def readParquetAsCandlesInRangeStream(path: String, startMs: Long, endMs: Long, zone: ZoneId): Stream[IO, Candle] = {
+  def candlesInRangeStream(startMs: Long, endMs: Long, zone: ZoneId): Stream[IO, Candle] = {
     // Build query (inspects parquet timestamp column type where possible) in a blocking IO
-    def buildQuery(path: String, startMs: Long, endMs: Long, zone: ZoneId): IO[String] = IO.blocking {
+    def buildQuery(startMs: Long, endMs: Long, zone: ZoneId): IO[String] = IO.blocking {
       val safePath = path.replace("'", "''")
       val fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
       val startStr = Instant.ofEpochMilli(startMs).atZone(zone).toLocalDateTime.format(fmt)
@@ -113,7 +113,7 @@ object ParquetSource {
       Candle(Level(open), Level(high), Level(low), Level(close), epochMillis, duration)
     }
 
-    val qIO = buildQuery(path, startMs, endMs, zone)
+    val qIO = buildQuery(startMs, endMs, zone)
 
     Stream.bracket(qIO.flatMap { q =>
       IO.blocking {
