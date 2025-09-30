@@ -50,14 +50,12 @@ class PlanningEventGenerator(swingService: SwingService = new SwingService(1)) e
 }
 
 class PlanningSource extends CandleSource {
-    // lazy val parquetPath = "core/src/main/resources/samples/es_futures_1h_60days.parquet"
-    // lazy val parquetSource = new ParquetSource(parquetPath)
-    lazy val apiSource = new PolygonAPISource(CandleDuration.OneHour)
+    // lazy val apiSource = new PolygonAPISource(CandleDuration.OneHour)
+    lazy val source = new ParquetSource(CandleDuration.OneHour)
 
     def candles(state: SystemState): Stream[IO, Candle] = {
         val (startMs, endMs, zoneId) = computePlanningWindow(state)
-        // parquetSource.candlesInRangeStream(startMs, endMs, zoneId)
-        apiSource.candlesInRangeStream(startMs, endMs, zoneId)
+        source.candlesInRangeStream(startMs, endMs, zoneId)
     }
 
     private def computePlanningWindow(state: SystemState): (Long, Long, java.time.ZoneId) = {

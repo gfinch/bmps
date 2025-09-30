@@ -20,6 +20,7 @@ import scala.concurrent.duration._
  * - Automatic retry with 60-second delay for rate limit (HTTP 429) errors
  * - Built-in 1-second delay between API calls to respect rate limits
  * - Optimized multi-day requests (up to 30 days per API call) to minimize API usage
+ * - Automatic timezone conversion from UTC to Eastern time for consistency with ParquetSource
  * - Supports OneMinute and OneHour candle durations only
  * 
  * @param duration The candle duration - supports OneMinute and OneHour only
@@ -64,6 +65,8 @@ class PolygonAPISource(duration: CandleDuration) extends DataSource {
     // Convert epoch milliseconds to LocalDate for API calls
     val startDate = Instant.ofEpochMilli(startMs).atZone(zone).toLocalDate
     val endDate = Instant.ofEpochMilli(endMs).atZone(zone).toLocalDate
+
+    println(s"Looking at date range $startDate to $endDate!")
     
     // Generate date ranges to minimize API calls (group up to 30 trading days per request)
     val dateRanges = generateDateRanges(startDate, endDate)
@@ -75,6 +78,13 @@ class PolygonAPISource(duration: CandleDuration) extends DataSource {
       .evalMap(fetchCandlesForDateRange)
       .evalTap(_ => IO.sleep(1.second)) // Wait 1 second between API calls to avoid hitting rate limits
       .flatMap(Stream.emits)
+    // .evalTap { candle =>
+    //     if (candle.timestamp >= startMs && candle.timestamp < endMs) {
+    //         IO.println(s"$startMs -> ${candle.timestamp} -> $endMs")
+    //     } else {
+    //         IO.unit
+    //     }
+    // }
       .filter(candle => candle.timestamp >= startMs && candle.timestamp < endMs)
   }
   
@@ -115,21 +125,6 @@ class PolygonAPISource(duration: CandleDuration) extends DataSource {
       case Left(error) => 
         // Log error but don't fail the stream - just return empty list for this range
         IO.println(s"Failed to fetch data for $startDateStr to $endDateStr: $error").as(List.empty[Candle])
-    }
-  }
-  
-  /**
-   * Fetch all candles for a specific trading day (kept for backward compatibility if needed)
-   */
-  private def fetchCandlesForDay(date: LocalDate): IO[List[Candle]] = {
-    val dateStr = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
-    val url = s"https://api.polygon.io/v2/aggs/ticker/SPY/range/$multiplier/$timespan/$dateStr/$dateStr?apikey=$apiKey"
-    
-    makeApiRequest(url).flatMap {
-      case Right(jsonStr) => parseJsonToCandles(jsonStr)
-      case Left(error) => 
-        // Log error but don't fail the stream - just return empty list for this day
-        IO.println(s"Failed to fetch data for $dateStr: $error").as(List.empty[Candle])
     }
   }
   
@@ -209,6 +204,30 @@ class PolygonAPISource(duration: CandleDuration) extends DataSource {
   }
   
   /**
+   * Convert UTC timestamp to Eastern time timestamp.
+   * Polygon API returns timestamps in UTC, but we need them in Eastern time for consistency
+   * with the rest of the system.
+   * 
+   * This matches the behavior in ParquetSource where timestamps are converted to Eastern 
+   * "wall clock time" and stored as epoch milliseconds. This approach handles daylight 
+   * saving time automatically.
+   */
+  private def convertUtcToEasternTime(utcTimestampMs: Long): Long = {
+    val utcInstant = Instant.ofEpochMilli(utcTimestampMs)
+    val easternZone = ZoneId.of("America/New_York")
+    
+    // Convert UTC instant to Eastern zoned time (handles DST automatically)
+    val easternZoned = utcInstant.atZone(easternZone)
+    
+    // Get the local date/time components in Eastern timezone
+    val easternLocal = easternZoned.toLocalDateTime
+    
+    // Convert the Eastern local time back to epoch millis as if it were UTC
+    // This gives us the "wall clock time" in milliseconds, matching ParquetSource behavior
+    easternLocal.atZone(ZoneId.of("UTC")).toInstant.toEpochMilli
+  }
+  
+  /**
    * Parse a single JSON object to a Candle
    */
   private def parseJsonObject(jsonObj: String): Option[Candle] = {
@@ -221,18 +240,21 @@ class PolygonAPISource(duration: CandleDuration) extends DataSource {
       val closePattern = """"c":([0-9.]+)""".r
       
       for {
-        timestamp <- timestampPattern.findFirstMatchIn(jsonObj).map(_.group(1).toLong)
+        utcTimestamp <- timestampPattern.findFirstMatchIn(jsonObj).map(_.group(1).toLong)
         open <- openPattern.findFirstMatchIn(jsonObj).map(_.group(1).toFloat)
         high <- highPattern.findFirstMatchIn(jsonObj).map(_.group(1).toFloat)
         low <- lowPattern.findFirstMatchIn(jsonObj).map(_.group(1).toFloat)
         close <- closePattern.findFirstMatchIn(jsonObj).map(_.group(1).toFloat)
       } yield {
+        // Convert UTC timestamp to Eastern time to match ParquetSource behavior
+        val easternTimestamp = convertUtcToEasternTime(utcTimestamp)
+        
         Candle(
           open = Level(open),
           high = Level(high),
           low = Level(low),
           close = Level(close),
-          timestamp = timestamp,
+          timestamp = easternTimestamp,
           duration = duration
         )
       }
