@@ -7,12 +7,16 @@ import java.time.Instant
 import bmps.core.models._
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import bmps.core.models.CandleDuration.OneHour
+import bmps.core.models.CandleDuration.OneMinute
 
-/**
- * ParquetSource encapsulates reading candles from a Parquet file using DuckDB JDBC.
- * This keeps CoreService independent of how data is sourced (parquet, websocket, etc.).
- */
-class ParquetSource(path: String) extends DataSource {
+class ParquetSource(duration: CandleDuration) extends DataSource {
+
+  private lazy val path = duration match {
+    case OneHour => "core/src/main/resources/backtest/es-1h_bk.parquet"
+    case OneMinute => "core/src/main/resources/backtest/es-1m_bk.parquet"
+    case _ => throw new IllegalArgumentException(s"$duration not supported")
+  }
 
   private def timeframeToDuration(tf: String): CandleDuration = tf match {
     case "1m" | "1min"  => CandleDuration.OneMinute

@@ -14,6 +14,8 @@ import bmps.core.models.Order
 import bmps.core.services.OrderService
 import cats.instances.order
 import bmps.core.models.SystemStatePhase
+import bmps.core.io.PolygonAPISource
+import bmps.core.models.CandleDuration
 
 class TradingEventGenerator(swingService: SwingService = new SwingService(1)) extends EventGenerator with TradingDate {
 
@@ -45,12 +47,12 @@ class TradingEventGenerator(swingService: SwingService = new SwingService(1)) ex
 }
 
 class TradingSource extends CandleSource {
-    lazy val parquetPath = "core/src/main/resources/samples/es_futures_5min_60days.parquet"
-    lazy val parquetSource = new ParquetSource(parquetPath)
+    // lazy val source = new PolygonAPISource(CandleDuration.OneMinute)
+    lazy val source = new ParquetSource(CandleDuration.OneMinute)
 
     def candles(state: SystemState): Stream[IO, Candle] = {
         val (startMs, endMs, zoneId) = computeTradingWindow(state)
-        parquetSource.candlesInRangeStream(startMs, endMs, zoneId)
+        source.candlesInRangeStream(startMs, endMs, zoneId)
     }
 
     private def computeTradingWindow(state: SystemState): (Long, Long, java.time.ZoneId) = {
