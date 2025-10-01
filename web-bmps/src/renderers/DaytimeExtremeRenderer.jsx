@@ -9,9 +9,9 @@ class DaytimeExtremeRenderer extends BaseRenderer {
   constructor(chart, options = {}) {
     super(chart)
     this.options = {
-      lineColor: '#000000',      // Changed to black
+      highExtremeColor: '#EF4444',  // Red for high extremes
+      lowExtremeColor: '#22C55E',   // Green for low extremes
       lineWidth: 2,
-      labelColor: '#000000',     // Changed to black
       labelSize: 12,
       labelOffset: 15, // pixels to the left of start time
       ...options
@@ -114,16 +114,30 @@ class DaytimeExtremeRenderer extends BaseRenderer {
     const actualEvent = event.event || event
     const extreme = actualEvent.daytimeExtreme
     
+    // Extract extreme type from nested object structure like {High: {}} or {Low: {}}
+    let extremeType = 'High' // default
+    if (extreme.extremeType) {
+      const extremeTypeKeys = Object.keys(extreme.extremeType)
+      if (extremeTypeKeys.length > 0) {
+        extremeType = extremeTypeKeys[0] // Take the first key (High or Low)
+      }
+    }
+
+    // Determine colors based on extreme type
+    const isHighExtreme = extremeType === 'High'
+    const lineColor = isHighExtreme ? this.options.highExtremeColor : this.options.lowExtremeColor
+    
     const lineData = {
       id: `extreme-${actualEvent.timestamp}`,
       level: extreme.level.value,
       startTime: actualEvent.timestamp,
       endTime: extreme.endTime || null, // null means infinite
       label: this.generateLabel(extreme),
+      extremeType: extremeType,
       style: {
-        lineColor: this.options.lineColor,
+        lineColor: lineColor,
         lineWidth: this.options.lineWidth,
-        labelColor: this.options.labelColor,
+        labelColor: lineColor,
         labelSize: this.options.labelSize
       }
     }

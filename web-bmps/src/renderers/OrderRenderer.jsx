@@ -198,6 +198,15 @@ class OrderRenderer extends BaseRenderer {
         status = statusKeys[0] // Take the first key (Loss, Profit, Planned, etc.)
       }
     }
+
+    // Extract entryType from nested object structure like {EngulfingOrderBlock: {}}, {FairValueGapOrderBlock: {}}, etc.
+    let entryType = 'EngulfingOrderBlock' // default
+    if (order.entryType) {
+      const entryTypeKeys = Object.keys(order.entryType)
+      if (entryTypeKeys.length > 0) {
+        entryType = entryTypeKeys[0] // Take the first key (EngulfingOrderBlock, FairValueGapOrderBlock, etc.)
+      }
+    }
     
     const orderData = {
       id: `order-${actualEvent.timestamp}`,
@@ -209,7 +218,8 @@ class OrderRenderer extends BaseRenderer {
       filledTimestamp: order.filledTimestamp || null,
       closeTimestamp: order.closeTimestamp || null,
       status: status,
-      orderType: orderType
+      orderType: orderType,
+      entryType: entryType
     }
 
     console.debug('Transformed event to order data:', orderData)

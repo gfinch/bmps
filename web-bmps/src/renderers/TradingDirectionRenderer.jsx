@@ -111,16 +111,6 @@ class TradingDirectionRenderer extends BaseRenderer {
       
       if (eventType === 'TradingDirection') {
         tradingDirectionEvents.push(eventWrapper)
-        
-        // Add logging for UP events to debug
-        const direction = this.extractDirection(actualEvent.tradingDirection)
-        if (direction && direction.toLowerCase() === 'up') {
-          console.log('🔄 TradingDirection UP event received:', {
-            timestamp: actualEvent.timestamp,
-            direction: direction,
-            event: actualEvent
-          })
-        }
       }
     })
 
@@ -175,13 +165,6 @@ class TradingDirectionRenderer extends BaseRenderer {
       
       const isUpDirection = direction.toLowerCase() === 'up'
       
-      // Log every trading direction event for debugging
-      console.log('📊 Processing TradingDirection event:', {
-        direction: direction,
-        isUpDirection: isUpDirection,
-        timestamp: timestamp,
-        time: Math.floor(timestamp / 1000)
-      })
 
       // Get chart dimensions and time scale
       const timeScale = this.chart.timeScale()
