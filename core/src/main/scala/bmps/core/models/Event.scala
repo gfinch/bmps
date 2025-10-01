@@ -12,6 +12,7 @@ object EventType {
     case object PlanZone extends EventType
     case object DaytimeExtreme extends EventType
     case object Order extends EventType
+    case object TradeDirection extends EventType
     case object PhaseComplete extends EventType
     case object PhaseErrored extends EventType
     case object Reset extends EventType
@@ -24,7 +25,8 @@ case class Event(
     swingPoint: Option[SwingPoint] = None,
     planZone: Option[PlanZone] = None,
     daytimeExtreme: Option[DaytimeExtreme] = None,
-    order: Option[SerializableOrder] = None
+    order: Option[SerializableOrder] = None,
+    tradeDirection: Option[Direction] = None
 )
 
 object Event {
@@ -33,6 +35,7 @@ object Event {
     def fromPlanZone(planZone: PlanZone): Event = Event(EventType.PlanZone, planZone.startTime, planZone = Some(planZone))
     def fromDaytimeExtreme(daytimeExtreme: DaytimeExtreme): Event = Event(EventType.DaytimeExtreme, daytimeExtreme.timestamp, daytimeExtreme = Some(daytimeExtreme))
     def fromOrder(order: Order): Event = Event(EventType.Order, order.timestamp, order = Some(SerializableOrder.fromOrder(order)))
+    def fromTradeDirection(candle: Candle, tradingDirection: Option[Direction]) = Event(EventType.TradeDirection, candle.timestamp, tradeDirection = tradingDirection)
     def phaseComplete(timestamp: Long): Event = Event(EventType.PhaseComplete, timestamp)
     def phaseErrored(timestamp: Long): Event = Event(EventType.PhaseErrored, timestamp)
     def reset(timestamp: Long): Event = Event(EventType.Reset, timestamp)
