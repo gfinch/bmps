@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect } from 'react'
 import { createChart } from 'lightweight-charts'
-import { Play, Pause, SkipBack, SkipForward, Rewind, FastForward } from 'lucide-react'
+import { Play, Pause, SkipBack, SkipForward, Rewind, FastForward, Scissors } from 'lucide-react'
 import { useEventPlayback } from '../hooks/useEventPlayback.jsx'
 import { ChartRenderingService } from '../services/chartRenderingService.jsx'
 import { CandlestickRenderer, DaytimeExtremeRenderer, PlanZoneRenderer } from '../renderers/index.js'
@@ -20,6 +20,9 @@ export default function PlanningChartPage() {
     // Future layers can be added here
     // swingPoints: true,
   })
+
+  // Clip tool state
+  const [isClipToolActive, setIsClipToolActive] = useState(false)
 
   // Initialize chart
   useEffect(() => {
@@ -193,13 +196,46 @@ export default function PlanningChartPage() {
     console.log(`Fast forwarded to timestamp: ${playback.currentTimestamp}`)
   }
 
+  const handleClipToolToggle = () => {
+    setIsClipToolActive(!isClipToolActive)
+    console.log(`Clip tool ${!isClipToolActive ? 'activated' : 'deactivated'}`)
+  }
+
+  const handleChartClick = (event) => {
+    if (!isClipToolActive || !chartRef.current) return
+    
+    const chart = chartRef.current
+    const containerRect = chartContainerRef.current.getBoundingClientRect()
+    const x = event.clientX - containerRect.left
+    
+    try {
+      // Convert pixel coordinate to time coordinate
+      const logicalIndex = chart.timeScale().coordinateToLogical(x)
+      if (logicalIndex !== null && logicalIndex !== undefined) {
+        const timestamp = chart.timeScale().coordinateToTime(x)
+        if (timestamp !== null && timestamp !== undefined) {
+          // Convert seconds to milliseconds for our playback system
+          const timestampMs = timestamp * 1000
+          playback.jumpToTimestamp(timestampMs)
+          console.log(`Clipped to timestamp: ${timestampMs}`)
+          
+          // Auto-deactivate the clip tool after use
+          setIsClipToolActive(false)
+        }
+      }
+    } catch (error) {
+      console.warn('Error converting chart coordinate to timestamp:', error)
+    }
+  }
+
   return (
     <div className="flex-1 flex flex-col">
       {/* Chart Container - fills remaining space */}
       <div className="flex-1 min-h-0">
         <div 
           ref={chartContainerRef} 
-          className="w-full h-full min-h-[300px]"
+          className={`w-full h-full min-h-[300px] ${isClipToolActive ? 'cursor-crosshair' : ''}`}
+          onClick={handleChartClick}
         />
       </div>
 
@@ -280,6 +316,16 @@ export default function PlanningChartPage() {
             title="Fast Forward"
           >
             <FastForward className="w-5 h-5" />
+          </button>
+          <button
+            onClick={handleClipToolToggle}
+            className={`p-3 border border-gray-300 rounded-md ${isClipToolActive 
+              ? 'bg-blue-500 text-white hover:bg-blue-600' 
+              : 'text-gray-600 hover:text-gray-800 bg-white hover:bg-gray-50'
+            }`}
+            title="Clip Tool - Click to activate, then click on chart to jump to timestamp"
+          >
+            <Scissors className="w-5 h-5" />
           </button>
         </div>
       </div>

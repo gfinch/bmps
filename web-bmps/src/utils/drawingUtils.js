@@ -193,3 +193,46 @@ export function getPriceCoordinate(price, series, chart) {
   
   return priceY
 }
+
+/**
+ * Draw a filled triangle on the canvas
+ * @param {CanvasRenderingContext2D} ctx - Canvas context
+ * @param {Object} options - Drawing options
+ * @param {number} options.x1 - First vertex X coordinate
+ * @param {number} options.y1 - First vertex Y coordinate
+ * @param {number} options.x2 - Second vertex X coordinate
+ * @param {number} options.y2 - Second vertex Y coordinate
+ * @param {number} options.x3 - Third vertex X coordinate
+ * @param {number} options.y3 - Third vertex Y coordinate
+ * @param {string} options.fillColor - Fill color (with transparency)
+ * @param {string} options.strokeColor - Stroke color
+ * @param {number} options.strokeWidth - Stroke width
+ */
+export function drawTriangle(ctx, options) {
+  const { 
+    x1, y1, x2, y2, x3, y3,
+    fillColor, 
+    strokeColor, 
+    strokeWidth = 1
+  } = options
+  
+  ctx.beginPath()
+  ctx.moveTo(x1, y1)
+  ctx.lineTo(x2, y2)
+  ctx.lineTo(x3, y3)
+  ctx.closePath()
+  
+  // Fill triangle
+  if (fillColor) {
+    ctx.fillStyle = fillColor
+    ctx.fill()
+  }
+  
+  // Stroke triangle
+  if (strokeColor) {
+    ctx.strokeStyle = strokeColor
+    ctx.lineWidth = strokeWidth
+    ctx.setLineDash([]) // Solid lines for triangles
+    ctx.stroke()
+  }
+}

@@ -1,9 +1,9 @@
 import { useRef, useState, useEffect } from 'react'
 import { createChart, CandlestickSeries } from 'lightweight-charts'
-import { Play, Pause, SkipBack, SkipForward, Rewind, FastForward } from 'lucide-react'
+import { Play, Pause, SkipBack, SkipForward, Rewind, FastForward, Scissors } from 'lucide-react'
 import { useEventPlayback } from '../hooks/useEventPlayback.jsx'
 import { ChartRenderingService } from '../services/chartRenderingService.jsx'
-import { CandlestickRenderer, DaytimeExtremeRenderer, PlanZoneRenderer, OrderRenderer } from '../renderers/index.js'
+import { CandlestickRenderer, DaytimeExtremeRenderer, PlanZoneRenderer, OrderRenderer, TradingDirectionRenderer } from '../renderers/index.js'
 
 export default function TradingChartPage() {
   const chartContainerRef = useRef()
@@ -18,7 +18,11 @@ export default function TradingChartPage() {
     planZones: true,
     daytimeExtremes: true,
     orders: true,
+    tradingDirection: true,
   })
+
+  // Clip tool state
+  const [isClipToolActive, setIsClipToolActive] = useState(false)
 
   // Initialize playback to first timestamp when page loads
   useEffect(() => {
@@ -122,6 +126,17 @@ export default function TradingChartPage() {
         })
         chartServiceRef.current.addRenderer('Order', orderRenderer)
 
+        // Create trading direction renderer for direction change markers
+        const tradingDirectionRenderer = new TradingDirectionRenderer(chart, {
+          showTradingDirection: true,
+          colors: {
+            up: '#26a69a',   // Green for up direction
+            down: '#ef5350'  // Red for down direction
+          },
+          size: 2 // Larger size for visibility
+        })
+        chartServiceRef.current.addRenderer('TradingDirection', tradingDirectionRenderer)
+
         // Store chart reference
         chartRef.current = chart
 
@@ -176,6 +191,9 @@ export default function TradingChartPage() {
       // Update orders visibility
       chartServiceRef.current.setRendererVisibility('Order', layerVisibility.orders)
       
+      // Update trading direction visibility
+      chartServiceRef.current.setRendererVisibility('TradingDirection', layerVisibility.tradingDirection)
+      
       console.log('Trading chart layer visibility updated:', layerVisibility)
     }
   }, [layerVisibility])
@@ -222,6 +240,39 @@ export default function TradingChartPage() {
     console.log(`Trading fast forwarded to timestamp: ${playback.currentTimestamp}`)
   }
 
+  // Clip tool handlers
+  const handleClipToolToggle = () => {
+    setIsClipToolActive(!isClipToolActive)
+    console.log(`Trading clip tool ${!isClipToolActive ? 'activated' : 'deactivated'}`)
+  }
+
+  const handleChartClick = (event) => {
+    if (!isClipToolActive || !chartRef.current) return
+    
+    const chart = chartRef.current
+    const containerRect = chartContainerRef.current.getBoundingClientRect()
+    const x = event.clientX - containerRect.left
+    
+    try {
+      // Convert pixel coordinate to time coordinate
+      const logicalIndex = chart.timeScale().coordinateToLogical(x)
+      if (logicalIndex !== null && logicalIndex !== undefined) {
+        const timestamp = chart.timeScale().coordinateToTime(x)
+        if (timestamp !== null && timestamp !== undefined) {
+          // Convert seconds to milliseconds for our playback system
+          const timestampMs = timestamp * 1000
+          playback.jumpToTimestamp(timestampMs)
+          console.log(`Trading clipped to timestamp: ${timestampMs}`)
+          
+          // Deactivate clip tool after use
+          setIsClipToolActive(false)
+        }
+      }
+    } catch (error) {
+      console.error('Error converting chart click to timestamp:', error)
+    }
+  }
+
   return (
     <div className="flex-1 flex flex-col">
       {/* Chart Container - fills remaining space */}
@@ -229,6 +280,8 @@ export default function TradingChartPage() {
         <div 
           ref={chartContainerRef} 
           className="w-full h-full min-h-[300px]"
+          onClick={handleChartClick}
+          style={{ cursor: isClipToolActive ? 'crosshair' : 'default' }}
         />
       </div>
 
@@ -280,6 +333,21 @@ export default function TradingChartPage() {
             />
             <span className="text-sm font-medium text-gray-700">Orders</span>
           </label>
+          <label className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              checked={layerVisibility.tradingDirection}
+              onChange={(e) => {
+                const newVisibility = {
+                  ...layerVisibility,
+                  tradingDirection: e.target.checked
+                }
+                setLayerVisibility(newVisibility)
+              }}
+              className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+            />
+            <span className="text-sm font-medium text-gray-700">Trading Direction</span>
+          </label>
         </div>
       </div>
 
@@ -324,6 +392,16 @@ export default function TradingChartPage() {
             title="Fast Forward"
           >
             <FastForward className="w-5 h-5" />
+          </button>
+          <button
+            onClick={handleClipToolToggle}
+            className={`p-3 border border-gray-300 rounded-md ${isClipToolActive 
+              ? 'bg-blue-500 text-white hover:bg-blue-600' 
+              : 'text-gray-600 hover:text-gray-800 bg-white hover:bg-gray-50'
+            }`}
+            title="Clip Tool - Click to activate, then click on chart to jump to timestamp"
+          >
+            <Scissors className="w-5 h-5" />
           </button>
         </div>
       </div>

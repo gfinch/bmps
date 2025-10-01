@@ -50,8 +50,8 @@ class TradingEventGenerator(swingService: SwingService = new SwingService(1)) ex
         val changedOrders = withOrders.orders.filterNot(state.orders.contains)
         val orderEvents = changedOrders.map(Event.fromOrder)
         val tradingDirectionEvent = if (!state.tradingDirection.equals(withOrders.tradingDirection)) {
-            Some(Event.fromTradeDirection(withOrders.tradingCandles.last, withOrders.tradingDirection))
-        } else None
+            List(Event.fromTradeDirection(withOrders.tradingCandles.last, withOrders.tradingDirection))
+        } else List.empty
 
         val allEvents = swingEvents ++ orderEvents ++ tradingDirectionEvent
         (withOrders, allEvents)

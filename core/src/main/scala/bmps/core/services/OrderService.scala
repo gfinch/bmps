@@ -59,6 +59,8 @@ object OrderService {
         val isRightDirection = state.tradingDirection.exists(_ == order.direction)
         val isOrderReady = if (order.entryType == EntryType.FairValueGapOrderBlock) {
             FairValueGapOrderBlockService.shouldPlaceOrder(order, state.tradingCandles.last)
+        } else if (order.entryType == EntryType.EngulfingOrderBlock) {
+            EngulfingOrderBlockService.shouldPlaceOrder(order, state.tradingCandles.last)
         } else true
         //TODO more sophisticated logic
         (activeOrders == 0 && isRightDirection && isOrderReady)
