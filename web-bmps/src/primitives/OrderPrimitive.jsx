@@ -28,6 +28,7 @@ class OrderPrimitive {
       plannedColor: '#2563EB',     // Blue for all states
       placedColor: '#2563EB',      // Blue for all states
       filledColor: '#2563EB',      // Blue for all states
+      orderStartColor: '#EC4899',  // Pink for order start vertical lines
       triangleFillColor: 'rgba(37, 99, 235, 0.3)',  // Blue with transparency for triangle fill
       triangleStrokeColor: '#000000',  // Black stroke for triangle
       profitBoxFill: 'rgba(34, 197, 94, 0.15)',   // Green with transparency
@@ -132,6 +133,24 @@ class OrderPaneRenderer {
     this.orders = []
     this.chart = null
     this.series = null
+  }
+
+  /**
+   * Convert entry type to abbreviated label
+   * @param {string} entryType - The entry type from the order
+   * @returns {string} The abbreviated label
+   */
+  getEntryTypeLabel(entryType) {
+    const entryTypeMap = {
+      'EngulfingOrderBlock': 'EOB',
+      'FairValueGapOrderBlock': 'FVG',
+      'InvertedFairValueGapOrderBlock': 'IFV',
+      'BreakerBlockOrderBlock': 'BBO',
+      'MarketStructureShiftOrderBlock': 'MSS',
+      'SupermanOrderBlock': 'SOB',
+      'JediOrderBlock': 'JOB'
+    }
+    return entryTypeMap[entryType] || entryType
   }
 
   setChartContext(chart, series) {
@@ -252,6 +271,10 @@ class OrderPaneRenderer {
   }
 
   drawPlannedOrder(ctx, order, startX, entryY, scope) {
+    // Get take profit and stop loss Y coordinates for vertical line
+    const takeProfitY = getPriceCoordinate(order.takeProfit, this.series, this.chart)
+    const stopLossY = getPriceCoordinate(order.stopLoss, this.series, this.chart)
+
     // Purple line from start to infinity
     drawHorizontalLine(ctx, {
       startX,
@@ -262,9 +285,37 @@ class OrderPaneRenderer {
       lineDash: 'solid',
       canvasWidth: scope.mediaSize.width
     })
+
+    // Draw pink dashed vertical line at order start timestamp
+    if (takeProfitY !== null && stopLossY !== null) {
+      drawVerticalLine(ctx, {
+        x: startX,
+        startY: takeProfitY,
+        endY: stopLossY,
+        color: this.options.orderStartColor,
+        width: this.options.lineWidth,
+        lineDash: 'dashed'
+      })
+    }
+
+    // Draw entry type label to the left of order start
+    const entryTypeLabel = this.getEntryTypeLabel(order.entryType)
+    drawLabel(ctx, {
+      text: entryTypeLabel,
+      x: startX - this.options.labelOffset,
+      y: entryY,
+      color: this.options.labelColor,
+      size: this.options.labelSize,
+      align: 'right',
+      baseline: 'middle'
+    })
   }
 
   drawPlacedOrder(ctx, order, startX, placedX, entryY, scope) {
+    // Get take profit and stop loss Y coordinates for vertical line
+    const takeProfitY = getPriceCoordinate(order.takeProfit, this.series, this.chart)
+    const stopLossY = getPriceCoordinate(order.stopLoss, this.series, this.chart)
+
     // Purple line from start to placed
     if (placedX !== null) {
       drawHorizontalLine(ctx, {
@@ -287,7 +338,43 @@ class OrderPaneRenderer {
         lineDash: 'solid',
         canvasWidth: scope.mediaSize.width
       })
+
+      // Draw vertical dashed line at placed timestamp
+      if (takeProfitY !== null && stopLossY !== null) {
+        drawVerticalLine(ctx, {
+          x: placedX,
+          startY: takeProfitY,
+          endY: stopLossY,
+          color: this.options.placedColor,
+          width: this.options.lineWidth,
+          lineDash: 'dashed'
+        })
+      }
     }
+
+    // Draw pink dashed vertical line at order start timestamp
+    if (takeProfitY !== null && stopLossY !== null) {
+      drawVerticalLine(ctx, {
+        x: startX,
+        startY: takeProfitY,
+        endY: stopLossY,
+        color: this.options.orderStartColor,
+        width: this.options.lineWidth,
+        lineDash: 'dashed'
+      })
+    }
+
+    // Draw entry type label to the left of order start
+    const entryTypeLabel = this.getEntryTypeLabel(order.entryType)
+    drawLabel(ctx, {
+      text: entryTypeLabel,
+      x: startX - this.options.labelOffset,
+      y: entryY,
+      color: this.options.labelColor,
+      size: this.options.labelSize,
+      align: 'right',
+      baseline: 'middle'
+    })
   }
 
   drawFilledOrder(ctx, order, startX, placedX, filledX, entryY, 
@@ -321,6 +408,16 @@ class OrderPaneRenderer {
           lineDash: 'dashed'
         })
       }
+
+      // Draw pink dashed vertical line at order start timestamp
+      drawVerticalLine(ctx, {
+        x: startX,
+        startY: takeProfitY,
+        endY: stopLossY,
+        color: this.options.orderStartColor,
+        width: this.options.lineWidth,
+        lineDash: 'dashed'
+      })
 
       // Infinite profit and loss boxes from filled time (unchanged)
       drawRectangle(ctx, {
@@ -370,6 +467,18 @@ class OrderPaneRenderer {
         })
       }
     }
+
+    // Draw entry type label to the left of order start
+    const entryTypeLabel = this.getEntryTypeLabel(order.entryType)
+    drawLabel(ctx, {
+      text: entryTypeLabel,
+      x: startX - this.options.labelOffset,
+      y: entryY,
+      color: this.options.labelColor,
+      size: this.options.labelSize,
+      align: 'right',
+      baseline: 'middle'
+    })
   }
 
   drawProfitOrder(ctx, order, startX, placedX, filledX, closeX, entryY,
@@ -403,6 +512,16 @@ class OrderPaneRenderer {
           lineDash: 'dashed'
         })
       }
+
+      // Draw pink dashed vertical line at order start timestamp
+      drawVerticalLine(ctx, {
+        x: startX,
+        startY: takeProfitY,
+        endY: stopLossY,
+        color: this.options.orderStartColor,
+        width: this.options.lineWidth,
+        lineDash: 'dashed'
+      })
 
       if (closeX !== null) {
         // Finite boxes: filled -> closed
@@ -455,6 +574,18 @@ class OrderPaneRenderer {
         })
       }
     }
+
+    // Draw entry type label to the left of order start
+    const entryTypeLabel = this.getEntryTypeLabel(order.entryType)
+    drawLabel(ctx, {
+      text: entryTypeLabel,
+      x: startX - this.options.labelOffset,
+      y: entryY,
+      color: this.options.labelColor,
+      size: this.options.labelSize,
+      align: 'right',
+      baseline: 'middle'
+    })
   }
 
   drawLossOrder(ctx, order, startX, placedX, filledX, closeX, entryY,
@@ -488,6 +619,16 @@ class OrderPaneRenderer {
           lineDash: 'dashed'
         })
       }
+
+      // Draw pink dashed vertical line at order start timestamp
+      drawVerticalLine(ctx, {
+        x: startX,
+        startY: takeProfitY,
+        endY: stopLossY,
+        color: this.options.orderStartColor,
+        width: this.options.lineWidth,
+        lineDash: 'dashed'
+      })
 
       if (closeX !== null) {
         // Finite boxes: filled -> closed
@@ -540,6 +681,18 @@ class OrderPaneRenderer {
         })
       }
     }
+
+    // Draw entry type label to the left of order start
+    const entryTypeLabel = this.getEntryTypeLabel(order.entryType)
+    drawLabel(ctx, {
+      text: entryTypeLabel,
+      x: startX - this.options.labelOffset,
+      y: entryY,
+      color: this.options.labelColor,
+      size: this.options.labelSize,
+      align: 'right',
+      baseline: 'middle'
+    })
   }
 
   drawCancelledOrder(ctx, order, startX, closeX, entryY, scope) {
@@ -555,6 +708,18 @@ class OrderPaneRenderer {
         canvasWidth: scope.mediaSize.width
       })
     }
+
+    // Draw entry type label to the left of order start
+    const entryTypeLabel = this.getEntryTypeLabel(order.entryType)
+    drawLabel(ctx, {
+      text: entryTypeLabel,
+      x: startX - this.options.labelOffset,
+      y: entryY,
+      color: this.options.labelColor,
+      size: this.options.labelSize,
+      align: 'right',
+      baseline: 'middle'
+    })
   }
 }
 

@@ -264,6 +264,19 @@ export default function TradingChartPage() {
           playback.jumpToTimestamp(timestampMs)
           console.log(`Trading clipped to timestamp: ${timestampMs}`)
           
+          // Center the chart view on the clicked timestamp
+          // Calculate a logical range centered on the clicked point
+          const currentRange = chart.timeScale().getVisibleLogicalRange()
+          if (currentRange) {
+            const rangeSize = currentRange.to - currentRange.from
+            const halfRange = rangeSize / 2
+            const newRange = {
+              from: logicalIndex - halfRange,
+              to: logicalIndex + halfRange
+            }
+            chart.timeScale().setVisibleLogicalRange(newRange)
+          }
+          
           // Deactivate clip tool after use
           setIsClipToolActive(false)
         }

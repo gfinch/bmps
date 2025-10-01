@@ -53,7 +53,7 @@ class TradingEventGenerator(swingService: SwingService = new SwingService(1)) ex
             List(Event.fromTradeDirection(withOrders.tradingCandles.last, withOrders.tradingDirection))
         } else List.empty
 
-        val allEvents = swingEvents ++ orderEvents ++ tradingDirectionEvent
+        val allEvents = swingEvents ++ orderEvents //++ tradingDirectionEvent
         (withOrders, allEvents)
     }
 }
