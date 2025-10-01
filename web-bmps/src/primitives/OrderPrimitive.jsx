@@ -2,8 +2,9 @@
  * Order Series Primitive for TradingView Lightweight Charts
  * Draws orders with different visualizations based on order status:
  * - Planned: Purple line to infinity
- * - Placed: Purple line to placed time, then blue line to infinity  
- * - Filled: Lines as above + profit/loss boxes to infinity
+ * - Placed: Purple line to placed time, then blue line to infinity        case 'Cancelled':
+        this.drawCancelledOrder(ctx, order, startX, closeX, entryY, scope)
+        break * - Filled: Lines as above + profit/loss boxes to infinity
  * - Profit/Loss: Lines + finite boxes, with winner/loser coloring
  * - Cancelled: Grey line from start to close
  */
@@ -150,6 +151,37 @@ class OrderPaneRenderer {
     })
   }
 
+  /**
+   * Apply minimum width logic to ensure order boxes have visual width
+   * When filled and close times are the same or too close, add padding
+   * This is specifically for Filled, Profit, and Loss orders that draw boxes
+   * @param {number|null} filledX - Original filled X coordinate
+   * @param {number|null} closeX - Original close X coordinate  
+   * @returns {Object} Object with adjustedFilledX and adjustedCloseX
+   */
+  applyMinimumWidth(filledX, closeX) {
+    // If either coordinate is null, return as-is
+    if (filledX === null || closeX === null) {
+      return { adjustedFilledX: filledX, adjustedCloseX: closeX }
+    }
+
+    // Calculate the width between filled and close
+    const originalWidth = Math.abs(closeX - filledX)
+    const minimumWidth = 20 // Minimum pixels of width to ensure visibility
+    
+    // If the width is too small, add padding
+    if (originalWidth < minimumWidth) {
+      const padding = (minimumWidth - originalWidth) / 2
+      const adjustedFilledX = filledX - padding
+      const adjustedCloseX = closeX + padding
+      
+      return { adjustedFilledX, adjustedCloseX }
+    }
+    
+    // Width is sufficient, return original coordinates
+    return { adjustedFilledX: filledX, adjustedCloseX: closeX }
+  }
+
   drawOrder(ctx, order, scope) {
     // Get price coordinates
     const entryY = getPriceCoordinate(order.entryPoint, this.series, this.chart)
@@ -168,6 +200,9 @@ class OrderPaneRenderer {
     const placedX = order.placedTimestamp ? getTimeCoordinate(order.placedTimestamp, this.chart) : null
     const filledX = order.filledTimestamp ? getTimeCoordinate(order.filledTimestamp, this.chart) : null
     const closeX = order.closeTimestamp ? getTimeCoordinate(order.closeTimestamp, this.chart) : null
+
+    // Apply minimum width logic to ensure orders have visual width
+    const { adjustedFilledX, adjustedCloseX } = this.applyMinimumWidth(filledX, closeX)
 
     // Determine profit and loss box boundaries
     // For Long orders: profit is above entry (takeProfit > entryPoint), loss is below
@@ -190,22 +225,22 @@ class OrderPaneRenderer {
         break
         
       case 'Filled':
-        this.drawFilledOrder(ctx, order, startX, placedX, filledX, entryY, 
+        this.drawFilledOrder(ctx, order, startX, placedX, adjustedFilledX, entryY, 
                            profitBoxTop, profitBoxBottom, lossBoxTop, lossBoxBottom, scope)
         break
         
       case 'Profit':
-        this.drawProfitOrder(ctx, order, startX, placedX, filledX, closeX, entryY,
+        this.drawProfitOrder(ctx, order, startX, placedX, adjustedFilledX, adjustedCloseX, entryY,
                            profitBoxTop, profitBoxBottom, lossBoxTop, lossBoxBottom, scope)
         break
         
       case 'Loss':
-        this.drawLossOrder(ctx, order, startX, placedX, filledX, closeX, entryY,
+        this.drawLossOrder(ctx, order, startX, placedX, adjustedFilledX, adjustedCloseX, entryY,
                          profitBoxTop, profitBoxBottom, lossBoxTop, lossBoxBottom, scope)
         break
         
       case 'Cancelled':
-        this.drawCancelledOrder(ctx, order, startX, closeX, entryY, scope)
+        this.drawCancelledOrder(ctx, order, startX, adjustedCloseX, entryY, scope)
         break
     }
 

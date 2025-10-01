@@ -30,18 +30,30 @@ class TradingEventGenerator(swingService: SwingService = new SwingService(1)) ex
         val newDirection = directionOption.getOrElse(state.swingDirection)
         val withSwings = state.copy(tradingCandles = updatedCandles, tradingSwingPoints = swings, swingDirection = newDirection)
 
-        val updatedOrders = withSwings.orders.map(_.adjustState(candle)).map(_.cancelOrSell(candle))
-        val withOldOrders = withSwings.copy(orders = updatedOrders)
-        val withNewOrders = OrderService.buildOrders(withOldOrders)
-        val withOrders = OrderService.placeOrders(withNewOrders)
+        val withOrders = if (OrderService.isEndOfDay(candle)) {
+            val updatedOrders = withSwings.orders.map(_.adjustState(candle)).map(_.cancelOrSell(candle))
+            withSwings.copy(orders = updatedOrders)
+        } else {
+            val updatedOrders = withSwings.orders.map(_.adjustState(candle))
+            val withOldOrders = withSwings.copy(orders = updatedOrders)
+            val newTradingDirection = OrderService.determineTradingDirection(withOldOrders)
+            val withNewTradingDirection = if (!state.tradingDirection.contains(newTradingDirection)) {
+                withOldOrders.copy(tradingDirection = Some(newTradingDirection))
+            } else withOldOrders
+            val withNewOrders = OrderService.buildOrders(withNewTradingDirection)
+            OrderService.placeOrders(withNewOrders)
+        }
 
         val newSwingPoints = withOrders.tradingSwingPoints.drop(state.tradingSwingPoints.length)
         val swingEvents = newSwingPoints.map(Event.fromSwingPoint)
 
         val changedOrders = withOrders.orders.filterNot(state.orders.contains)
         val orderEvents = changedOrders.map(Event.fromOrder)
+        val tradingDirectionEvent = if (!state.tradingDirection.equals(withOrders.tradingDirection)) {
+            Some(Event.fromTradeDirection(withOrders.tradingCandles.last, withOrders.tradingDirection))
+        } else None
 
-        val allEvents = swingEvents ++ orderEvents
+        val allEvents = swingEvents ++ orderEvents ++ tradingDirectionEvent
         (withOrders, allEvents)
     }
 }
