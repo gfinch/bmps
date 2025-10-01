@@ -5,6 +5,7 @@ import bmps.core.models.OrderType
 import bmps.core.models.Direction
 import bmps.core.models.Order
 import bmps.core.models.EntryType
+import bmps.core.models.Candle
 
 object EngulfingOrderBlockService {
     //Assume we have a trading direction set for the day: Up or Down
@@ -31,6 +32,15 @@ object EngulfingOrderBlockService {
                     state.copy(orders = allOrders)
                 }.getOrElse(state)
             case _ => state
+        }
+    }
+
+    def shouldPlaceOrder(order: Order, candle: Candle): Boolean = {
+        require(order.entryType == EntryType.EngulfingOrderBlock, s"Called EngulfingOrderBlock.shouldPlace order with ${order.entryType}")
+        order.orderType match {
+            case OrderType.Long if candle.close.value <= order.entryPoint => true
+            case OrderType.Short if candle.close.value >= order.entryPoint => true
+            case _ => false
         }
     }
 }

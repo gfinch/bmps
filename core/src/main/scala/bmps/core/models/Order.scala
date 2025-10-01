@@ -87,9 +87,9 @@ case class Order(low: Level,
                 this.copy(status = Profit, filledTimestamp = Some(candle.timestamp), closeTimestamp = Some(candle.timestamp))
             case (Placed, Long) if candle.high.value >= takeProfit =>
                 this.copy(status = Cancelled, closeTimestamp = Some(candle.timestamp))
-            case (Placed, Long) if candle.low.value <= stopLoss => 
-                this.copy(status = Loss, filledTimestamp = Some(candle.timestamp), closeTimestamp = Some(candle.timestamp))
-            case (Placed, Long) if candle.low.value <= entryPoint => 
+            // case (Placed, Long) if candle.low.value <= stopLoss => 
+            //     this.copy(status = Loss, filledTimestamp = Some(candle.timestamp), closeTimestamp = Some(candle.timestamp))
+            case (Placed, Long) if candle.low.value >= entryPoint => 
                 this.copy(status = Filled, filledTimestamp = Some(candle.timestamp))
 
             case (Placed, Short) if candle.high.value >= stopLoss && candle.low.value <= takeProfit && candle.isBearish =>
@@ -100,9 +100,9 @@ case class Order(low: Level,
                 this.copy(status = Profit, filledTimestamp = Some(candle.timestamp), closeTimestamp = Some(candle.timestamp))
             case (Placed, Short) if candle.low.value <= takeProfit =>
                 this.copy(status = Cancelled, closeTimestamp = Some(candle.timestamp))
-            case (Placed, Short) if candle.high.value >= stopLoss =>
-                this.copy(status = Loss, filledTimestamp = Some(candle.timestamp), closeTimestamp = Some(candle.timestamp))
-            case (Placed, Short) if candle.high.value >= entryPoint =>
+            // case (Placed, Short) if candle.high.value >= stopLoss =>
+            //     this.copy(status = Loss, filledTimestamp = Some(candle.timestamp), closeTimestamp = Some(candle.timestamp))
+            case (Placed, Short) if candle.low.value <= entryPoint =>
                 this.copy(status = Filled, filledTimestamp = Some(candle.timestamp))
 
             case (Filled, Long) if candle.high.value >= takeProfit && candle.low.value <= stopLoss && candle.isBullish =>

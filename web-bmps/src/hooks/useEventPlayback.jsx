@@ -110,7 +110,15 @@ export function useEventPlayback(phase) {
      */
     setPlayRate: useCallback((ms) => {
       eventPlaybackService.setPlayRate(ms)
-    }, [])
+    }, []),
+
+    /**
+     * Jump to specific timestamp (for clip tool)
+     * @param {number} timestamp - Target timestamp
+     */
+    jumpToTimestamp: useCallback((timestamp) => {
+      eventPlaybackService.jumpToTimestamp(phase, timestamp)
+    }, [phase])
   }
 
   // Navigation state

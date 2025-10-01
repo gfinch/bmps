@@ -289,6 +289,36 @@ class EventPlaybackService {
   }
 
   /**
+   * Jump to specific timestamp (for clip tool functionality)
+   * @param {string} phase - Phase to jump in
+   * @param {number} timestamp - Target timestamp
+   */
+  jumpToTimestamp(phase, timestamp) {
+    const uniqueTimestamps = this.getUniqueTimestamps(phase)
+    
+    if (uniqueTimestamps.length === 0) {
+      console.debug(`No events in ${phase} buffer to jump to`)
+      return
+    }
+
+    // Find the closest available timestamp
+    let closestTimestamp = uniqueTimestamps[0]
+    let minDiff = Math.abs(timestamp - closestTimestamp)
+    
+    for (const ts of uniqueTimestamps) {
+      const diff = Math.abs(timestamp - ts)
+      if (diff < minDiff) {
+        minDiff = diff
+        closestTimestamp = ts
+      }
+    }
+    
+    console.debug(`Jumping ${phase} to timestamp: ${closestTimestamp} (requested: ${timestamp})`)
+    this.currentTimestamp[phase] = closestTimestamp
+    this.publishVisibleEvents(phase)
+  }
+
+  /**
    * Get all events visible at current timestamp (timestamp <= current)
    * @param {string} phase - Phase to get events for
    * @returns {Array} Events visible at current timestamp

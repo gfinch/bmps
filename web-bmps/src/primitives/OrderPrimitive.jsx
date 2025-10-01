@@ -11,6 +11,8 @@
 
 import { 
   drawHorizontalLine, 
+  drawVerticalLine,
+  drawTriangle,
   drawRectangle,
   drawLabel, 
   getTimeCoordinate, 
@@ -23,9 +25,11 @@ import {
 class OrderPrimitive {
   constructor(options = {}) {
     this.options = {
-      plannedColor: '#7C3AED',    // Purple for planned state
-      placedColor: '#2563EB',     // Blue for placed state
-      filledColor: '#2563EB',     // Blue for filled state  
+      plannedColor: '#2563EB',     // Blue for all states
+      placedColor: '#2563EB',      // Blue for all states
+      filledColor: '#2563EB',      // Blue for all states
+      triangleFillColor: 'rgba(37, 99, 235, 0.3)',  // Blue with transparency for triangle fill
+      triangleStrokeColor: '#000000',  // Black stroke for triangle
       profitBoxFill: 'rgba(34, 197, 94, 0.15)',   // Green with transparency
       profitBoxStroke: '#22C55E',  // Green stroke
       lossBoxFill: 'rgba(239, 68, 68, 0.15)',     // Red with transparency  
@@ -288,31 +292,37 @@ class OrderPaneRenderer {
 
   drawFilledOrder(ctx, order, startX, placedX, filledX, entryY, 
                   profitBoxTop, profitBoxBottom, lossBoxTop, lossBoxBottom, scope) {
-    // Lines: planned -> placed -> filled
-    if (placedX !== null) {
-      drawHorizontalLine(ctx, {
-        startX,
-        endX: placedX,
-        y: entryY,
-        color: this.options.plannedColor,
-        width: this.options.lineWidth,
-        lineDash: 'solid',
-        canvasWidth: scope.mediaSize.width
-      })
-    }
+    // Get take profit and stop loss Y coordinates
+    const takeProfitY = getPriceCoordinate(order.takeProfit, this.series, this.chart)
+    const stopLossY = getPriceCoordinate(order.stopLoss, this.series, this.chart)
 
-    if (placedX !== null && filledX !== null) {
-      drawHorizontalLine(ctx, {
-        startX: placedX,
-        endX: filledX,
-        y: entryY,
-        color: this.options.filledColor,
-        width: this.options.lineWidth,
-        lineDash: 'solid',
-        canvasWidth: scope.mediaSize.width
+    if (filledX !== null && takeProfitY !== null && stopLossY !== null) {
+      // Draw triangle from (startX, entryY) to (filledX, takeProfitY) to (filledX, stopLossY)
+      drawTriangle(ctx, {
+        x1: startX,
+        y1: entryY,
+        x2: filledX,
+        y2: takeProfitY,
+        x3: filledX,
+        y3: stopLossY,
+        fillColor: this.options.triangleFillColor,
+        strokeColor: this.options.triangleStrokeColor,
+        strokeWidth: 1
       })
 
-      // Infinite profit and loss boxes from filled time
+      // Draw vertical dashed line at placed timestamp if it exists
+      if (placedX !== null) {
+        drawVerticalLine(ctx, {
+          x: placedX,
+          startY: takeProfitY,
+          endY: stopLossY,
+          color: this.options.filledColor,
+          width: this.options.lineWidth,
+          lineDash: 'dashed'
+        })
+      }
+
+      // Infinite profit and loss boxes from filled time (unchanged)
       drawRectangle(ctx, {
         startX: filledX,
         endX: null,
@@ -334,34 +344,65 @@ class OrderPaneRenderer {
         strokeWidth: 1,
         canvasWidth: scope.mediaSize.width
       })
+    } else {
+      // Fallback to horizontal lines if filled timestamp doesn't exist or coordinates fail
+      if (placedX !== null) {
+        drawHorizontalLine(ctx, {
+          startX,
+          endX: placedX,
+          y: entryY,
+          color: this.options.plannedColor,
+          width: this.options.lineWidth,
+          lineDash: 'solid',
+          canvasWidth: scope.mediaSize.width
+        })
+      }
+
+      if (placedX !== null && filledX !== null) {
+        drawHorizontalLine(ctx, {
+          startX: placedX,
+          endX: filledX,
+          y: entryY,
+          color: this.options.filledColor,
+          width: this.options.lineWidth,
+          lineDash: 'solid',
+          canvasWidth: scope.mediaSize.width
+        })
+      }
     }
   }
 
   drawProfitOrder(ctx, order, startX, placedX, filledX, closeX, entryY,
                   profitBoxTop, profitBoxBottom, lossBoxTop, lossBoxBottom, scope) {
-    // Lines: planned -> placed -> filled
-    if (placedX !== null) {
-      drawHorizontalLine(ctx, {
-        startX,
-        endX: placedX,
-        y: entryY,
-        color: this.options.plannedColor,
-        width: this.options.lineWidth,
-        lineDash: 'solid',
-        canvasWidth: scope.mediaSize.width
-      })
-    }
+    // Get take profit and stop loss Y coordinates
+    const takeProfitY = getPriceCoordinate(order.takeProfit, this.series, this.chart)
+    const stopLossY = getPriceCoordinate(order.stopLoss, this.series, this.chart)
 
-    if (placedX !== null && filledX !== null) {
-      drawHorizontalLine(ctx, {
-        startX: placedX,
-        endX: filledX,
-        y: entryY,
-        color: this.options.filledColor,
-        width: this.options.lineWidth,
-        lineDash: 'solid',
-        canvasWidth: scope.mediaSize.width
+    if (filledX !== null && takeProfitY !== null && stopLossY !== null) {
+      // Draw triangle from (startX, entryY) to (filledX, takeProfitY) to (filledX, stopLossY)
+      drawTriangle(ctx, {
+        x1: startX,
+        y1: entryY,
+        x2: filledX,
+        y2: takeProfitY,
+        x3: filledX,
+        y3: stopLossY,
+        fillColor: this.options.triangleFillColor,
+        strokeColor: this.options.triangleStrokeColor,
+        strokeWidth: 1
       })
+
+      // Draw vertical dashed line at placed timestamp if it exists
+      if (placedX !== null) {
+        drawVerticalLine(ctx, {
+          x: placedX,
+          startY: takeProfitY,
+          endY: stopLossY,
+          color: this.options.filledColor,
+          width: this.options.lineWidth,
+          lineDash: 'dashed'
+        })
+      }
 
       if (closeX !== null) {
         // Finite boxes: filled -> closed
@@ -388,34 +429,65 @@ class OrderPaneRenderer {
           canvasWidth: scope.mediaSize.width
         })
       }
+    } else {
+      // Fallback to horizontal lines if coordinates fail
+      if (placedX !== null) {
+        drawHorizontalLine(ctx, {
+          startX,
+          endX: placedX,
+          y: entryY,
+          color: this.options.plannedColor,
+          width: this.options.lineWidth,
+          lineDash: 'solid',
+          canvasWidth: scope.mediaSize.width
+        })
+      }
+
+      if (placedX !== null && filledX !== null) {
+        drawHorizontalLine(ctx, {
+          startX: placedX,
+          endX: filledX,
+          y: entryY,
+          color: this.options.filledColor,
+          width: this.options.lineWidth,
+          lineDash: 'solid',
+          canvasWidth: scope.mediaSize.width
+        })
+      }
     }
   }
 
   drawLossOrder(ctx, order, startX, placedX, filledX, closeX, entryY,
                 profitBoxTop, profitBoxBottom, lossBoxTop, lossBoxBottom, scope) {
-    // Lines: planned -> placed -> filled
-    if (placedX !== null) {
-      drawHorizontalLine(ctx, {
-        startX,
-        endX: placedX,
-        y: entryY,
-        color: this.options.plannedColor,
-        width: this.options.lineWidth,
-        lineDash: 'solid',
-        canvasWidth: scope.mediaSize.width
-      })
-    }
+    // Get take profit and stop loss Y coordinates
+    const takeProfitY = getPriceCoordinate(order.takeProfit, this.series, this.chart)
+    const stopLossY = getPriceCoordinate(order.stopLoss, this.series, this.chart)
 
-    if (placedX !== null && filledX !== null) {
-      drawHorizontalLine(ctx, {
-        startX: placedX,
-        endX: filledX,
-        y: entryY,
-        color: this.options.filledColor,
-        width: this.options.lineWidth,
-        lineDash: 'solid',
-        canvasWidth: scope.mediaSize.width
+    if (filledX !== null && takeProfitY !== null && stopLossY !== null) {
+      // Draw triangle from (startX, entryY) to (filledX, takeProfitY) to (filledX, stopLossY)
+      drawTriangle(ctx, {
+        x1: startX,
+        y1: entryY,
+        x2: filledX,
+        y2: takeProfitY,
+        x3: filledX,
+        y3: stopLossY,
+        fillColor: this.options.triangleFillColor,
+        strokeColor: this.options.triangleStrokeColor,
+        strokeWidth: 1
       })
+
+      // Draw vertical dashed line at placed timestamp if it exists
+      if (placedX !== null) {
+        drawVerticalLine(ctx, {
+          x: placedX,
+          startY: takeProfitY,
+          endY: stopLossY,
+          color: this.options.filledColor,
+          width: this.options.lineWidth,
+          lineDash: 'dashed'
+        })
+      }
 
       if (closeX !== null) {
         // Finite boxes: filled -> closed
@@ -439,6 +511,31 @@ class OrderPaneRenderer {
           fillColor: this.options.lossBoxFill,
           strokeColor: this.options.lossBoxStroke,
           strokeWidth: 1,
+          canvasWidth: scope.mediaSize.width
+        })
+      }
+    } else {
+      // Fallback to horizontal lines if coordinates fail
+      if (placedX !== null) {
+        drawHorizontalLine(ctx, {
+          startX,
+          endX: placedX,
+          y: entryY,
+          color: this.options.plannedColor,
+          width: this.options.lineWidth,
+          lineDash: 'solid',
+          canvasWidth: scope.mediaSize.width
+        })
+      }
+
+      if (placedX !== null && filledX !== null) {
+        drawHorizontalLine(ctx, {
+          startX: placedX,
+          endX: filledX,
+          y: entryY,
+          color: this.options.filledColor,
+          width: this.options.lineWidth,
+          lineDash: 'solid',
           canvasWidth: scope.mediaSize.width
         })
       }

@@ -37,15 +37,15 @@ object MarketTrendService {
       return TrendAnalysis(Direction.Up, 0.5, 0.0, 0.0, 0.3)
     }
 
-    // Multi-timeframe analysis
-    val longTerm = analyzeTrendWindow(recentCandles, 120) // 2 hours
-    val mediumTerm = analyzeTrendWindow(recentCandles, 60) // 1 hour  
-    val shortTerm = analyzeTrendWindow(recentCandles, 30) // 30 minutes
+    // Multi-timeframe analysis - moderately more responsive
+    val longTerm = analyzeTrendWindow(recentCandles, 75)  // 1.25 hours (was 1.5h)
+    val mediumTerm = analyzeTrendWindow(recentCandles, 35) // 35 minutes (was 45m)  
+    val shortTerm = analyzeTrendWindow(recentCandles, 15)  // 15 minutes (was 20m)
 
-    // Weighted scoring (long-term bias)
-    val longWeight = 0.5
-    val mediumWeight = 0.3
-    val shortWeight = 0.2
+    // Weighted scoring (more balanced between timeframes)
+    val longWeight = 0.4   // Further reduced from 0.45
+    val mediumWeight = 0.4 // Increased from 0.35
+    val shortWeight = 0.2  // Same
 
     val weightedMomentum = 
       longTerm.momentum * longWeight +
@@ -62,10 +62,10 @@ object MarketTrendService {
     val confidence = (agreement + weightedStrength) / 2.0
 
     // Apply stability threshold - require meaningful momentum to change direction
-    val momentumThreshold = 0.1
+    val momentumThreshold = 0.06 // More sensitive (was 0.08)
     val direction = if (abs(weightedMomentum) < momentumThreshold) {
-      // Weak momentum, check if we have strong agreement
-      if (confidence > 0.7) {
+      // Weak momentum, check if we have reasonable agreement
+      if (confidence > 0.6) { // Less strict (was 0.65)
         if (weightedMomentum >= 0) Direction.Up else Direction.Down
       } else {
         Direction.Up // Default when uncertain
