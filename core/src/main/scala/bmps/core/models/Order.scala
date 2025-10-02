@@ -27,6 +27,12 @@ object EntryType {
     case object JediOrderBlock extends EntryType
 }
 
+object CancelReason {
+    final val FullCandleOutside: String = "A full candle fell outside the range of the order."
+    final val TenMinuteWickOutside: String = "More than ten minutes have passed and the candle wicked outside the order."
+    final val EndOfDay: String = "Ten minutes until closing. All orders cancelled."
+}
+
 case class Order(low: Level, 
                      high: Level, 
                      timestamp: Long, 
@@ -37,7 +43,8 @@ case class Order(low: Level,
                      riskDollars: Double = 550.0,
                      placedTimestamp: Option[Long] = None,
                      filledTimestamp: Option[Long] = None,
-                     closeTimestamp: Option[Long] = None) {
+                     closeTimestamp: Option[Long] = None,
+                     cancelReason: Option[String] = None) {
 
     import OrderType._
     import OrderStatus._
@@ -76,66 +83,6 @@ case class Order(low: Level,
     lazy val isActive = (status == OrderStatus.Placed || status == OrderStatus.Filled)
     lazy val direction: Direction = if (orderType == OrderType.Long) Direction.Up else Direction.Down
 
-    def adjustState(candle: Candle): Order = {
-        (status, orderType)  match {
-            case (Planned, _) if (candle.low >= high || candle.high <= low) =>
-                this.copy(status = Cancelled, closeTimestamp = Some(candle.timestamp))
-            case (Planned, Long) if (candle.timestamp - timestamp > TenMinutes) && (candle.close.value >= takeProfit || candle.close.value <= stopLoss) => 
-                this.copy(status = Cancelled, closeTimestamp = Some(candle.timestamp))
-            case (Planned, Short) if (candle.timestamp - timestamp > TenMinutes) && (candle.close.value <= takeProfit || candle.close.value >= stopLoss) =>
-                this.copy(status = Cancelled, closeTimestamp = Some(candle.timestamp))
-            case (Planned, _) => this
-
-            case (Placed, _) if (candle.low >= high || candle.high <= low) =>
-                this.copy(status = Cancelled, closeTimestamp = Some(candle.timestamp))
-            case (Placed, Long) if candle.low.value <= stopLoss && candle.high.value >= takeProfit && candle.isBullish =>
-                this.copy(status = Loss, filledTimestamp = Some(candle.timestamp), closeTimestamp = Some(candle.timestamp))
-            case (Placed, Long) if candle.low.value <= stopLoss && candle.high.value >= takeProfit && candle.isBearish =>
-                this.copy(status = Profit, filledTimestamp = Some(candle.timestamp), closeTimestamp = Some(candle.timestamp))
-            case (Placed, Long) if candle.low.value <= entryPoint && candle.high.value >= takeProfit => 
-                this.copy(status = Profit, filledTimestamp = Some(candle.timestamp), closeTimestamp = Some(candle.timestamp))
-            // case (Placed, Long) if candle.high.value >= takeProfit =>
-            //     this.copy(status = Cancelled, closeTimestamp = Some(candle.timestamp))
-            // case (Placed, Long) if candle.low.value <= stopLoss => 
-            //     this.copy(status = Loss, filledTimestamp = Some(candle.timestamp), closeTimestamp = Some(candle.timestamp))
-            case (Placed, Long) if candle.low.value >= entryPoint => 
-                this.copy(status = Filled, filledTimestamp = Some(candle.timestamp))
-
-            case (Placed, Short) if candle.high.value >= stopLoss && candle.low.value <= takeProfit && candle.isBearish =>
-                this.copy(status = Loss, filledTimestamp = Some(candle.timestamp), closeTimestamp = Some(candle.timestamp))
-            case (Placed, Short) if candle.high.value >= stopLoss && candle.low.value <= takeProfit && candle.isBullish =>
-                this.copy(status = Profit, filledTimestamp = Some(candle.timestamp), closeTimestamp = Some(candle.timestamp))
-            case (Placed, Short) if candle.high.value >= entryPoint && candle.low.value <= takeProfit =>
-                this.copy(status = Profit, filledTimestamp = Some(candle.timestamp), closeTimestamp = Some(candle.timestamp))
-            // case (Placed, Short) if candle.low.value <= takeProfit =>
-            //     this.copy(status = Cancelled, closeTimestamp = Some(candle.timestamp))
-            // case (Placed, Short) if candle.high.value >= stopLoss =>
-            //     this.copy(status = Loss, filledTimestamp = Some(candle.timestamp), closeTimestamp = Some(candle.timestamp))
-            case (Placed, Short) if candle.low.value <= entryPoint =>
-                this.copy(status = Filled, filledTimestamp = Some(candle.timestamp))
-
-            case (Filled, Long) if candle.high.value >= takeProfit && candle.low.value <= stopLoss && candle.isBullish =>
-                this.copy(status = Loss, closeTimestamp = Some(candle.timestamp))
-            case (Filled, Long) if candle.high.value >= takeProfit && candle.low.value <= stopLoss && candle.isBearish =>
-                this.copy(status = Profit, closeTimestamp = Some(candle.timestamp))
-            case (Filled, Long) if candle.high.value >= takeProfit =>
-                this.copy(status = Profit, closeTimestamp = Some(candle.timestamp))
-            case (Filled, Long) if candle.low.value <= stopLoss =>
-                this.copy(status = Loss, closeTimestamp = Some(candle.timestamp))
-
-            case (Filled, Short) if candle.low.value <= takeProfit && candle.high.value >= stopLoss && candle.isBearish =>
-                this.copy(status = Loss, closeTimestamp = Some(candle.timestamp))
-            case (Filled, Short) if candle.low.value <= takeProfit && candle.high.value >= stopLoss && candle.isBullish =>
-                this.copy(status = Profit, closeTimestamp = Some(candle.timestamp))
-            case (Filled, Short) if candle.low.value <= takeProfit =>
-                this.copy(status = Profit, closeTimestamp = Some(candle.timestamp))
-            case (Filled, Short) if candle.high.value >= stopLoss =>
-                this.copy(status = Loss, closeTimestamp = Some(candle.timestamp))
-
-            case _ => this
-        }
-    }
-
     def cancelOrSell(candle: Candle): Order = {
         if (closeTimestamp.isEmpty) {
             (status, orderType) match {
@@ -148,7 +95,7 @@ case class Order(low: Level,
                 case (Filled, Short) if candle.close.value >= entryPoint =>
                     this.copy(status = Loss, closeTimestamp = Some(candle.timestamp))
                 case _ => 
-                    this.copy(status = Cancelled, closeTimestamp = Some(candle.timestamp))
+                    this.copy(status = Cancelled, closeTimestamp = Some(candle.timestamp), cancelReason = Some(CancelReason.EndOfDay))
             }
         } else this
     }
@@ -170,7 +117,8 @@ case class SerializableOrder(low: Level,
                              takeProfit: Double,
                              contracts: Int,
                              atRisk: Double,
-                             potential: Double
+                             potential: Double,
+                             cancelReason: Option[String]
                      )
 
 object Order {
@@ -206,6 +154,7 @@ object SerializableOrder {
         takeProfit = order.takeProfit.toDouble,
         contracts = order.contracts,
         atRisk = order.atRisk,
-        potential = order.potential
+        potential = order.potential,
+        cancelReason = order.cancelReason
       )
 }

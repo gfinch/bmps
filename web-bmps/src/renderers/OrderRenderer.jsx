@@ -219,7 +219,8 @@ class OrderRenderer extends BaseRenderer {
       closeTimestamp: order.closeTimestamp || null,
       status: status,
       orderType: orderType,
-      entryType: entryType
+      entryType: entryType,
+      cancelReason: order.cancelReason || null
     }
 
     console.debug('Transformed event to order data:', orderData)
