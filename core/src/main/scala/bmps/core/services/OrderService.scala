@@ -25,7 +25,7 @@ object OrderService {
         require(state.tradingCandles.nonEmpty, "buildOrders called before there are candles in Trade state.")
         val processors = Seq(
             EngulfingOrderBlockService.processState(_), 
-            FairValueGapOrderBlockService.processState(_)
+            // FairValueGapOrderBlockService.processState(_)
         )
 
         processors.foldLeft(state) { (lastState, nextProcess) => nextProcess(lastState) }
@@ -56,14 +56,14 @@ object OrderService {
 
     private def shouldPlaceOrder(order: Order, state: SystemState): Boolean = {
         val activeOrders = state.orders.count(_.isActive)
-        val isRightDirection = state.tradingDirection.exists(_ == order.direction)
+        // val isRightDirection = state.tradingDirection.exists(_ == order.direction)
         val isOrderReady = if (order.entryType == EntryType.FairValueGapOrderBlock) {
             FairValueGapOrderBlockService.shouldPlaceOrder(order, state.tradingCandles.last)
         } else if (order.entryType == EntryType.EngulfingOrderBlock) {
             EngulfingOrderBlockService.shouldPlaceOrder(order, state.tradingCandles.last)
         } else true
         //TODO more sophisticated logic
-        (activeOrders == 0 && isRightDirection && isOrderReady)
+        (activeOrders == 0 && isOrderReady)
     }
 
     private def placeOrder(order: Order, timestamp: Long): Order = {

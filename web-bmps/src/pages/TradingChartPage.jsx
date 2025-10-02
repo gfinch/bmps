@@ -60,7 +60,7 @@ export default function TradingChartPage() {
             horzLines: { color: '#f0f0f0' },
           },
           crosshair: {
-            mode: 1,
+            mode: 0, // Normal mode - crosshairs follow mouse freely
           },
           rightPriceScale: {
             borderColor: '#cccccc',
