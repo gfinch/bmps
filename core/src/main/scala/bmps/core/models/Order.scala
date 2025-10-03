@@ -34,17 +34,17 @@ object CancelReason {
 }
 
 case class Order(low: Level, 
-                     high: Level, 
-                     timestamp: Long, 
-                     orderType: OrderType,
-                     entryType: EntryType, 
-                     status: OrderStatus = OrderStatus.Planned,
-                     profitMultiplier: Double = 2.0,
-                     riskDollars: Double = 550.0,
-                     placedTimestamp: Option[Long] = None,
-                     filledTimestamp: Option[Long] = None,
-                     closeTimestamp: Option[Long] = None,
-                     cancelReason: Option[String] = None) {
+                    high: Level, 
+                    timestamp: Long, 
+                    orderType: OrderType,
+                    entryType: EntryType, 
+                    status: OrderStatus = OrderStatus.Planned,
+                    profitMultiplier: Double = 2.0,
+                    placedTimestamp: Option[Long] = None,
+                    filledTimestamp: Option[Long] = None,
+                    closeTimestamp: Option[Long] = None,
+                    cancelReason: Option[String] = None,
+                    accountId: Option[String] = None) {
 
     import OrderType._
     import OrderStatus._
@@ -76,29 +76,8 @@ case class Order(low: Level,
         case Short => low.value - profitPoints
     }
 
-    lazy val contracts: Int = Math.floor(riskDollars / atRiskPerContract).toInt
-    lazy val atRisk = atRiskPerContract * contracts
-    lazy val potential = potentialPerContract * contracts
-    lazy val isViable = contracts <= MaxContracts
     lazy val isActive = (status == OrderStatus.Placed || status == OrderStatus.Filled)
     lazy val direction: Direction = if (orderType == OrderType.Long) Direction.Up else Direction.Down
-
-    def cancelOrSell(candle: Candle): Order = {
-        if (closeTimestamp.isEmpty) {
-            (status, orderType) match {
-                case (Filled, Long) if candle.close.value >= entryPoint =>
-                    this.copy(status = Profit, closeTimestamp = Some(candle.timestamp))
-                case (Filled, Long) if candle.close.value <= entryPoint =>
-                    this.copy(status = Loss, closeTimestamp = Some(candle.timestamp))
-                case (Filled, Short) if candle.close.value <= entryPoint =>
-                    this.copy(status = Profit, closeTimestamp = Some(candle.timestamp))
-                case (Filled, Short) if candle.close.value >= entryPoint =>
-                    this.copy(status = Loss, closeTimestamp = Some(candle.timestamp))
-                case _ => 
-                    this.copy(status = Cancelled, closeTimestamp = Some(candle.timestamp), cancelReason = Some(CancelReason.EndOfDay))
-            }
-        } else this
-    }
 }
 
 case class SerializableOrder(low: Level, 
@@ -136,25 +115,33 @@ object Order {
 }
 
 object SerializableOrder {
-    def fromOrder(order: Order): SerializableOrder =
-      SerializableOrder(
-        low = order.low,
-        high = order.high,
-        timestamp = order.timestamp,
-        orderType = order.orderType,
-        entryType = order.entryType,
-        status = order.status,
-        profitMultiplier = order.profitMultiplier,
-        riskDollars = order.riskDollars,
-        placedTimestamp = order.placedTimestamp,
-        filledTimestamp = order.filledTimestamp,
-        closeTimestamp = order.closeTimestamp,
-        entryPoint = order.entryPoint.toDouble,
-        stopLoss = order.stopLoss.toDouble,
-        takeProfit = order.takeProfit.toDouble,
-        contracts = order.contracts,
-        atRisk = order.atRisk,
-        potential = order.potential,
-        cancelReason = order.cancelReason
-      )
+    def fromOrder(order: Order, riskPerTrade: Double): SerializableOrder = {
+
+        //For the purposes of simulation, we'll assume $500 at risk per order
+        val riskDollars = riskPerTrade
+        val contracts: Int = Math.floor(riskDollars / order.atRiskPerContract).toInt
+        val atRisk = order.atRiskPerContract * contracts
+        val potential = order.potentialPerContract * contracts
+
+        SerializableOrder(
+            low = order.low,
+            high = order.high,
+            timestamp = order.timestamp,
+            orderType = order.orderType,
+            entryType = order.entryType,
+            status = order.status,
+            profitMultiplier = order.profitMultiplier,
+            riskDollars = riskDollars,
+            placedTimestamp = order.placedTimestamp,
+            filledTimestamp = order.filledTimestamp,
+            closeTimestamp = order.closeTimestamp,
+            entryPoint = order.entryPoint.toDouble,
+            stopLoss = order.stopLoss.toDouble,
+            takeProfit = order.takeProfit.toDouble,
+            contracts = contracts,
+            atRisk = atRisk,
+            potential = potential,
+            cancelReason = order.cancelReason
+        )
+    } 
 }

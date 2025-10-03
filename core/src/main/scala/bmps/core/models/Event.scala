@@ -34,7 +34,7 @@ object Event {
     def fromSwingPoint(swingPoint: SwingPoint): Event = Event(EventType.SwingPoint, swingPoint.timestamp, swingPoint = Some(swingPoint))
     def fromPlanZone(planZone: PlanZone): Event = Event(EventType.PlanZone, planZone.startTime, planZone = Some(planZone))
     def fromDaytimeExtreme(daytimeExtreme: DaytimeExtreme): Event = Event(EventType.DaytimeExtreme, daytimeExtreme.timestamp, daytimeExtreme = Some(daytimeExtreme))
-    def fromOrder(order: Order): Event = Event(EventType.Order, order.timestamp, order = Some(SerializableOrder.fromOrder(order)))
+    def fromOrder(order: Order, riskPerTrade: Double): Event = Event(EventType.Order, order.timestamp, order = Some(SerializableOrder.fromOrder(order, riskPerTrade)))
     def fromTradeDirection(candle: Candle, tradingDirection: Option[Direction]) = Event(EventType.TradingDirection, candle.timestamp, tradingDirection = tradingDirection)
     def phaseComplete(timestamp: Long): Event = Event(EventType.PhaseComplete, timestamp)
     def phaseErrored(timestamp: Long): Event = Event(EventType.PhaseErrored, timestamp)

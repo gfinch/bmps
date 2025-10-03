@@ -2,6 +2,10 @@ package bmps.core.models
 import bmps.core.models.OrderStatus.Planned
 import bmps.core.models.OrderStatus.Placed
 import java.security.KeyStore.Entry
+import java.time.ZoneId
+import java.time.Instant
+import java.time.Duration
+import java.time.LocalTime
 
 case class Level(value: Float) {
     def <(other: Level): Boolean = this.value < other.value
@@ -61,6 +65,16 @@ case class Candle(
 
     def engulfs(other: Candle): Boolean = bodyHeight > other.bodyHeight
     def isOpposite(other: Candle): Boolean = isBullish && other.isBearish || isBearish && other.isBullish
+
+    lazy val isEndOfDay: Boolean = {
+        val zone = ZoneId.of("UTC") //Because the candles are offset to NY Time already.
+        val localDate = Instant.ofEpochMilli(timestamp).atZone(zone).toLocalDate
+        val closingZdt = localDate.atTime(LocalTime.of(16, 0)).atZone(zone)
+        val closingMillis = closingZdt.toInstant.toEpochMilli
+        val tenMinutesMillis = Duration.ofMinutes(10).toMillis
+
+        closingMillis - timestamp <= tenMinutesMillis
+    }
 }
 
 case class SwingPoint(

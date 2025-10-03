@@ -7,25 +7,51 @@ import bmps.core.models.CancelReason
 import bmps.core.models.Candle
 import bmps.core.models.OrderStatus._
 import java.time.Duration
+import bmps.core.models.SerializableOrder
+
+sealed trait BrokerType
+object BrokerType {
+    case object LeadAccountBroker extends BrokerType
+    case object SimulatedAccountBroker extends BrokerType
+}
 
 trait AccountBroker {
-    final val TenMinutes = Duration.ofMinutes(10).toMillis()
-
-    val accountName: String
+    val accountId: String
+    val riskPerTrade: Double
+    val brokerType: BrokerType
 
     def placeOrder(order: Order, candle: Candle): Order
     def fillOrder(order: Order, candle: Candle): Order
     def takeProfit(order: Order, candle: Candle): Order
     def takeLoss(order: Order, candle: Candle): Order
+    def exitOrder(order: Order, candle: Candle): Order
     def cancelOrder(order: Order, candle: Candle, cancelReason: String): Order
+}
+
+class LeadAccountBroker(brokers: List[AccountBroker], riskDollars: Double = 550.0) extends AccountBroker {
+    final val TenMinutes = Duration.ofMinutes(10).toMillis()
+
+    val accountId = "LeadAccountBroker"
+    val riskPerTrade = riskDollars
+    val brokerType = BrokerType.LeadAccountBroker
+
+    def placeOrder(order: Order, candle: Candle): Order = brokers.map(_.placeOrder(order, candle)).head
+    def fillOrder(order: Order, candle: Candle): Order = brokers.map(_.fillOrder(order, candle)).head
+    def takeProfit(order: Order, candle: Candle): Order = brokers.map(_.takeProfit(order, candle)).head
+    def takeLoss(order: Order, candle: Candle): Order = brokers.map(_.takeLoss(order, candle)).head
+    def exitOrder(order: Order, candle: Candle): Order = brokers.map(_.exitOrder(order, candle)).head
+    def cancelOrder(order: Order, candle: Candle, cancelReason: String): Order = brokers.map(_.cancelOrder(order, candle, cancelReason)).head
+
+    lazy val brokerCount = brokers.size
 
     def updateOrderStatus(order: Order, candle: Candle): Order = {
         val operations = Seq(
-            cancelPlannedOrderCandleOutside(_,_),
             checkIfOrderWasFilled(_,_),
             takeProfitOrLossFromTallCandle(_,_),
             takeProfitFromShortCandle(_,_),
             takeLossFromShortCandle(_,_),
+            exitOrderAtEndOfDay(_,_),
+            cancelPlannedOrderCandleOutside(_,_),
             cancelPlacedOrderCandleOutside(_,_), 
             cancelOldPlannedOrderWickOutside(_,_),
             cancelOldPlacedOrderWickOutside(_,_)
@@ -34,6 +60,10 @@ trait AccountBroker {
         operations.foldLeft(order) { (updatedOrder, operation) =>
             operation(updatedOrder, candle)
         }
+    }
+
+    def buildSerializableOrder(order: Order): SerializableOrder = {
+        SerializableOrder.fromOrder(order, riskPerTrade)
     }
 
     //Rule: Fill the order if candle crosses entry point.
@@ -89,6 +119,15 @@ trait AccountBroker {
                 case OrderType.Short if candle.high.value >= order.stopLoss => takeLoss(order, candle)
                 case _ => order
             }
+        } else order
+    }
+
+    //Rule: During end of day, exit order
+    private def exitOrderAtEndOfDay(order: Order, candle: Candle): Order = {
+        if (candle.isEndOfDay) order.status match {
+            case Planned | Placed => cancelOrder(order, candle, CancelReason.EndOfDay)
+            case Filled => exitOrder(order, candle)
+            case _ => order
         } else order
     }
 

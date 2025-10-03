@@ -14,8 +14,35 @@ import bmps.core.phases.PreparingPhaseBuilder
 import bmps.core.phases.TradingPhaseBuilder
 import cats.effect.{IO, IOApp}
 import java.time.LocalDate
+import bmps.core.brokers.{AccountBroker, AccountBrokerFactory, BrokerType}
+import com.typesafe.config.ConfigFactory
+import scala.jdk.CollectionConverters._
+import bmps.core.brokers.LeadAccountBroker
 
 object AppLauncher extends IOApp.Simple {
+  
+  /** Load AccountBrokers from configuration */
+  private def loadAccountBrokers(): LeadAccountBroker = {
+    val config = ConfigFactory.load()
+    val riskPerTradeUI = config.getDouble("bmps.core.risk-per-trade-ui")
+    val brokerConfigs = config.getConfigList("bmps.core.account-brokers").asScala.toList
+    
+    val brokers = brokerConfigs.map { brokerConfig =>
+      val accountId = brokerConfig.getString("account-id")
+      val riskPerTrade = brokerConfig.getDouble("risk-per-trade")
+      val brokerTypeString = brokerConfig.getString("broker-type")
+      
+      val brokerType = brokerTypeString match {
+        case "SimulatedAccountBroker" => BrokerType.SimulatedAccountBroker
+        case _ => throw new IllegalArgumentException(s"Unknown broker type: $brokerTypeString")
+      }
+      
+      AccountBrokerFactory.buildAccountBroker(accountId, riskPerTrade, brokerType)
+    }
+
+    new LeadAccountBroker(brokers, riskPerTradeUI)
+  }
+
   /** Create the shared pieces and return resources that include a running
     * HTTP/WebSocket server that serves `webRoot` on the given port. The
     * runners map is left empty; populate when wiring real CandleSource/
@@ -25,11 +52,13 @@ object AppLauncher extends IOApp.Simple {
     stateRef <- Resource.eval(Ref.of[IO, SystemState](SystemState()))
     broadcaster <- Resource.eval(Broadcaster.create(Some(10000)))
     sem <- Resource.eval(Semaphore[IO](1))
-    // populate with stub PhaseRunner instances so the server can be smoke-tested
+    // Load account brokers from configuration
+    leadAccount = loadAccountBrokers()
+    // populate with PhaseRunner instances, using configured AccountBrokers for TradingPhase
     runners: Map[SystemStatePhase, PhaseRunner] = Map(
       SystemStatePhase.Planning -> PlanningPhaseBuilder.build(),
       SystemStatePhase.Preparing -> PreparingPhaseBuilder.build(),
-      SystemStatePhase.Trading -> TradingPhaseBuilder.build()
+      SystemStatePhase.Trading -> TradingPhaseBuilder.build(leadAccount)
     )
     controller = new PhaseController(stateRef, broadcaster, runners, sem)
     server <- Server.resource(stateRef, controller, broadcaster, webRoot, port)

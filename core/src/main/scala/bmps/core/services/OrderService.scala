@@ -21,37 +21,24 @@ object OrderService {
     }
 
     def buildOrders(state: SystemState): SystemState = {
-        //TODO ... need to determine order direction && if we're in an area of interest.
         require(state.tradingCandles.nonEmpty, "buildOrders called before there are candles in Trade state.")
         val processors = Seq(
             EngulfingOrderBlockService.processState(_), 
             // FairValueGapOrderBlockService.processState(_)
         )
 
-        processors.foldLeft(state) { (lastState, nextProcess) => nextProcess(lastState) }
+        val result = processors.foldLeft(state) { (lastState, nextProcess) => nextProcess(lastState) }
+        if(result.orders.size > state.orders.size) println("FOUND ORDERS TO CREATE")
+        result
     }
     
-    def placeOrders(state: SystemState): SystemState = {
+    def findOrderToPlace(state: SystemState): Option[Order] = {
         require(state.tradingCandles.nonEmpty, "placeOrders called before there are candles in Trade state.")
-        val timestamp = state.tradingCandles.last.timestamp
-        var orderPlaced = false
-        val updatedOrders = state.orders.zipWithIndex.map { case (order, i) => 
-            if (order.status == OrderStatus.Planned && !orderPlaced && shouldPlaceOrder(order, state)) {
-                orderPlaced = true
-                placeOrder(order, timestamp)
-            } else order
+        val orders = state.orders.find { order => 
+            order.status == OrderStatus.Planned && shouldPlaceOrder(order, state)
         }
-        state.copy(orders = updatedOrders)
-    }
-
-    def isEndOfDay(candle: Candle): Boolean = {
-        val zone = ZoneId.of("UTC") //Because the candles are offset to NY Time already.
-        val localDate = Instant.ofEpochMilli(candle.timestamp).atZone(zone).toLocalDate
-        val closingZdt = localDate.atTime(LocalTime.of(16, 0)).atZone(zone)
-        val closingMillis = closingZdt.toInstant.toEpochMilli
-        val tenMinutesMillis = Duration.ofMinutes(10).toMillis
-
-        closingMillis - candle.timestamp <= tenMinutesMillis
+        if (orders.nonEmpty) println("FOUND ORDER TO PLACE")
+        orders
     }
 
     private def shouldPlaceOrder(order: Order, state: SystemState): Boolean = {
@@ -64,10 +51,5 @@ object OrderService {
         } else true
         //TODO more sophisticated logic
         (activeOrders == 0 && isOrderReady)
-    }
-
-    private def placeOrder(order: Order, timestamp: Long): Order = {
-        require(order.status == OrderStatus.Planned, "Tried to place an order that was not in Planned state.")
-        order.copy(status = OrderStatus.Placed, placedTimestamp = Some(timestamp))
     }
 }
