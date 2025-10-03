@@ -21,7 +21,8 @@ class SimulatedAccountBrokerSpec extends AnyFunSuite {
   private def testOrder(orderType: OrderType, low: Float, high: Float, timestamp: Long) =
     Order(lvl(low), lvl(high), timestamp, orderType, EntryType.EngulfingOrderBlock)
   
-  val broker = new SimulatedAccountBroker("TestAccount")
+  val simulatedBroker = new SimulatedAccountBroker("TestAccount", 100.0)
+  val broker = new LeadAccountBroker(List(simulatedBroker))
   val baseDate = LocalDate.of(2024, 1, 2)
   val baseTime = tsFor(baseDate, 10, 0)
 
@@ -424,5 +425,96 @@ class SimulatedAccountBrokerSpec extends AnyFunSuite {
     val candle3 = testCandle(125f, 135f, 128f, 132f, baseTime + 180000)
     order = broker.updateOrderStatus(order, candle3)
     assert(order.status == Profit)
+  }
+
+  // ================= END OF DAY TESTS =================
+
+  test("Planned order cancelled at end of day") {
+    val order = testOrder(Long, 100f, 110f, baseTime).copy(status = Planned)
+    // Create end of day candle (within 10 minutes of 4 PM UTC)
+    val endOfDayTime = tsFor(baseDate, 15, 55) // 3:55 PM UTC, 10:55 AM ET (5 minutes before close)
+    val candle = testCandle(105f, 115f, 108f, 112f, endOfDayTime)
+    
+    val result = broker.updateOrderStatus(order, candle)
+    
+    assert(result.status == Cancelled)
+    assert(result.cancelReason.contains(CancelReason.EndOfDay))
+    assert(result.closeTimestamp.contains(candle.timestamp))
+  }
+
+  test("Placed order cancelled at end of day") {
+    val order = testOrder(Long, 100f, 110f, baseTime).copy(status = Placed)
+    // Create end of day candle (within 10 minutes of 4 PM UTC)
+    // Candle doesn't touch entry point (110f) so it won't get filled
+    val endOfDayTime = tsFor(baseDate, 15, 52) // 3:52 PM UTC, 10:52 AM ET (8 minutes before close)
+    val candle = testCandle(111f, 115f, 112f, 113f, endOfDayTime) // low at 111, above entry 110
+    
+    val result = broker.updateOrderStatus(order, candle)
+    
+    assert(result.status == Cancelled)
+    assert(result.cancelReason.contains(CancelReason.EndOfDay))
+    assert(result.closeTimestamp.contains(candle.timestamp))
+  }
+
+  test("Filled Long order exited at end of day - profitable exit") {
+    val order = testOrder(Long, 100f, 110f, baseTime).copy(status = Filled)
+    // Create end of day candle with close above entry point (110f for Long order)
+    val endOfDayTime = tsFor(baseDate, 15, 55) // 3:55 PM UTC, 10:55 AM ET (5 minutes before close)
+    val candle = testCandle(105f, 115f, 108f, 112f, endOfDayTime) // close at 112, above entry 110
+    
+    val result = broker.updateOrderStatus(order, candle)
+    
+    assert(result.status == Profit)
+    assert(result.closeTimestamp.contains(candle.timestamp))
+  }
+
+  test("Filled Long order exited at end of day - loss exit") {
+    val order = testOrder(Long, 100f, 110f, baseTime).copy(status = Filled)
+    // Create end of day candle with close below entry point (110f for Long order)
+    val endOfDayTime = tsFor(baseDate, 15, 55) // 3:55 PM UTC, 10:55 AM ET (5 minutes before close)
+    val candle = testCandle(105f, 115f, 108f, 107f, endOfDayTime) // close at 107, below entry 110
+    
+    val result = broker.updateOrderStatus(order, candle)
+    
+    assert(result.status == Loss)
+    assert(result.closeTimestamp.contains(candle.timestamp))
+  }
+
+  test("Filled Short order exited at end of day - profitable exit") {
+    val order = testOrder(Short, 100f, 110f, baseTime).copy(status = Filled)
+    // Create end of day candle with close below entry point (100f for Short order)
+    val endOfDayTime = tsFor(baseDate, 15, 55) // 3:55 PM UTC, 10:55 AM ET (5 minutes before close)
+    val candle = testCandle(95f, 105f, 102f, 97f, endOfDayTime) // close at 97, below entry 100
+    
+    val result = broker.updateOrderStatus(order, candle)
+    
+    assert(result.status == Profit)
+    assert(result.closeTimestamp.contains(candle.timestamp))
+  }
+
+  test("Filled Short order exited at end of day - loss exit") {
+    val order = testOrder(Short, 100f, 110f, baseTime).copy(status = Filled)
+    // Create end of day candle with close above entry point (100f for Short order)
+    val endOfDayTime = tsFor(baseDate, 15, 55) // 3:55 PM UTC, 10:55 AM ET (5 minutes before close)
+    val candle = testCandle(95f, 105f, 98f, 103f, endOfDayTime) // close at 103, above entry 100
+    
+    val result = broker.updateOrderStatus(order, candle)
+    
+    assert(result.status == Loss)
+    assert(result.closeTimestamp.contains(candle.timestamp))
+  }
+
+  test("Orders not affected by end of day outside 10-minute window") {
+    val order = testOrder(Long, 100f, 110f, baseTime).copy(status = Planned)
+    // Create candle well outside 10-minute window
+    // Since isEndOfDay treats timestamps as UTC and closes at 16:00 UTC, create time at 14:00 UTC  
+    val normalTime = ZonedDateTime.of(baseDate, LocalTime.of(14, 0), ZoneId.of("UTC")).toInstant.toEpochMilli
+    val candle = testCandle(105f, 115f, 108f, 112f, normalTime) // between stopLoss(100) and takeProfit(130)
+    
+    val result = broker.updateOrderStatus(order, candle)
+    
+    // Order should remain planned since it's not end of day
+    assert(result.status == Planned)
+    assert(result.cancelReason.isEmpty)
   }
 }

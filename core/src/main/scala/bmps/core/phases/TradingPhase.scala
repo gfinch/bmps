@@ -16,8 +16,10 @@ import cats.instances.order
 import bmps.core.models.SystemStatePhase
 import bmps.core.io.PolygonAPISource
 import bmps.core.models.CandleDuration
+import bmps.core.brokers.LeadAccountBroker
 
-class TradingEventGenerator(swingService: SwingService = new SwingService(1)) extends EventGenerator with TradingDate {
+class TradingEventGenerator(leadAccount: LeadAccountBroker, swingService: SwingService = new SwingService(1)) extends EventGenerator with TradingDate {
+    require(leadAccount.brokerCount >= 1, "Must have at least one account broker defined.")
 
     def initialize(state: SystemState, options: Map[String, String] = Map.empty): SystemState = {
         val tradingDirection = OrderService.determineTradingDirection(state)
@@ -25,37 +27,40 @@ class TradingEventGenerator(swingService: SwingService = new SwingService(1)) ex
     }
 
     def process(state: SystemState, candle: Candle): (SystemState, List[Event]) = {
+        //Candle and swing processing
         val updatedCandles = state.tradingCandles :+ candle
         val (swings, directionOption) = swingService.computeSwings(updatedCandles)
         val newDirection = directionOption.getOrElse(state.swingDirection)
         val withSwings = state.copy(tradingCandles = updatedCandles, tradingSwingPoints = swings, swingDirection = newDirection)
 
-        val withOrders = withSwings //if (OrderService.isEndOfDay(candle)) {
-        //     val updatedOrders = withSwings.orders.map(_.adjustState(candle)).map(_.cancelOrSell(candle))
-        //     withSwings.copy(orders = updatedOrders)
-        // } else {
-        //     val updatedOrders = withSwings.orders.map(_.adjustState(candle))
-        //     val withOldOrders = withSwings.copy(orders = updatedOrders)
-        //     // val newTradingDirection = OrderService.determineTradingDirection(withOldOrders)
-        //     // // val withNewTradingDirection = if (!state.tradingDirection.contains(newTradingDirection)) {
-        //     // //     withOldOrders.copy(tradingDirection = Some(newTradingDirection))
-        //     // // } else withOldOrders
-        //     val withNewOrders = OrderService.buildOrders(withOldOrders)
-        //     OrderService.placeOrders(withNewOrders)
-        // }
-
+        //Order processing
+        val withNewOrders = OrderService.buildOrders(withSwings)
+        val withPlacedOrders = placeOrders(withNewOrders, candle)
+        val withOrders = adjustOrderState(withPlacedOrders, candle)
+        
+        //Event processing
         val newSwingPoints = withOrders.tradingSwingPoints.drop(state.tradingSwingPoints.length)
         val swingEvents = newSwingPoints.map(Event.fromSwingPoint)
-
         val changedOrders = withOrders.orders.filterNot(state.orders.contains)
-        val orderEvents = changedOrders.map(Event.fromOrder)
-        
-        // val tradingDirectionEvent = if (!state.tradingDirection.equals(withOrders.tradingDirection)) {
-        //     List(Event.fromTradeDirection(withOrders.tradingCandles.last, withOrders.tradingDirection))
-        // } else List.empty
+        val orderEvents = changedOrders.map(Event.fromOrder(_, leadAccount.riskPerTrade))
 
-        val allEvents = swingEvents ++ orderEvents //++ tradingDirectionEvent
+        val allEvents = swingEvents ++ orderEvents
         (withOrders, allEvents)
+    }
+
+    private def adjustOrderState(state: SystemState, candle: Candle): SystemState = {
+        val adjustedOrders = state.orders.map(o => leadAccount.updateOrderStatus(o, candle))
+        state.copy(orders = adjustedOrders)
+    }
+    
+    private def placeOrders(state: SystemState, candle: Candle): SystemState = {
+        val placedOrders = OrderService.findOrderToPlace(state).map(leadAccount.placeOrder(_, candle)) match {
+            case Some(placedOrder) =>
+                state.orders.map(order => if (order.timestamp == placedOrder.timestamp) placedOrder else order)
+            case None =>
+                state.orders
+        }
+        state.copy(orders = placedOrders)
     }
 }
 
@@ -81,5 +86,5 @@ class TradingSource extends CandleSource {
 }
 
 object TradingPhaseBuilder {
-    def build() = new PhaseRunner(new TradingSource(), new TradingEventGenerator())
+    def build(leadAccount: LeadAccountBroker) = new PhaseRunner(new TradingSource(), new TradingEventGenerator(leadAccount))
 }

@@ -17,11 +17,11 @@ object EngulfingOrderBlockService {
         val newOrder = subjects.find(s => test.engulfs(s) && test.isOpposite(s)).flatMap { subject =>
             test.direction match {
                 case Direction.Up if test.close > subject.high && precededBySteepChange(test, subject, state) && areSubstantialCandles(test, subject) => 
-                    Some(Order.fromCandle(subject, OrderType.Long, EntryType.EngulfingOrderBlock, test.timestamp).copy(profitMultiplier = 1.5))
+                    Some(Order.fromCandle(subject, OrderType.Long, EntryType.EngulfingOrderBlock, test.timestamp))
                 case Direction.Down if test.close < subject.low && precededBySteepChange(test, subject, state) && areSubstantialCandles(test, subject) =>
-                    Some(Order.fromCandle(subject, OrderType.Short, EntryType.EngulfingOrderBlock, test.timestamp).copy(profitMultiplier = 1.5))
+                    Some(Order.fromCandle(subject, OrderType.Short, EntryType.EngulfingOrderBlock, test.timestamp))
                 case _ => None
-            } 
+            }
         }
 
         newOrder.map { order =>
