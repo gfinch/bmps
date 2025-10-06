@@ -98,6 +98,34 @@ class EventPlaybackService {
   // Navigation API
 
   /**
+   * Reset playback state for all phases
+   * Clears timestamps and stops any playing intervals
+   */
+  reset() {
+    // Stop any playing intervals
+    Object.keys(this.playIntervals).forEach(phase => {
+      if (this.playIntervals[phase]) {
+        clearInterval(this.playIntervals[phase])
+        this.playIntervals[phase] = null
+      }
+    })
+    
+    // Reset playback state
+    this.isPlaying = {
+      planning: false,
+      trading: false
+    }
+    
+    // Reset timestamps
+    this.currentTimestamp = {
+      planning: null,
+      trading: null
+    }
+    
+    this.notifyListeners()
+  }
+
+  /**
    * Move to first timestamp in phase buffer
    * @param {string} phase - Phase to rewind ('planning' or 'trading')
    */

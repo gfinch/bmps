@@ -6,19 +6,18 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import phaseService from '../services/phaseService.jsx'
 import eventBufferManager from '../services/eventBuffer.jsx'
-import { useWebSocket } from './useWebSocket.jsx'
+import restApiService from '../services/restApiService.jsx'
 
 /**
  * Planning Phase Hook
  * @returns {Object} Planning state and methods
  */
 export function usePlanning() {
-  const { isConnected, status: wsStatus } = useWebSocket()
-  
   // Planning state
   const [events, setEvents] = useState([])
   const [isInitializing, setIsInitializing] = useState(false)
   const [isInitialized, setIsInitialized] = useState(false)
+  const [isPolling, setIsPolling] = useState(false)
   const [error, setError] = useState(null)
   const [currentConfig, setCurrentConfig] = useState(null)
   
@@ -53,14 +52,15 @@ export function usePlanning() {
       const status = phaseService.getStatus()
       setIsInitializing(status.isInitializing)
       setIsInitialized(status.isInitialized)
+      setIsPolling(status.isPolling)
       setCurrentConfig(status.currentConfig)
     }
     
     // Initial status update
     updatePlanningStatus()
     
-    // Set up periodic status updates (since service doesn't have listeners yet)
-    const statusInterval = setInterval(updatePlanningStatus, 1000)
+    // Set up periodic status updates
+    const statusInterval = setInterval(updatePlanningStatus, 500)
     
     // Cleanup
     return () => {
@@ -74,8 +74,7 @@ export function usePlanning() {
   /**
    * Initialize planning phase with configuration
    * @param {Object} config - Planning configuration
-   * @param {string} config.tradingDate - Trading date
-   * @param {number} config.planningDays - Number of planning days
+   * @param {string} config.tradingDate - Trading date (system uses 2 trading days automatically)
    */
   const startPlanning = useCallback(async (config) => {
     console.debug('usePlanning: Starting planning with config:', config)
@@ -118,7 +117,7 @@ export function usePlanning() {
   const eventCount = events.length
   const latestEvent = events.length > 0 ? events[events.length - 1] : null
   const hasEvents = eventCount > 0
-  const canStart = isConnected && !isInitializing
+  const canStart = !isInitializing && !isPolling
   const hasError = error !== null
 
   // Event filtering helpers
@@ -155,11 +154,8 @@ export function usePlanning() {
     // State
     isInitializing,
     isInitialized,
+    isPolling,
     currentConfig,
-    
-    // Connection state
-    isConnected,
-    wsStatus,
     canStart,
     
     // Error state
@@ -182,8 +178,8 @@ export function usePlanning() {
     getStatusMessage: () => {
       if (hasError) return error
       if (isInitializing) return 'Initializing planning phase...'
-      if (isInitialized) return `Planning active (${eventCount} events)`
-      if (!isConnected) return 'Waiting for connection...'
+      if (isPolling) return `Polling for events (${eventCount} events)`
+      if (isInitialized) return `Planning complete (${eventCount} events)`
       return 'Ready to start planning'
     }
   }

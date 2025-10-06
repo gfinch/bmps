@@ -5,10 +5,9 @@ import cats.effect.Ref
 import cats.effect.std.Semaphore
 import bmps.core.models.SystemState
 import bmps.core.models.SystemStatePhase
-import bmps.core.api.run.Broadcaster
-import bmps.core.api.run.PhaseController
-import bmps.core.api.impl.PhaseRunner
-import bmps.core.api.io.Server
+import bmps.core.api.run.{PhaseController, PhaseRunner}
+import bmps.core.api.io.RestServer
+import bmps.core.api.storage.EventStore
 import bmps.core.phases.PlanningPhaseBuilder
 import bmps.core.phases.PreparingPhaseBuilder
 import bmps.core.phases.TradingPhaseBuilder
@@ -18,6 +17,7 @@ import bmps.core.brokers.{AccountBroker, AccountBrokerFactory, BrokerType}
 import com.typesafe.config.ConfigFactory
 import scala.jdk.CollectionConverters._
 import bmps.core.brokers.LeadAccountBroker
+import bmps.core.services.ReportService
 
 object AppLauncher extends IOApp.Simple {
   
@@ -44,13 +44,11 @@ object AppLauncher extends IOApp.Simple {
   }
 
   /** Create the shared pieces and return resources that include a running
-    * HTTP/WebSocket server that serves `webRoot` on the given port. The
-    * runners map is left empty; populate when wiring real CandleSource/
-    * EventGenerator implementations.
+    * REST API server on port 8081 for phase control and event retrieval.
     */
-  def createResource(webRoot: String = "web-react/dist", port: Int = 8080): Resource[IO, (Ref[IO, SystemState], Broadcaster, PhaseController, org.http4s.server.Server)] = for {
+  def createResource(restPort: Int = 8081): Resource[IO, (Ref[IO, SystemState], PhaseController, org.http4s.server.Server)] = for {
     stateRef <- Resource.eval(Ref.of[IO, SystemState](SystemState()))
-    broadcaster <- Resource.eval(Broadcaster.create(Some(10000)))
+    eventStore <- Resource.eval(EventStore.create())
     sem <- Resource.eval(Semaphore[IO](1))
     // Load account brokers from configuration
     leadAccount = loadAccountBrokers()
@@ -60,12 +58,18 @@ object AppLauncher extends IOApp.Simple {
       SystemStatePhase.Preparing -> PreparingPhaseBuilder.build(),
       SystemStatePhase.Trading -> TradingPhaseBuilder.build(leadAccount)
     )
-    controller = new PhaseController(stateRef, broadcaster, runners, sem)
-    server <- Server.resource(stateRef, controller, broadcaster, webRoot, port)
-  } yield (stateRef, broadcaster, controller, server)
+    controller = new PhaseController(stateRef, eventStore, runners, sem)
+    // Create report service
+    reportService = new ReportService(eventStore, leadAccount)
+    // Start REST API server on port 8081
+    restServer <- RestServer.resource(controller, eventStore, leadAccount, reportService, restPort)
+  } yield (stateRef, controller, restServer)
 
-  val run: IO[Unit] = createResource().use { case (stateRef, broadcaster, controller, server) =>
-    IO.println("Server started on port 8080") *> IO.never
+  val run: IO[Unit] = createResource().use { case (stateRef, controller, restServer) =>
+    IO.println("REST API server started on port 8081") *>
+    IO.println("Use PUT /phase/start to start a phase") *>
+    IO.println("Use GET /phase/events?tradingDate=YYYY-MM-DD&phase=<phase> to get events") *>
+    IO.never
   }
 
 }

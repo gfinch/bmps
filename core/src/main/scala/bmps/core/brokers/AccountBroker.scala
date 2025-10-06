@@ -15,6 +15,10 @@ object BrokerType {
     case object SimulatedAccountBroker extends BrokerType
 }
 
+case class OrderReport(orders: List[SerializableOrder], winning: Int, losing: Int,
+                       averageWinDollars: Double, averageLossDollars: Double,
+                       maxDrawdownDollars: Double, totalPnL: Double)
+
 trait AccountBroker {
     val accountId: String
     val riskPerTrade: Double
@@ -26,9 +30,71 @@ trait AccountBroker {
     def takeLoss(order: Order, candle: Candle): Order
     def exitOrder(order: Order, candle: Candle): Order
     def cancelOrder(order: Order, candle: Candle, cancelReason: String): Order
+    
+    def orderReport(serializableOrders: List[SerializableOrder]): OrderReport = {
+        // Filter for completed orders (Profit or Loss)
+        val completedOrders = serializableOrders.filter(o => 
+            o.status == OrderStatus.Profit || o.status == OrderStatus.Loss
+        )
+        
+        // Count wins and losses
+        val winningOrders = completedOrders.filter(_.status == OrderStatus.Profit)
+        val losingOrders = completedOrders.filter(_.status == OrderStatus.Loss)
+        val winning = winningOrders.length
+        val losing = losingOrders.length
+        
+        // Calculate average win/loss dollars
+        val averageWinDollars = if (winning > 0) {
+            winningOrders.map(_.potential).sum / winning
+        } else 0.0
+        
+        val averageLossDollars = if (losing > 0) {
+            losingOrders.map(_.atRisk).sum / losing
+        } else 0.0
+        
+        // Calculate max drawdown: largest drop from peak P&L
+        val maxDrawdownDollars = if (completedOrders.nonEmpty) {
+            // Sort by close timestamp to get chronological order
+            val chronological = completedOrders.sortBy(_.closeTimestamp.getOrElse(0L))
+            
+            // Calculate running P&L and track max drawdown
+            val (_, _, maxDD) = chronological.foldLeft((0.0, 0.0, 0.0)) { 
+                case ((runningPnL, peakPnL, currentMaxDD), order) =>
+                    val pnl = if (order.status == OrderStatus.Profit) order.potential else -order.atRisk
+                    val newRunningPnL = runningPnL + pnl
+                    val newPeakPnL = Math.max(peakPnL, newRunningPnL)
+                    val drawdown = newPeakPnL - newRunningPnL
+                    val newMaxDD = Math.max(currentMaxDD, drawdown)
+                    (newRunningPnL, newPeakPnL, newMaxDD)
+            }
+            maxDD
+        } else 0.0
+        
+        // Calculate total P&L
+        val totalPnL = (winning * averageWinDollars) - (losing * averageLossDollars)
+        
+        OrderReport(serializableOrders, winning, losing, averageWinDollars, averageLossDollars, maxDrawdownDollars, totalPnL)
+    }
+    
+    /**
+     * Determine profitability status for a list of orders
+     * @param orders List of serializable orders
+     * @return Some(true) if profitable (P&L > 0), 
+     *         Some(false) if unprofitable (P&L < 0),
+     *         None if neutral (no trades or P&L = 0)
+     */
+    def isProfitable(orders: List[SerializableOrder]): Option[Boolean] = {
+        if (orders.isEmpty) return None
+        
+        val report = orderReport(orders)
+        
+        if (report.totalPnL > 0) Some(true)
+        else if (report.totalPnL < 0) Some(false)
+        else None
+    }
 }
 
-class LeadAccountBroker(brokers: List[AccountBroker], riskDollars: Double = 550.0) extends AccountBroker {
+class LeadAccountBroker(val brokers: List[AccountBroker], riskDollars: Double = 550.0) extends AccountBroker {
     final val TenMinutes = Duration.ofMinutes(10).toMillis()
 
     val accountId = "LeadAccountBroker"

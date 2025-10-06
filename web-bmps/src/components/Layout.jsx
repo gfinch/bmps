@@ -1,9 +1,9 @@
 import { NavLink, useLocation } from 'react-router-dom'
-import { Settings, TrendingUp, LineChart, BarChart3 } from 'lucide-react'
-import { useWebSocket } from '../hooks/useWebSocket.jsx'
+import { TrendingUp, LineChart, BarChart3 } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import restApiService from '../services/restApiService.jsx'
 
 const navItems = [
-  { path: '/config', label: 'Configuration', icon: Settings },
   { path: '/planning', label: 'Planning Chart', icon: TrendingUp },
   { path: '/trading', label: 'Trading Chart', icon: LineChart },
   { path: '/results', label: 'Results', icon: BarChart3 }
@@ -11,7 +11,23 @@ const navItems = [
 
 export default function Layout({ children }) {
   const location = useLocation()
-  const { isConnected } = useWebSocket()
+  const [isConnected, setIsConnected] = useState(false)
+
+  useEffect(() => {
+    const checkHealth = async () => {
+      try {
+        const healthy = await restApiService.checkHealth()
+        setIsConnected(healthy)
+      } catch (err) {
+        setIsConnected(false)
+      }
+    }
+    
+    checkHealth()
+    const interval = setInterval(checkHealth, 10000)
+    
+    return () => clearInterval(interval)
+  }, [])
   
   // Pages that should use full viewport height without padding
   const fullHeightPages = ['/planning', '/trading']

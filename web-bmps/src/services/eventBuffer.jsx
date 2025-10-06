@@ -113,6 +113,43 @@ class EventBuffer {
   }
 
   /**
+   * Replace events from a specific source phase while preserving events from other phases
+   * Used when multiple phases write to the same buffer (e.g., preparing and trading both write to 'trading' buffer)
+   * @param {Event[]} newEvents - New events to add/replace
+   * @param {string} sourcePhase - The source phase of these events ('preparing' or 'trading')
+   */
+  replaceEventsForPhase(newEvents, sourcePhase) {
+    if (!Array.isArray(newEvents)) {
+      console.warn('replaceEventsForPhase called with non-array:', newEvents)
+      return
+    }
+
+    console.debug(`Replacing events from ${sourcePhase} phase in ${this.phase} buffer`)
+    console.debug(`Before: ${this.events.length} events`)
+    
+    // Filter out events from the source phase, keep events from other phases
+    const eventsFromOtherPhases = this.events.filter(event => {
+      // Keep events that don't have a sourcePhase metadata or have a different sourcePhase
+      return event.sourcePhase !== sourcePhase
+    })
+    
+    // Add sourcePhase metadata to new events
+    const newEventsWithMetadata = newEvents.map(event => ({
+      ...event,
+      sourcePhase: sourcePhase,
+      phase: event.phase || this.phase
+    }))
+    
+    // Combine and sort by timestamp
+    this.events = [...eventsFromOtherPhases, ...newEventsWithMetadata]
+      .sort((a, b) => a.timestamp - b.timestamp)
+    
+    console.debug(`After: ${this.events.length} events (${eventsFromOtherPhases.length} preserved, ${newEventsWithMetadata.length} new)`)
+    
+    this.notifyListeners()
+  }
+
+  /**
    * Add a listener for event changes
    * @param {function(): void} listener - Callback function
    */
