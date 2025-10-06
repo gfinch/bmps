@@ -7,28 +7,20 @@ import cats.effect.IO
 import bmps.core.services.{SwingService, PlanZoneService, LiquidityZoneService}
 import bmps.core.io.ParquetSource
 import bmps.core.models.{SystemState, Event, Candle}
-import bmps.core.api.intf.EventGenerator
-import bmps.core.api.intf.CandleSource
-import bmps.core.api.impl.PhaseRunner
+import bmps.core.api.intf.{EventGenerator, CandleSource}
+import bmps.core.api.run.PhaseRunner
 import bmps.core.models.SystemStatePhase
 import bmps.core.models.CandleDuration
 import bmps.core.io.PolygonAPISource
 
 class PlanningEventGenerator(swingService: SwingService = new SwingService(1)) extends EventGenerator with TradingDate {
     def initialize(state: SystemState, options: Map[String, String] = Map.empty): SystemState = {
-        (options.get("tradingDate"), options.get("planningDays")) match {
-            case (Some(tradeDate), Some(daysStr)) =>
-                val localDate = parseTradingDate(tradeDate)
-                val days = daysStr.toInt
-                state.copy(systemStatePhase = SystemStatePhase.Planning, tradingDay = localDate, planningDays = days)
-            case (Some(tradeDate), None) =>
+        options.get("tradingDate") match {
+            case Some(tradeDate) =>
                 val localDate = parseTradingDate(tradeDate)
                 state.copy(systemStatePhase = SystemStatePhase.Planning, tradingDay = localDate)
-            case (None, Some(daysStr)) =>
-                val days = daysStr.toInt
-                state.copy(systemStatePhase = SystemStatePhase.Planning, planningDays = days)
-            case (None, None) =>
-                state
+            case None =>
+                state.copy(systemStatePhase = SystemStatePhase.Planning)
         }
     }
 
@@ -60,10 +52,14 @@ class PlanningSource extends CandleSource {
 
     private def computePlanningWindow(state: SystemState): (Long, Long, java.time.ZoneId) = {
         import java.time.{ZoneId, ZonedDateTime, LocalTime}
+        import bmps.core.utils.MarketCalendar
+        
         val zoneId = ZoneId.of("America/New_York")
         val tradingDay = state.tradingDay
-        val planningDays = state.planningDays
-        val startDate = tradingDay.minusDays(planningDays)
+        
+        // Calculate the date that's 2 trading days before tradingDay
+        val startDate = MarketCalendar.getTradingDaysBack(tradingDay, 2)
+        
         val startDateTime = ZonedDateTime.of(startDate, LocalTime.of(9, 0), zoneId)
         val endDateTime = ZonedDateTime.of(tradingDay, LocalTime.of(16, 0), zoneId)
         val startMs = startDateTime.toInstant.toEpochMilli

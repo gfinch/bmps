@@ -1,17 +1,39 @@
 import { useRef, useState, useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
 import { createChart } from 'lightweight-charts'
-import { Play, Pause, SkipBack, SkipForward, Rewind, FastForward, Scissors } from 'lucide-react'
+import { Play, Pause, SkipBack, SkipForward, Rewind, FastForward, Scissors, Calendar, AlertCircle } from 'lucide-react'
 import { useEventPlayback } from '../hooks/useEventPlayback.jsx'
+import { usePlanning } from '../hooks/usePlanning.jsx'
 import { ChartRenderingService } from '../services/chartRenderingService.jsx'
 import { CandlestickRenderer, DaytimeExtremeRenderer, PlanZoneRenderer } from '../renderers/index.js'
+import phaseService from '../services/phaseService.jsx'
 
 export default function PlanningChartPage() {
+  const location = useLocation()
   const chartContainerRef = useRef()
   const chartRef = useRef()
   const chartServiceRef = useRef()
   
   // Use event playback hook for planning phase
   const playback = useEventPlayback('planning')
+
+  // Use planning hook for configuration and starting planning
+  const {
+    startPlanning,
+    isInitializing,
+    canStart,
+    error,
+    hasError,
+    clearEvents
+  } = usePlanning()
+
+  // Get today's date in YYYY-MM-DD format
+  const today = new Date().toISOString().split('T')[0]
+  
+  // Trading date state - use stored config date if available, otherwise default to today
+  const [tradingDate, setTradingDate] = useState(() => {
+    return phaseService.currentConfig?.tradingDate || today
+  })
 
   // Layer visibility state
   const [layerVisibility, setLayerVisibility] = useState({
@@ -23,6 +45,38 @@ export default function PlanningChartPage() {
 
   // Clip tool state
   const [isClipToolActive, setIsClipToolActive] = useState(false)
+
+  // Sync trading date with phaseService when component mounts or config changes
+  useEffect(() => {
+    if (phaseService.currentConfig?.tradingDate) {
+      setTradingDate(phaseService.currentConfig.tradingDate)
+    }
+  }, []) // Run once on mount to pick up any existing config
+
+  // Handle navigation from other pages (e.g., clicking date in Results page)
+  useEffect(() => {
+    if (location.state?.tradingDate) {
+      const { tradingDate: navDate, autoStart } = location.state
+      setTradingDate(navDate)
+      
+      // Auto-start planning if requested
+      if (autoStart) {
+        // Clear the navigation state to prevent re-triggering
+        window.history.replaceState({}, document.title)
+        
+        // Start planning after a short delay to ensure state is updated
+        setTimeout(async () => {
+          try {
+            clearEvents()
+            await startPlanning({ tradingDate: navDate })
+            console.log('Auto-started planning for date:', navDate)
+          } catch (err) {
+            console.error('Failed to auto-start planning:', err)
+          }
+        }, 100)
+      }
+    }
+  }, [location.state])
 
   // Initialize chart
   useEffect(() => {
@@ -201,6 +255,20 @@ export default function PlanningChartPage() {
     console.log(`Clip tool ${!isClipToolActive ? 'activated' : 'deactivated'}`)
   }
 
+  const handleStartPlanning = async () => {
+    try {
+      // Clear all buffers and reset playback
+      clearEvents()
+      
+      // Start planning with the selected trading date
+      await startPlanning({ tradingDate })
+      console.log('Planning started successfully for date:', tradingDate)
+    } catch (err) {
+      console.error('Failed to start planning:', err)
+      // Error is already handled by the hook
+    }
+  }
+
   const handleChartClick = (event) => {
     if (!isClipToolActive || !chartRef.current) return
     
@@ -288,58 +356,92 @@ export default function PlanningChartPage() {
         </div>
       </div>
 
-      {/* Media Controls - fixed at bottom */}
-      <div className="flex-shrink-0 py-2">
-        <div className="flex items-center justify-center space-x-3">
-          <button
-            onClick={handleRewind}
-            className="p-3 text-gray-600 hover:text-gray-800 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
-            title="Rewind"
-          >
-            <Rewind className="w-5 h-5" />
-          </button>
-          <button
-            onClick={handleStepBackward}
-            className="p-3 text-gray-600 hover:text-gray-800 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
-            title="Step Back"
-          >
-            <SkipBack className="w-5 h-5" />
-          </button>
-          <button
-            onClick={handlePlay}
-            className="p-3 btn-primary"
-            title={playback.isPlaying ? 'Pause' : 'Play'}
-          >
-            {playback.isPlaying ? (
-              <Pause className="w-5 h-5" />
-            ) : (
-              <Play className="w-5 h-5" />
+      {/* Media Controls and Configuration - fixed at bottom */}
+      <div className="flex-shrink-0 py-3 border-t border-gray-200">
+        <div className="flex items-center justify-between px-4">
+          {/* Left: Trading Date Configuration */}
+          <div className="flex items-center space-x-3">
+            <label className="flex items-center space-x-2 text-sm font-medium text-gray-700">
+              <Calendar className="w-4 h-4" />
+              <span>Trading Date:</span>
+            </label>
+            <input
+              type="date"
+              value={tradingDate}
+              onChange={(e) => setTradingDate(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={isInitializing}
+            />
+            <button
+              onClick={handleStartPlanning}
+              disabled={!canStart || isInitializing}
+              className="px-4 py-2 btn-primary text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isInitializing ? 'Starting...' : 'Start Planning'}
+            </button>
+            {hasError && (
+              <div className="flex items-center space-x-1 text-red-600">
+                <AlertCircle className="w-4 h-4" />
+                <span className="text-sm">{error}</span>
+              </div>
             )}
-          </button>
-          <button
-            onClick={handleStepForward}
-            className="p-3 text-gray-600 hover:text-gray-800 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
-            title="Step Forward"
-          >
-            <SkipForward className="w-5 h-5" />
-          </button>
-          <button
-            onClick={handleFastForward}
-            className="p-3 text-gray-600 hover:text-gray-800 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
-            title="Fast Forward"
-          >
-            <FastForward className="w-5 h-5" />
-          </button>
-          <button
-            onClick={handleClipToolToggle}
-            className={`p-3 border border-gray-300 rounded-md ${isClipToolActive 
-              ? 'bg-blue-500 text-white hover:bg-blue-600' 
-              : 'text-gray-600 hover:text-gray-800 bg-white hover:bg-gray-50'
-            }`}
-            title="Clip Tool - Click to activate, then click on chart to jump to timestamp"
-          >
-            <Scissors className="w-5 h-5" />
-          </button>
+          </div>
+
+          {/* Center: Playback Controls */}
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={handleRewind}
+              className="p-3 text-gray-600 hover:text-gray-800 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+              title="Rewind"
+            >
+              <Rewind className="w-5 h-5" />
+            </button>
+            <button
+              onClick={handleStepBackward}
+              className="p-3 text-gray-600 hover:text-gray-800 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+              title="Step Back"
+            >
+              <SkipBack className="w-5 h-5" />
+            </button>
+            <button
+              onClick={handlePlay}
+              className="p-3 btn-primary"
+              title={playback.isPlaying ? 'Pause' : 'Play'}
+            >
+              {playback.isPlaying ? (
+                <Pause className="w-5 h-5" />
+              ) : (
+                <Play className="w-5 h-5" />
+              )}
+            </button>
+            <button
+              onClick={handleStepForward}
+              className="p-3 text-gray-600 hover:text-gray-800 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+              title="Step Forward"
+            >
+              <SkipForward className="w-5 h-5" />
+            </button>
+            <button
+              onClick={handleFastForward}
+              className="p-3 text-gray-600 hover:text-gray-800 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+              title="Fast Forward"
+            >
+              <FastForward className="w-5 h-5" />
+            </button>
+            <button
+              onClick={handleClipToolToggle}
+              className={`p-3 border border-gray-300 rounded-md ${isClipToolActive 
+                ? 'bg-blue-500 text-white hover:bg-blue-600' 
+                : 'text-gray-600 hover:text-gray-800 bg-white hover:bg-gray-50'
+              }`}
+              title="Clip Tool - Click to activate, then click on chart to jump to timestamp"
+            >
+              <Scissors className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Right: Spacer for balance */}
+          <div className="w-64"></div>
         </div>
       </div>
     </div>

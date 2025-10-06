@@ -7,9 +7,8 @@ import cats.effect.IO
 import bmps.core.services.{SwingService, PlanZoneService, LiquidityZoneService}
 import bmps.core.io.ParquetSource
 import bmps.core.models.{SystemState, Event, Candle}
-import bmps.core.api.intf.EventGenerator
-import bmps.core.api.intf.CandleSource
-import bmps.core.api.impl.PhaseRunner
+import bmps.core.api.intf.{EventGenerator, CandleSource}
+import bmps.core.api.run.PhaseRunner
 import bmps.core.models.Order
 import bmps.core.services.OrderService
 import cats.instances.order

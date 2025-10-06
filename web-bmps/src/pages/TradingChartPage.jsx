@@ -1,9 +1,10 @@
 import { useRef, useState, useEffect } from 'react'
 import { createChart, CandlestickSeries } from 'lightweight-charts'
-import { Play, Pause, SkipBack, SkipForward, Rewind, FastForward, Scissors } from 'lucide-react'
+import { Play, Pause, SkipBack, SkipForward, Rewind, FastForward, Scissors, Calendar } from 'lucide-react'
 import { useEventPlayback } from '../hooks/useEventPlayback.jsx'
 import { ChartRenderingService } from '../services/chartRenderingService.jsx'
 import { CandlestickRenderer, DaytimeExtremeRenderer, PlanZoneRenderer, OrderRenderer, TradingDirectionRenderer } from '../renderers/index.js'
+import phaseService from '../services/phaseService.jsx'
 
 export default function TradingChartPage() {
   const chartContainerRef = useRef()
@@ -12,6 +13,10 @@ export default function TradingChartPage() {
   
   // Use event playback hook for trading phase
   const playback = useEventPlayback('trading')
+
+  // Get trading date from phase service (read-only)
+  const today = new Date().toISOString().split('T')[0]
+  const tradingDate = phaseService.currentConfig?.tradingDate || today
 
   // Layer visibility state
   const [layerVisibility, setLayerVisibility] = useState({
@@ -364,58 +369,79 @@ export default function TradingChartPage() {
         </div>
       </div>
 
-      {/* Media Controls - fixed at bottom */}
-      <div className="flex-shrink-0 py-2">
-        <div className="flex items-center justify-center space-x-3">
-          <button
-            onClick={handleRewind}
-            className="p-3 text-gray-600 hover:text-gray-800 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
-            title="Rewind"
-          >
-            <Rewind className="w-5 h-5" />
-          </button>
-          <button
-            onClick={handleStepBackward}
-            className="p-3 text-gray-600 hover:text-gray-800 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
-            title="Step Back"
-          >
-            <SkipBack className="w-5 h-5" />
-          </button>
-          <button
-            onClick={handlePlay}
-            className="p-3 btn-primary"
-            title={playback.isPlaying ? 'Pause' : 'Play'}
-          >
-            {playback.isPlaying ? (
-              <Pause className="w-5 h-5" />
-            ) : (
-              <Play className="w-5 h-5" />
-            )}
-          </button>
-          <button
-            onClick={handleStepForward}
-            className="p-3 text-gray-600 hover:text-gray-800 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
-            title="Step Forward"
-          >
-            <SkipForward className="w-5 h-5" />
-          </button>
-          <button
-            onClick={handleFastForward}
-            className="p-3 text-gray-600 hover:text-gray-800 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
-            title="Fast Forward"
-          >
-            <FastForward className="w-5 h-5" />
-          </button>
-          <button
-            onClick={handleClipToolToggle}
-            className={`p-3 border border-gray-300 rounded-md ${isClipToolActive 
-              ? 'bg-blue-500 text-white hover:bg-blue-600' 
-              : 'text-gray-600 hover:text-gray-800 bg-white hover:bg-gray-50'
-            }`}
-            title="Clip Tool - Click to activate, then click on chart to jump to timestamp"
-          >
-            <Scissors className="w-5 h-5" />
-          </button>
+      {/* Media Controls and Trading Date Display - fixed at bottom */}
+      <div className="flex-shrink-0 py-3 border-t border-gray-200">
+        <div className="flex items-center justify-between px-4">
+          {/* Left: Trading Date Display (Read-only) */}
+          <div className="flex items-center space-x-3">
+            <label className="flex items-center space-x-2 text-sm font-medium text-gray-700">
+              <Calendar className="w-4 h-4" />
+              <span>Trading Date:</span>
+            </label>
+            <input
+              type="date"
+              value={tradingDate}
+              readOnly
+              className="px-3 py-2 border border-gray-300 rounded-md text-sm bg-gray-50 cursor-not-allowed"
+              title="Trading date is read-only in Trading phase"
+            />
+          </div>
+
+          {/* Center: Playback Controls */}
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={handleRewind}
+              className="p-3 text-gray-600 hover:text-gray-800 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+              title="Rewind"
+            >
+              <Rewind className="w-5 h-5" />
+            </button>
+            <button
+              onClick={handleStepBackward}
+              className="p-3 text-gray-600 hover:text-gray-800 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+              title="Step Back"
+            >
+              <SkipBack className="w-5 h-5" />
+            </button>
+            <button
+              onClick={handlePlay}
+              className="p-3 btn-primary"
+              title={playback.isPlaying ? 'Pause' : 'Play'}
+            >
+              {playback.isPlaying ? (
+                <Pause className="w-5 h-5" />
+              ) : (
+                <Play className="w-5 h-5" />
+              )}
+            </button>
+            <button
+              onClick={handleStepForward}
+              className="p-3 text-gray-600 hover:text-gray-800 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+              title="Step Forward"
+            >
+              <SkipForward className="w-5 h-5" />
+            </button>
+            <button
+              onClick={handleFastForward}
+              className="p-3 text-gray-600 hover:text-gray-800 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+              title="Fast Forward"
+            >
+              <FastForward className="w-5 h-5" />
+            </button>
+            <button
+              onClick={handleClipToolToggle}
+              className={`p-3 border border-gray-300 rounded-md ${isClipToolActive 
+                ? 'bg-blue-500 text-white hover:bg-blue-600' 
+                : 'text-gray-600 hover:text-gray-800 bg-white hover:bg-gray-50'
+              }`}
+              title="Clip Tool - Click to activate, then click on chart to jump to timestamp"
+            >
+              <Scissors className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Right: Spacer for balance */}
+          <div className="w-64"></div>
         </div>
       </div>
     </div>

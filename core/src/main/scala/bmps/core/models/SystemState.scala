@@ -12,7 +12,6 @@ object SystemStatePhase {
 
 case class SystemState(
     tradingDay: LocalDate = LocalDate.now(),
-    planningDays: Int = 30,
     
     swingDirection: Direction = Direction.Up,
     systemStatePhase: SystemStatePhase = Planning,
