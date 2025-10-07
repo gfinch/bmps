@@ -1,13 +1,17 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { BarChart3, TrendingUp, TrendingDown, DollarSign, Clock, RefreshCw, AlertCircle, Calendar, ChevronLeft, ChevronRight } from 'lucide-react'
 import { DayPicker } from 'react-day-picker'
 import 'react-day-picker/dist/style.css'
+import { createChart, BaselineSeries } from 'lightweight-charts'
 import restApiService from '../services/restApiService.jsx'
 import phaseService from '../services/phaseService.jsx'
 
 export default function ResultsPage() {
   const navigate = useNavigate()
+  const chartContainerRef = useRef()
+  const chartRef = useRef()
+  const baselineSeriesRef = useRef()
   const [activeTab, setActiveTab] = useState('overview')
   const [orderReport, setOrderReport] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -73,6 +77,14 @@ export default function ResultsPage() {
         ? await restApiService.getAggregateOrderReport()
         : await restApiService.getOrderReport(tradingDate)
       setOrderReport(report)
+      
+      // Always refresh the all-time P&L display
+      const allTimeReport = await restApiService.getAggregateOrderReport()
+      setAllTimePnL(allTimeReport.totalPnL)
+      
+      // Refresh available dates to update calendar colors
+      const dateInfos = await restApiService.getAvailableDates()
+      setAvailableDates(dateInfos)
     } catch (err) {
       console.error('Failed to fetch order report:', err)
       setError(err.message)
@@ -81,6 +93,157 @@ export default function ResultsPage() {
       setLoading(false)
     }
   }
+
+  // Initialize chart when container becomes available
+  useEffect(() => {
+    // Don't initialize if no data to show
+    if (!orderReport) {
+      return
+    }
+
+    if (!chartContainerRef.current) {
+      return
+    }
+
+    // If chart already exists, don't recreate
+    if (chartRef.current) {
+      return
+    }
+
+    const container = chartContainerRef.current
+    
+    // Wait for container to have dimensions
+    if (container.clientWidth === 0 || container.clientHeight === 0) {
+      return
+    }
+
+    // Clear container
+    container.innerHTML = ''
+
+    // Create the chart
+    const chart = createChart(container, {
+      width: container.clientWidth,
+      height: 400,
+      layout: {
+        background: { color: '#ffffff' },
+        textColor: '#333',
+      },
+      grid: {
+        vertLines: { color: '#f0f0f0' },
+        horzLines: { color: '#f0f0f0' },
+      },
+      crosshair: {
+        mode: 0,
+      },
+      rightPriceScale: {
+        borderColor: '#cccccc',
+      },
+      timeScale: {
+        borderColor: '#cccccc',
+        timeVisible: true,
+        secondsVisible: false,
+      },
+    })
+
+    chartRef.current = chart
+
+    // Handle resize
+    const handleResize = () => {
+      if (chartRef.current && container) {
+        chartRef.current.applyOptions({ width: container.clientWidth })
+      }
+    }
+    window.addEventListener('resize', handleResize)
+
+    // Cleanup function
+    return () => {
+      window.removeEventListener('resize', handleResize)
+      if (chartRef.current) {
+        chartRef.current.remove()
+        chartRef.current = null
+      }
+      baselineSeriesRef.current = null
+    }
+  }, [orderReport])
+
+  // Update chart data when orderReport changes
+  useEffect(() => {
+    // Add a small delay to ensure chart is fully initialized
+    const timer = setTimeout(() => {
+      // Make sure we have both chart and data before proceeding
+      if (!chartRef.current || !orderReport || !orderReport.orders) {
+        return
+      }
+
+      // Remove existing series if it exists
+      if (baselineSeriesRef.current && chartRef.current) {
+        try {
+          chartRef.current.removeSeries(baselineSeriesRef.current)
+          baselineSeriesRef.current = null
+        } catch (e) {
+          console.error('Error removing baseline series:', e)
+        }
+      }
+
+      // Process trades into cumulative P&L data
+      const completedOrders = orderReport.orders
+        .filter(order => {
+          const status = typeof order.status === 'object' ? Object.keys(order.status)[0] : order.status
+          return status === 'Profit' || status === 'Loss'
+        })
+        .sort((a, b) => (a.closeTimestamp || 0) - (b.closeTimestamp || 0))
+
+      // If no completed orders, don't create series
+      if (completedOrders.length === 0) {
+        return
+      }
+
+      // Calculate cumulative P&L
+      let cumulativePnL = 0
+      const pnlData = completedOrders.map(order => {
+        const status = typeof order.status === 'object' ? Object.keys(order.status)[0] : order.status
+        const pnl = status === 'Profit' ? order.potential : -order.atRisk
+        cumulativePnL += pnl
+
+        return {
+          time: order.closeTimestamp / 1000, // Convert to seconds for TradingView
+          value: cumulativePnL
+        }
+      })
+
+      // Add starting point at 0 if we have data
+      if (pnlData.length > 0) {
+        const firstTime = pnlData[0].time
+        pnlData.unshift({ time: firstTime - 1, value: 0 })
+      }
+
+            // Create baseline series
+      try {
+        baselineSeriesRef.current = chartRef.current.addSeries(BaselineSeries, {
+          baseValue: { type: 'price', price: 0 },
+          topLineColor: '#22c55e', // Green for profits
+          topFillColor1: 'rgba(34, 197, 94, 0.28)',
+          topFillColor2: 'rgba(34, 197, 94, 0.05)',
+          bottomLineColor: '#ef4444', // Red for losses
+          bottomFillColor1: 'rgba(239, 68, 68, 0.05)',
+          bottomFillColor2: 'rgba(239, 68, 68, 0.28)',
+          lineWidth: 2,
+          crosshairMarkerVisible: true,
+          lastValueVisible: true,
+          priceLineVisible: true,
+        })
+
+        baselineSeriesRef.current.setData(pnlData)
+
+        // Fit content
+        chartRef.current.timeScale().fitContent()
+      } catch (e) {
+        console.error('Error creating chart series:', e)
+      }
+    }, 50) // 50ms delay to ensure chart is ready
+
+    return () => clearTimeout(timer)
+  }, [orderReport])
 
   // Get sorted list of available date strings for navigation
   const availableDateStrings = availableDates
@@ -529,6 +692,13 @@ export default function ResultsPage() {
           )}
         </div>
       </div>
+
+      {/* P&L Chart */}
+      {orderReport && trades.length > 0 && (
+        <div className="card p-6">
+          <div ref={chartContainerRef} className="w-full bg-white" style={{ height: '400px' }} />
+        </div>
+      )}
     </div>
   )
 }

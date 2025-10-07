@@ -1,7 +1,7 @@
 ThisBuild / scalaVersion := "2.13.12"
 
 lazy val root = (project in file("."))
-  .aggregate(core)
+  .aggregate(core, console)
   .settings(
     name := "bmps"
   )
@@ -22,4 +22,18 @@ lazy val core = (project in file("core"))
       "org.scalatest" %% "scalatest" % "3.2.17" % Test,
       "org.typelevel" %% "cats-effect-testing-scalatest" % "1.5.0" % Test
     )
+  )
+
+lazy val console = (project in file("console"))
+  .settings(
+    name := "bmps-console",
+    libraryDependencies ++= Seq(
+      "org.typelevel" %% "cats-effect" % "3.5.4",
+      "com.squareup.okhttp3" % "okhttp" % "4.12.0",
+      "io.circe" %% "circe-core" % "0.14.6",
+      "io.circe" %% "circe-generic" % "0.14.6",
+      "io.circe" %% "circe-parser" % "0.14.6",
+      "ch.qos.logback" % "logback-classic" % "1.4.11"
+    ),
+    Compile / mainClass := Some("bmps.console.ConsoleClient")
   )
