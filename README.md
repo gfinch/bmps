@@ -1,10 +1,26 @@
-# BMPS
+# BMPS - Backtesting and Market Pattern System
 
-A Scala project with three components:
+A Scala-based algorithmic trading research and backtesting framework for futures markets.
 
-- **Core**: A library that reads from a websocket, performs computations, and writes events via websocket using fs2.
-- **Web**: A web app that reads events from core and displays them.
-- **Console**: A console app that reads events from core and prints them to stdout.
+## ⚠️ Important Legal Notice
+
+**This is personal educational software for individual use only.**
+
+Before using this software, **you must read** [LEGAL_DISCLAIMER.md](./LEGAL_DISCLAIMER.md).
+
+Key points:
+- ✅ For personal research and education
+- ✅ Each user runs their own independent instance
+- ✅ Each user subscribes to their own market data
+- ❌ Not investment advice
+- ❌ No performance guarantees
+- ❌ Use at your own risk
+
+## Project Components
+
+- **Core**: Streaming data processing, strategy backtesting, and live trading engine using fs2
+- **Web**: Real-time visualization dashboard for monitoring strategies and positions
+- **Console**: Command-line interface for backtesting and analysis
 
 ## Setup
 

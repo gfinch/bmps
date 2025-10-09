@@ -1,0 +1,6431 @@
+Quickstart
+
+Set up Databento
+
+Choose a service
+
+Build your first application
+
+New user guides
+
+[]Examples and tutorials
+
+[]Equities
+
+Equities: Introduction
+
+Top pre-market movers
+
+Find average spread for a symbol
+
+Calculate synthetic NBBO from prop feeds
+
+[]Futures
+
+Futures: Introduction
+
+Volume, open interest, and settlement prices
+
+Futures trading hours
+
+Get options chain for a futures product
+
+[]Options
+
+Equity options: Introduction
+
+Options on futures: Introduction
+
+All options with a given underlying
+
+Join options with underlying prices
+
+US equity options volume by venue
+
+Resample US equity options NBBO
+
+Estimate implied volatility
+
+Get symbols for 0DTE options
+
+Calculate daily statistics for equity options
+
+[]Live data
+
+Handle multiple record types
+
+Stream live data to a file
+
+Estimate Databento feed latency
+
+Calculate TICK and TRIN indicators
+
+Subscribe to MBO snapshot
+
+Compare on-exchange and off-exchange trade volume
+
+[]Historical data
+
+Request a large number of symbols
+
+Programmatic batch downloads
+
+Best bid, best offer, and midprice
+
+Custom OHLCV bars from trades
+
+Join schemas on instrument ID
+
+Plot a candlestick chart
+
+Calculate VWAP and RSI
+
+End-of-day pricing and portfolio valuation
+
+Benchmark portfolio performance
+
+Market halts, volatility interrupts, and price bands
+
+Resample OHLCV from 1-minute to 5-minute
+
+[]Symbology
+
+Continuous contracts
+
+Parent symbology
+
+Symbology mapping for live data
+
+Dataset symbols
+
+[]Instrument definitions
+
+Finding liquid instruments
+
+Handling tick sizes
+
+[]Order book
+
+Types of order book events
+
+State management of resting orders
+
+Limit order book construction
+
+Microprice and book imbalance
+
+Queue position of an order
+
+[]Algorithmic trading
+
+A high-frequency liquidity-taking strategy
+
+Build prediction models with machine learning
+
+Execution slippage and markouts
+
+Matching engine latencies
+
+Using messaging rates as a proxy for implied volatility
+
+Mean reversion and portfolio optimization
+
+Pairs trading based on cointegration
+
+Build a real-time stock screener
+
+[]Corporate actions
+
+Dividends
+
+New listings
+
+Splits and reverse splits
+
+Mergers and demergers
+
+[]Adjustment factors
+
+Applying adjustment factors
+
+Handling multiple stock selections
+
+[]Security master
+
+Enrich instrument definitions
+
+Listings and delistings
+
+Market capitalization change
+
+Core concepts
+
+[]Schemas and data formats
+
+What's a schema?
+
+Market by order (MBO)
+
+Market by price (MBP-10)
+
+Market by price (MBP-1)
+
+BBO on trade (TBBO)
+
+BBO on interval (BBO)
+
+Trades
+
+Aggregate bars (OHLCV)
+
+Instrument definitions
+
+Imbalance
+
+Statistics
+
+Status
+
+Corporate actions
+
+Adjustment factors
+
+Security master
+
+[]Standards and conventions
+
+Common fields, enums and types
+
+Normalization
+
+Symbology
+
+Databento Binary Encoding
+
+Zstandard (zstd)
+
+MBO snapshots
+
+Reference data enums
+
+[]Architecture
+
+Databento architecture
+
+Timestamping
+
+Locations and network connectivity
+
+Dedicated connectivity
+
+Databento NTP service
+
+Performance optimization
+
+[]Venues and datasets
+
+CME Globex MDP 3.0
+
+Cboe BYX Depth
+
+Cboe BYZ Depth
+
+Cboe EDGA Depth
+
+Cboe EDGX Depth
+
+Databento US Equities Basic
+
+Databento US Equities Mini
+
+Databento US Equities Summary
+
+Eurex Exchange
+
+European Energy Exchange
+
+ICE Endex iMpact
+
+ICE Europe Commodities iMpact
+
+ICE Europe Financials iMpact
+
+ICE Futures US iMpact
+
+IEX TOPS
+
+MEMX Memoir
+
+MIAX Depth of Market
+
+Nasdaq Basic with NLS Plus
+
+Nasdaq TotalView-ITCH
+
+NYSE American Integrated
+
+NYSE Arca Integrated
+
+NYSE Texas Integrated
+
+NYSE National Trades and BBO
+
+NYSE Integrated
+
+OPRA Pillar
+
+Corporate actions
+
+Adjustment factors
+
+Security master
+
+API Reference
+
+[]Historical API
+
+[]Basics
+
+Overview
+
+Authentication
+
+Schemas and conventions
+
+Datasets
+
+Symbology
+
+Encodings
+
+Compression
+
+Dates and times
+
+Errors
+
+Rate limits
+
+Size limits
+
+Metered pricing
+
+Versioning
+
+[]Client
+
+Historical
+
+[]Metadata
+
+....list_publishers
+
+....list_datasets
+
+....list_schemas
+
+....list_fields
+
+....list_unit_prices
+
+....get_dataset_condition
+
+....get_dataset_range
+
+....get_record_count
+
+....get_billable_size
+
+....get_cost
+
+[]Time series
+
+....get_range
+
+....get_range_async
+
+[]Symbology
+
+....resolve
+
+[]Batch downloads
+
+....submit_job
+
+....list_jobs
+
+....list_files
+
+....download
+
+....download_async
+
+[]Helpers
+
+DBNStore
+
+....from_bytes
+
+....from_file
+
+....reader
+
+....replay
+
+....request_full_definitions
+
+....request_symbology
+
+....to_csv
+
+....to_df
+
+....to_file
+
+....to_json
+
+....to_ndarray
+
+....to_parquet
+
+....__iter__
+
+....insert_symbology_json
+
+map_symbols_csv
+
+map_symbols_json
+
+[]Live API
+
+[]Basics
+
+Overview
+
+Host and port
+
+Authentication
+
+Schemas and conventions
+
+Datasets
+
+Symbology
+
+Dates and times
+
+Intraday replay
+
+Snapshot
+
+System messages
+
+Errors
+
+Connection limits
+
+Metered pricing
+
+Encodings
+
+Compression
+
+Protocol
+
+Error detection
+
+Recovering after a disconnection
+
+Maintenance schedule
+
+[]Message flows
+
+Authentication
+
+Subscription
+
+Intraday historical subscription
+
+Starting the session
+
+[]Gateway control messages
+
+Greeting message
+
+Challenge request
+
+Authentication response
+
+[]Client control messages
+
+Authentication request
+
+Subscription request
+
+Session start
+
+[]Reference API
+
+[]Basics
+
+Overview
+
+Authentication
+
+Symbology
+
+Dates and times
+
+Errors
+
+Rate limits
+
+[]Client
+
+Reference
+
+[]Corporate actions
+
+....get_range
+
+[]Adjustment factors
+
+....get_range
+
+[]Security master
+
+....get_last
+
+....get_range
+
+Resources
+
+[]FAQs
+
+Client libraries vs. APIs
+
+Streaming vs. batch download
+
+Usage-based pricing and credits
+
+Instruments and products
+
+Venues and publishers
+
+MBP-1 vs. TBBO vs. BBO schemas
+
+[]Portal
+
+Data catalog
+
+Batch download
+
+Data usage
+
+API keys
+
+Download center
+
+Team
+
+Billing
+
+Plans and live data
+
+[]Release notes
+
+[]C++
+
+0.42.0 - 2025-08-19
+
+0.41.0 - 2025-08-12
+
+0.40.0 - 2025-07-29
+
+0.39.1 - 2025-07-22
+
+0.39.0 - 2025-07-15
+
+0.38.2 - 2025-07-01
+
+0.38.1 - 2025-06-25
+
+0.38.0 - 2025-06-10
+
+0.37.1 - 2025-06-03
+
+0.37.0 - 2025-06-03
+
+0.36.0 - 2025-05-27
+
+0.35.1 - 2025-05-20
+
+0.35.0 - 2025-05-13
+
+0.34.2 - 2025-05-06
+
+0.34.1 - 2025-04-29
+
+0.34.0 - 2025-04-22
+
+0.33.0 - 2025-04-15
+
+0.32.1 - 2025-04-07
+
+0.32.0 - 2025-04-02
+
+0.31.0 - 2025-03-18
+
+0.30.0 - 2025-02-11
+
+0.29.0 - 2025-02-04
+
+0.28.0 - 2025-01-21
+
+0.27.0 - 2025-01-07
+
+0.26.0 - 2024-12-17
+
+0.25.0 - 2024-11-12
+
+0.24.0 - 2024-10-22
+
+0.23.0 - 2024-09-25
+
+0.22.0 - 2024-08-27
+
+0.21.0 - 2024-07-30
+
+0.20.1 - 2024-07-16
+
+0.20.0 - 2024-07-09
+
+0.19.1 - 2024-06-25
+
+0.19.0 - 2024-06-04
+
+0.18.1 - 2024-05-22
+
+0.18.0 - 2024-05-14
+
+0.17.1 - 2024-04-08
+
+0.17.0 - 2024-04-01
+
+0.16.0 - 2024-03-01
+
+0.15.0 - 2024-01-16
+
+0.14.1 - 2023-12-18
+
+0.14.0 - 2023-11-23
+
+0.13.1 - 2023-10-23
+
+0.13.0 - 2023-09-21
+
+0.12.0 - 2023-08-24
+
+0.11.0 - 2023-08-10
+
+0.10.0 - 2023-07-20
+
+0.9.1 - 2023-07-11
+
+0.9.0 - 2023-06-13
+
+0.8.0 - 2023-05-16
+
+0.7.0 - 2023-04-28
+
+0.6.1 - 2023-03-28
+
+0.6.0 - 2023-03-24
+
+0.5.0 - 2023-03-13
+
+0.4.0 - 2023-03-02
+
+0.3.0 - 2023-01-06
+
+0.2.0 - 2022-12-01
+
+0.1.0 - 2022-11-07
+
+[]Python
+
+0.65.0 - TBD
+
+0.64.0 - 2025-09-30
+
+0.63.0 - 2025-09-02
+
+0.62.0 - 2025-08-19
+
+0.61.0 - 2025-08-12
+
+0.60.0 - 2025-08-05
+
+0.59.0 - 2025-07-15
+
+0.58.0 - 2025-07-08
+
+0.57.1 - 2025-06-17
+
+0.57.0 - 2025-06-10
+
+0.56.0 - 2025-06-03
+
+0.55.1 - 2025-06-02
+
+0.55.0 - 2025-05-29
+
+0.54.0 - 2025-05-13
+
+0.53.0 - 2025-04-29
+
+0.52.0 - 2025-04-15
+
+0.51.0 - 2025-04-08
+
+0.50.0 - 2025-03-18
+
+0.49.0 - 2025-03-04
+
+0.48.0 - 2025-01-21
+
+0.47.0 - 2024-12-17
+
+0.46.0 - 2024-12-10
+
+0.45.0 - 2024-11-12
+
+0.44.1 - 2024-10-29
+
+0.44.0 - 2024-10-22
+
+0.43.1 - 2024-10-15
+
+0.43.0 - 2024-10-09
+
+0.42.0 - 2024-09-23
+
+0.41.0 - 2024-09-03
+
+0.40.0 - 2024-08-27
+
+0.39.3 - 2024-08-20
+
+0.39.2 - 2024-08-13
+
+0.39.1 - 2024-08-13
+
+0.39.0 - 2024-07-30
+
+0.38.0 - 2024-07-23
+
+0.37.0 - 2024-07-09
+
+0.36.3 - 2024-07-02
+
+0.36.2 - 2024-06-25
+
+0.36.1 - 2024-06-18
+
+0.36.0 - 2024-06-11
+
+0.35.0 - 2024-06-04
+
+0.34.1 - 2024-05-21
+
+0.34.0 - 2024-05-14
+
+0.33.0 - 2024-04-16
+
+0.32.0 - 2024-04-04
+
+0.31.1 - 2024-03-20
+
+0.31.0 - 2024-03-05
+
+0.30.0 - 2024-02-22
+
+0.29.0 - 2024-02-13
+
+0.28.0 - 2024-02-01
+
+0.27.0 - 2024-01-23
+
+0.26.0 - 2024-01-16
+
+0.25.0 - 2024-01-09
+
+0.24.1 - 2023-12-15
+
+0.24.0 - 2023-11-23
+
+0.23.1 - 2023-11-10
+
+0.23.0 - 2023-10-26
+
+0.22.1 - 2023-10-24
+
+0.22.0 - 2023-10-23
+
+0.21.0 - 2023-10-11
+
+0.20.0 - 2023-09-21
+
+0.19.1 - 2023-09-08
+
+0.19.0 - 2023-08-25
+
+0.18.1 - 2023-08-16
+
+0.18.0 - 2023-08-14
+
+0.17.0 - 2023-08-10
+
+0.16.1 - 2023-08-03
+
+0.16.0 - 2023-07-25
+
+0.15.2 - 2023-07-19
+
+0.15.1 - 2023-07-06
+
+0.15.0 - 2023-07-05
+
+0.14.1 - 2023-06-16
+
+0.14.0 - 2023-06-14
+
+0.13.0 - 2023-06-02
+
+0.12.0 - 2023-05-01
+
+0.11.0 - 2023-04-13
+
+0.10.0 - 2023-04-07
+
+0.9.0 - 2023-03-10
+
+0.8.1 - 2023-03-05
+
+0.8.0 - 2023-03-03
+
+0.7.0 - 2023-01-10
+
+0.6.0 - 2022-12-02
+
+0.5.0 - 2022-11-07
+
+0.4.0 - 2022-09-14
+
+0.3.0 - 2022-08-30
+
+[]HTTP API
+
+0.35.0 - TBD
+
+0.34.1 - 2025-06-17
+
+0.34.0 - 2025-06-09
+
+0.33.0 - 2024-12-10
+
+0.32.0 - 2024-11-26
+
+0.31.0 - 2024-11-12
+
+0.30.0 - 2024-09-24
+
+0.29.0 - 2024-09-03
+
+0.28.0 - 2024-06-25
+
+0.27.0 - 2024-06-04
+
+0.26.0 - 2024-05-14
+
+0.25.0 - 2024-03-26
+
+0.24.0 - 2024-03-06
+
+0.23.0 - 2024-02-15
+
+0.22.0 - 2024-02-06
+
+0.21.0 - 2024-01-30
+
+0.20.0 - 2024-01-18
+
+0.19.0 - 2023-10-17
+
+0.18.0 - 2023-10-11
+
+0.17.0 - 2023-10-04
+
+0.16.0 - 2023-09-26
+
+0.15.0 - 2023-09-19
+
+0.14.0 - 2023-08-29
+
+0.13.0 - 2023-08-23
+
+0.12.0 - 2023-08-10
+
+0.11.0 - 2023-07-25
+
+0.10.0 - 2023-07-06
+
+0.9.0 - 2023-06-01
+
+0.8.0 - 2023-05-01
+
+0.7.0 - 2023-04-07
+
+0.6.0 - 2023-03-10
+
+0.5.0 - 2023-03-03
+
+0.4.0 - 2022-12-02
+
+0.3.0 - 2022-08-30
+
+0.2.0 - 2021-12-10
+
+0.1.0 - 2021-08-30
+
+[]Raw API
+
+0.7.0 - TBD
+
+0.6.4 - 2025-09-28
+
+0.6.3 - 2025-09-07
+
+0.6.2 - 2025-08-02
+
+0.6.1 - 2025-06-29
+
+0.6.0 - 2025-05-24
+
+0.5.6 - 2025-04-06
+
+0.5.5 - 2024-12-01
+
+0.5.4 - 2024-10-02
+
+0.5.3 - 2024-10-02
+
+0.5.1 - 2024-07-24
+
+2024-07-20
+
+2024-06-25
+
+0.5.0 - 2024-05-25
+
+0.4.6 - 2024-04-13
+
+0.4.5 - 2024-03-25
+
+0.4.4 - 2024-03-23
+
+0.4.3 - 2024-02-13
+
+0.4.2 - 2024-01-06
+
+0.4.0 - 2023-11-08
+
+0.3.0 - 2023-10-20
+
+0.2.0 - 2023-07-23
+
+0.1.0 - 2023-05-01
+
+[]Rust
+
+0.35.0 - TBD
+
+0.34.1 - 2025-09-30
+
+0.34.0 - 2025-09-23
+
+0.33.1 - 2025-08-26
+
+0.33.0 - 2025-08-19
+
+0.32.0 - 2025-08-12
+
+0.31.0 - 2025-07-30
+
+0.30.0 - 2025-07-22
+
+0.29.0 - 2025-07-15
+
+0.28.0 - 2025-07-01
+
+0.27.1 - 2025-06-25
+
+0.27.0 - 2025-06-10
+
+0.26.2 - 2025-06-03
+
+0.26.1 - 2025-05-30
+
+0.26.0 - 2025-05-28
+
+0.25.0 - 2025-05-13
+
+0.24.0 - 2025-04-22
+
+0.23.0 - 2025-04-15
+
+0.22.0 - 2025-04-01
+
+0.21.0 - 2025-03-18
+
+0.20.0 - 2025-02-12
+
+0.19.0 - 2025-01-21
+
+0.18.0 - 2025-01-08
+
+0.17.0 - 2024-12-17
+
+0.16.0 - 2024-11-12
+
+0.15.0 - 2024-10-22
+
+0.14.1 - 2024-10-08
+
+0.14.0 - 2024-10-01
+
+0.13.0 - 2024-09-25
+
+0.12.1 - 2024-08-27
+
+0.12.0 - 2024-07-30
+
+0.11.4 - 2024-07-16
+
+0.11.3 - 2024-07-09
+
+0.11.2 - 2024-06-25
+
+0.11.1 - 2024-06-11
+
+0.11.0 - 2024-06-04
+
+0.10.0 - 2024-05-22
+
+0.9.1 - 2024-05-15
+
+0.9.0 - 2024-05-14
+
+0.8.0 - 2024-04-01
+
+0.7.1 - 2024-03-05
+
+0.7.0 - 2024-03-01
+
+0.6.0 - 2024-01-16
+
+0.5.0 - 2023-11-23
+
+0.4.2 - 2023-10-23
+
+0.4.1 - 2023-10-06
+
+0.4.0 - 2023-09-21
+
+0.3.0 - 2023-09-13
+
+0.2.1 - 2023-08-25
+
+0.2.0 - 2023-08-10
+
+0.1.0 - 2023-08-02
+
+[]Data
+
+2025-09-23
+
+2025-08-26
+
+2025-08-05
+
+2025-07-25
+
+2025-07-06
+
+2025-07-01
+
+2025-06-27
+
+2025-06-17
+
+2025-06-10
+
+2025-05-20
+
+2025-05-07
+
+2025-04-05
+
+2025-04-01
+
+2025-03-13
+
+2025-02-26
+
+2025-02-01
+
+2025-01-15
+
+2024-12-14
+
+2024-12-03
+
+2024-12-02
+
+2024-10-22
+
+2024-10-24
+
+2024-07-05
+
+2024-06-25
+
+2024-06-18
+
+2024-05-07
+
+2024-01-18
+
+2023-11-17
+
+2023-10-04
+
+2023-08-29
+
+2023-07-23
+
+2023-05-01
+
+2023-04-28
+
+2023-03-07
+
+[] collapse all
+
+[]
+
+menu
+
+[]
+
+[] [] [] []
+
+[]
+
+[]
+
+log in api key support
+
+api key
+
+prod-001
+
+[]
+
+prod-001
+
+support log in portal
+
+sign up
+
+test user
+
+test@databento.com
+
+api key
+
+[]api reference - historical[]
+
+databento's historical data service can be accessed programmatically
+over its HTTP API. To make it easier to integrate the API, we also
+provide official client libraries that simplify the code you need to
+write.
+
+Our HTTP API is designed as a collection of RPC-style methods, which can
+be called using URLs in the form
+https://hist.databento.com/v0/METHOD_FAMILY.METHOD.
+
+Our client libraries wrap these HTTP RPC-style methods with more
+idiomatic interfaces in their respective languages.
+
+You can use our API to stream or load data directly into your
+application. You can also use our API to make batch download requests,
+which instruct our service to prepare the data as flat files that can
+downloaded from the Download center.
+
+HISTORICAL DATA
+
+Client Libraries
+
+[python]
+
+python
+
+[c++]
+
+c++
+
+[rust]
+
+rust
+
+APIs
+
+[http]
+
+http
+
+[http]
+
+http
+
+$
+
+pip install -U databento
+
+[]
+
+[]
+
+[] 215
+
+[]basics[]
+
+[]overview[]
+
+our historical api has the following structure:
+
+- Metadata provides information about the datasets themselves.
+- Time series provides all types of time series data. This includes
+  subsampled data (second, minute, hour, daily aggregates), trades,
+  top-of-book, order book deltas, order book snapshots, summary
+  statistics, static data and macro indicators. We also provide
+  properties of products such as expirations, tick sizes and symbols as
+  time series data.
+- Symbology provides methods that help find and resolve symbols across
+  different symbology systems.
+- Batch provides a means of submitting and querying for details of batch
+  download requests.
+
+[]authentication[]
+
+databento uses api keys to authenticate requests. you can view and
+manage your keys on the API keys page of your portal.
+
+Each API key is a 32-character string starting with db-. By default, our
+library uses the environment variable DATABENTO_API_KEY as your API key.
+However, if you pass an API key to the Historical constructor through
+the key parameter, then this value will be used instead.
+
+related: securing your api keys.
+
+[]
+
+example usage
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    import databento as db
+
+    # Establish connection and authenticate
+    client = db.Historical("db-HAaSXwJQW85bKXRg3gA5uHrhvnnM6")
+
+    # Authenticated request
+    print(client.metadata.list_datasets())
+
+[]schemas and conventions[]
+
+a schema is a data record format represented as a collection of
+different data fields. Our datasets support multiple schemas, such as
+order book, trades, bar aggregates, and so on. You can get a dictionary
+describing the fields of each schema from our List of market data
+schemas.
+
+You can get a list of all supported schemas for any given dataset using
+the Historical client's list_schemas method. The same information can
+also be found on the dataset details pages on the user portal.
+
+The following table provides details about the data types and
+conventions used for various fields that you will commonly encounter in
+the data.
+
+  Name                   Field           Description
+  ---------------------- --------------- --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  Dataset                dataset         A unique string name assigned to each dataset by Databento. Full list of datasets can be found from the metadata.
+  Publisher ID           publisher_id    A unique 16-bit unsigned integer assigned to each publisher by Databento. Full list of publisher IDs can be found from the metadata.
+  Instrument ID          instrument_id   A unique 32-bit unsigned integer assigned to each instrument by the venue. Information about instrument IDs for any given dataset can be found in the symbology.
+  Order ID               order_id        A unique 64-bit unsigned integer assigned to each order by the venue.
+  Timestamp (event)      ts_event        The matching-engine-received timestamp expressed as the number of nanoseconds since the UNIX epoch.
+  Timestamp (receive)    ts_recv         The capture-server-received timestamp expressed as the number of nanoseconds since the UNIX epoch.
+  Timestamp delta (in)   ts_in_delta     The matching-engine-sending timestamp expressed as the number of nanoseconds before ts_recv. See timestamping guide.
+  Timestamp out          ts_out          The Databento gateway-sending timestamp expressed as the number of nanoseconds since the UNIX epoch. See timestamping guide.
+  Price                  price           The price expressed as signed integer where every 1 unit corresponds to 1e-9, i.e. 1/1,000,000,000 or 0.000000001.
+  Book side              side            The side that initiates the event. Can be Ask for a sell order (or sell aggressor in a trade), Bid for a buy order (or buy aggressor in a trade), or None where no side is specified by the original source.
+  Size                   size            The order quantity.
+  Flag                   flag            A bit field indicating event end, message characteristics, and data quality.
+  Action                 action          The event type or order book operation. Can be Add, Cancel, Modify, cleaR book, Trade, Fill, or None.
+  Sequence number        sequence        The original message sequence number from the venue.
+
+[]datasets[]
+
+databento provides time series datasets for a variety of markets,
+sourced from different publishers. Our available datasets can be browsed
+through the search feature on our site.
+
+Each dataset is assigned a unique string identifier (dataset ID) in the
+form PUBLISHER.DATASET, such as GLBX.MDP3. For publishers that are also
+markets, we use standard four-character ISO 10383 Market Identifier
+Codes (MIC). Otherwise, Databento arbitrarily assigns a four-character
+identifier for the publisher.
+
+These dataset IDs are also found on the Data catalog and Download
+request features of the Databento user portal.
+
+When a publisher provides multiple data products with different levels
+of granularity, Databento subscribes to the most-granular product. We
+then provide this dataset with alternate schemas to make it easy to work
+with the level of detail most appropriate for your application.
+
+More information about different types of venues and publishers is
+available in our faqs.
+
+[]symbology[]
+
+databento's historical api supports several ways to select an instrument
+in a dataset. An instrument is specified using a symbol and a symbology
+type, also referred to as an stype. The supported symbology types are:
+
+- Raw symbology (raw_symbol) original string symbols used by the
+  publisher in the source data.
+- Instrument ID symbology (instrument_id) unique numeric ID assigned to
+  each instrument by the publisher.
+- Parent symbology (parent) groups instruments related to the market for
+  the same underlying.
+- Continuous contract symbology (continuous) proprietary symbology that
+  specifies instruments based on certain systematic rules.
+
+When requesting data from our timeseries.get_range or batch.submit_job
+endpoints, an input and output symbology type can be specified. by
+default, our client libraries will use raw symbology for the input type
+and instrument id symbology for the output type. not all symbology types
+are supported for every dataset.
+
+the process of converting between one symbology type to another is
+called symbology resolution. this conversion can be done, for no cost,
+with the symbology.resolve endpoint.
+
+for more about symbology at databento, see our standards and
+conventions.
+
+[]encodings[]
+
+dbn
+
+databento binary encoding (dbn) is an extremely fast message encoding
+and highly-compressible storage format for normalized market data. It
+includes a self-describing metadata header and adopts a binary format
+with zero-copy serialization.
+
+We recommend using our Python, C++, or Rust client libraries to read DBN
+files locally. A CLI tool is also available for converting DBN files to
+CSV or JSON.
+
+CSV
+
+Comma-separated values (CSV) is a simple text file format for tabular
+data, CSVs can be easily opened with Excel, loaded into pandas data
+frames, or parsed in C++.
+
+Our CSVs have one header line, followed by one record per line. Lines
+use UNIX-style \n separators.
+
+JSON
+
+JavaScript Object Notation (JSON) is a flexible text file format with
+broad language support and wide adoption across web apps.
+
+Our JSON files follow the JSON lines specification, where each line of
+the file is a JSON record. lines use unix-style \n separators.
+
+[]compression[]
+
+databento provides options for compressing files from our api. Available
+compression formats depend on the encoding you select.
+
+Zstd
+
+The Zstd compression option uses the Zstandard format.
+
+This option is available for all encodings, and is recommended for
+faster transfer speeds and smaller files.
+
+You can read Zstandard files in Python using the zstandard package.
+
+Read more about working with Zstandard-compressed files.
+
+None
+
+The None compression option disables compression entirely, resulting in
+significantly larger files. however, this can be useful for loading
+small csv files directly into excel.
+
+[]dates and times[]
+
+our python client library has several functions with timestamp
+arguments. these arguments will have type
+pandas.timestamp | datetime.date | str | int and support a variety of
+formats.
+
+it's recommended to use pandas.timestamp, which fully supports timezones
+and nanosecond-precision. if a datetime.date is used, the time is set to
+midnight utc. if an int is provided, the value is interpreted as unix
+nanoseconds.
+
+the client library also handles several string-based timestamp formats
+based on iso 8601.
+
+- yyyy-mm-dd, e.g. "2022-02-28" (midnight UTC)
+- yyyy-mm-ddTHH:MM, e.g. "2022-02-28T23:50"
+- yyyy-mm-ddTHH:MM:SS, e.g. "2022-02-28T23:50:59"
+- yyyy-mm-ddTHH:MM:SS.NNNNNNNNN, e.g. "2022-02-28T23:50:59.123456789"
+
+Timezone specification is also supported.
+
+- yyyy-mm-ddTHH:MMZ
+- yyyy-mm-ddTHH:MM±hh
+- yyyy-mm-ddTHH:MM±hhmm
+- yyyy-mm-ddTHH:MM±hh:mm
+
+bare dates
+
+some parameters require a bare date, without a time. these arguments
+have type datetime.date | str and must either be a datetime.date object,
+or a string in yyyy-mm-dd format, e.g. "2022-02-28".
+
+[]errors[]
+
+our historical api uses http response codes to indicate the success or
+failure of an API request. The client library provides exceptions that
+wrap these response codes.
+
+- 2xx indicates success.
+- 4xx indicates an error on the client side. Represented as a
+  BentoClientError.
+- 5xx indicates an error with Databento's servers. Represented as a
+  BentoServerError.
+
+The full list of the response codes and associated causes is as follows:
+
+  Code   Message                 Cause
+  ------ ----------------------- -------------------------------------------------------------------------------------------
+  200    OK                      Successful request.
+  206    Partial Content         Successful request, with partially resolved symbols.
+  400    Bad Request             Invalid request. Usually due to a missing, malformed or unsupported parameter.
+  401    Unauthorized            Invalid username or API key.
+  402    Payment Required        Issue with your account payment information.
+  403    Forbidden               The API key has insufficient permissions to perform the request.
+  404    Not Found               A resource is not found, or a requested symbol does not exist.
+  409    Conflict                A resource already exists.
+  422    Unprocessable Entity    The request is well formed, but we cannot or will not process the contained instructions.
+  429    Too Many Requests       API rate limit exceeded.
+  500    Internal Server Error   Unexpected condition encountered in our system.
+  503    Service Unavailable     Data gateway is offline or overloaded.
+  504    Gateway Timeout         Data gateway is available but other parts of our system are offline or overloaded.
+
+[]
+
+api method
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    class databento.BentoError(Exception)
+    class databento.BentoHttpError(databento.BentoError)
+    class databento.BentoClientError(databento.BentoHttpError)
+    class databento.BentoServerError(databento.BentoHttpError)
+
+[]
+
+example usage
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    import databento as db
+
+    client = db.Historical("INVALID_API_KEY")
+
+    try:
+        print(client.metadata.list_datasets())
+    except db.BentoClientError as e:
+        print(e)
+
+[]
+
+example response
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    400 auth_invalid_username_in_basic_auth
+    Invalid username in Basic auth ('INVALID_API_KEY').
+    documentation: https://databento.com/docs
+
+[]rate limits[]
+
+our historical api allows each ip address up to:
+
+- 100 concurrent connections.
+- 100 time series requests per second.
+- 100 symbology requests per second.
+- 20 metadata requests per second.
+- 20 batch list jobs requests per second.
+- 20 batch submit job requests per minute.
+
+When a request exceeds a rate limit, a BentoClientError exception is
+raised with a 429 error code.
+
+Retry-After
+
+The Retry-After response header indicates how long the user should wait
+before retrying.
+
+If you find that your application has been rate-limited, you can retry
+after waiting for the time specified in the Retry-After header.
+
+If you are using Python, you may use the time.sleep function as seen
+below to wait for the time specified in the Retry-After header. e.g.
+time.sleep(int(response.headers("retry-after", 1)))
+
+this code snippet works best for our current apis with their rate
+limits. future apis may have different rate limits, and might require a
+different default time delay.
+
+[]size limits[]
+
+there is no size limit for either stream or batch download requests.
+Batch download is more manageable for large datasets, so we recommend
+using batch download for requests over 5 GB.
+
+You can also manage the size of your request by splitting it into
+multiple, smaller requests. The historical API allows you to make stream
+and batch download requests with time ranges specified up to nanosecond
+resolution. You can also use the limit parameter in any request to limit
+the number of data records returned from the service.
+
+Batch download supports different delivery methods which can be
+specified using the delivery parameter.
+
+[]
+
+example usage
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    import databento as db
+
+    client = db.Historical("db-HAaSXwJQW85bKXRg3gA5uHrhvnnM6")
+
+    job = client.batch.submit_job(
+        dataset="GLBX.MDP3",
+        symbols="CLZ7",
+        schema="trades",
+        start="2022-06-06T00:00:00",
+        end="2022-06-10T00:10:00",
+        limit=10000,
+    )
+
+[]metered pricing[]
+
+databento only charges for the data that you use. You can find rates
+(per MB) for the various datasets and estimate pricing on our Data
+catalog. We meter the data by its uncompressed size in binary encoding.
+
+When you stream the data, you are billed incrementally for each outbound
+byte of data sent from our historical gateway. If your connection is
+interrupted while streaming our data and our historical gateway detects
+connection timeout over 5 seconds, it will immediately stop sending data
+and you will not be billed for the remainder of your request.
+
+Duplicate streaming requests will incur repeated charges. If you intend
+to access the same data multiple times, we recommend using our batch
+download feature. When you make a batch download request, you are only
+billed once for the request and, subsequently, you can download the data
+from the Download center multiple times over 30 days for no additional
+charge.
+
+You will only be billed for usage of time series data. Access to
+metadata, symbology, and account management is free. The
+Historical.metadata.get_cost method can be used to determine cost before
+you request any data.
+
+related: billing management.
+
+[]versioning[]
+
+our historical and live apis and its client libraries adopt
+major.minor.patch format for version numbers. These version numbers
+conform to semantic versioning. We are using major version 0 for initial
+development, where our API is not considered stable.
+
+Once we release major version 1, our public API will be stable. This
+means that you will be able to upgrade minor or patch versions to pick
+up new functionality, without breaking your integration.
+
+Starting with major versions after 1, we will provide support for
+previous versions for one year after the date of the subsequent major
+release. For example, if version 2.0.0 is released on January 1, 2024,
+then all versions 1.x.y of the API and client libraries will be
+deprecated. However, they will remain supported until January 1, 2025.
+
+We may introduce backwards-compatible changes between minor versions in
+the form of:
+
+- New data encodings
+- Additional fields to existing data schemas
+- Additional batch download customizations
+
+Our Release notes will contain information about both breaking and
+backwards-compatible changes in each release.
+
+Our API and official client libraries are kept in sync with same-day
+releases for major versions. For instance, 1.x.y of the C++ client
+library will use the same functionality found in any 1.x.y version of
+the python client.
+
+related: release notes.
+
+[]client[]
+
+[]historical[]
+
+to access databento's historical api, first create an instance of the
+Historical client. The entire API is exposed through instance methods of
+the client.
+
+Note that the API key can be passed as a parameter, which is not
+recommended for production applications. instead, you can leave out this
+parameter to pass your api key via the databento_api_key environment
+variable:
+
+currently, only bo1 is supported for historical data.
+
+[]parameters[]
+
+key
+
+optional | str
+
+32-character api key. found on your api keys page. if none then
+databento_api_key environment variable is used.
+
+gateway
+
+optional | historicalgateway or str
+
+site of historical gateway to connect to. currently only bo1 is
+supported. if none then will connect to the default historical gateway.
+
+[]
+
+api method
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    class Historical(
+        key: str | None = None,
+        gateway: HistoricalGateway | str = HistoricalGateway.BO1,
+    )
+
+[]
+
+example usage
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    import databento as db
+
+    # Pass as parameter
+    client = db.Historical("db-HAaSXwJQW85bKXRg3gA5uHrhvnnM6")
+
+    # Or, pass as `DATABENTO_API_KEY` environment variable
+    client = db.Historical()
+
+[]metadata[]
+
+[]historical.metadata.list_publishers[]
+
+list all publisher id mappings.
+
+use this method to list the details of publishers, including their
+dataset and venue mappings.
+
+[]returns[]
+
+list[dict[str, int | str]]
+
+a list of publisher details objects.
+
+publisher_id
+
+int
+
+the publisher id assigned by databento.
+
+dataset
+
+str
+
+the dataset id for the publisher.
+
+venue
+
+str
+
+the venue for the publisher.
+
+description
+
+str
+
+the publisher description.
+
+[]
+
+api method
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    Historical.metadata.list_publishers() -> list[dict[str, int | str]]
+
+[]
+
+example usage
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    import databento as db
+
+    client = db.Historical("db-HAaSXwJQW85bKXRg3gA5uHrhvnnM6")
+
+    publishers = client.metadata.list_publishers()
+    print(publishers)
+
+[]
+
+example response
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    [{'dataset': 'GLBX.MDP3',
+      'description': 'CME Globex MDP 3.0',
+      'publisher_id': 1,
+      'venue': 'GLBX'},
+     {'dataset': 'XNAS.ITCH',
+      'description': 'Nasdaq TotalView-ITCH',
+      'publisher_id': 2,
+      'venue': 'XNAS'},
+     {'dataset': 'XBOS.ITCH',
+      'description': 'Nasdaq BX TotalView-ITCH',
+      'publisher_id': 3,
+      'venue': 'XBOS'},
+     {'dataset': 'XPSX.ITCH',
+      'description': 'Nasdaq PSX TotalView-ITCH',
+      'publisher_id': 4,
+      'venue': 'XPSX'},
+     {'dataset': 'BATS.PITCH',
+      'description': 'Cboe BZX Depth',
+      'publisher_id': 5,
+      'venue': 'BATS'},
+     {'dataset': 'BATY.PITCH',
+      'description': 'Cboe BYX Depth',
+      'publisher_id': 6,
+      'venue': 'BATY'},
+     {'dataset': 'EDGA.PITCH',
+      'description': 'Cboe EDGA Depth',
+      'publisher_id': 7,
+      'venue': 'EDGA'},
+     {'dataset': 'EDGX.PITCH',
+      'description': 'Cboe EDGX Depth',
+      'publisher_id': 8,
+      'venue': 'EDGX'},
+     {'dataset': 'XNYS.PILLAR',
+      'description': 'NYSE Integrated',
+      'publisher_id': 9,
+      'venue': 'XNYS'},
+     {'dataset': 'XCIS.PILLAR',
+      'description': 'NYSE National Integrated',
+      'publisher_id': 10,
+      'venue': 'XCIS'},
+     {'dataset': 'XASE.PILLAR',
+      'description': 'NYSE American Integrated',
+      'publisher_id': 11,
+      'venue': 'XASE'},
+     {'dataset': 'XCHI.PILLAR',
+      'description': 'NYSE Texas Integrated',
+      'publisher_id': 12,
+      'venue': 'XCHI'},
+     {'dataset': 'XCIS.BBO',
+      'description': 'NYSE National BBO',
+      'publisher_id': 13,
+      'venue': 'XCIS'},
+     {'dataset': 'XCIS.TRADES',
+      'description': 'NYSE National Trades',
+      'publisher_id': 14,
+      'venue': 'XCIS'},
+     {'dataset': 'MEMX.MEMOIR',
+      'description': 'MEMX Memoir Depth',
+      'publisher_id': 15,
+      'venue': 'MEMX'},
+     {'dataset': 'EPRL.DOM',
+      'description': 'MIAX Pearl Depth',
+      'publisher_id': 16,
+      'venue': 'EPRL'},
+     {'dataset': 'XNAS.NLS',
+      'description': 'FINRA/Nasdaq TRF Carteret',
+      'publisher_id': 17,
+      'venue': 'FINN'},
+     {'dataset': 'XNAS.NLS',
+      'description': 'FINRA/Nasdaq TRF Chicago',
+      'publisher_id': 18,
+      'venue': 'FINC'},
+     {'dataset': 'XNYS.TRADES',
+      'description': 'FINRA/NYSE TRF',
+      'publisher_id': 19,
+      'venue': 'FINY'},
+     {'dataset': 'OPRA.PILLAR',
+      'description': 'OPRA - NYSE American Options',
+      'publisher_id': 20,
+      'venue': 'AMXO'},
+     {'dataset': 'OPRA.PILLAR',
+      'description': 'OPRA - BOX Options',
+      'publisher_id': 21,
+      'venue': 'XBOX'},
+     {'dataset': 'OPRA.PILLAR',
+      'description': 'OPRA - Cboe Options',
+      'publisher_id': 22,
+      'venue': 'XCBO'},
+     {'dataset': 'OPRA.PILLAR',
+      'description': 'OPRA - MIAX Emerald',
+      'publisher_id': 23,
+      'venue': 'EMLD'},
+     {'dataset': 'OPRA.PILLAR',
+      'description': 'OPRA - Cboe EDGX Options',
+      'publisher_id': 24,
+      'venue': 'EDGO'},
+     {'dataset': 'OPRA.PILLAR',
+      'description': 'OPRA - Nasdaq GEMX',
+      'publisher_id': 25,
+      'venue': 'GMNI'},
+     {'dataset': 'OPRA.PILLAR',
+      'description': 'OPRA - Nasdaq ISE',
+      'publisher_id': 26,
+      'venue': 'XISX'},
+     {'dataset': 'OPRA.PILLAR',
+      'description': 'OPRA - Nasdaq MRX',
+      'publisher_id': 27,
+      'venue': 'MCRY'},
+     {'dataset': 'OPRA.PILLAR',
+      'description': 'OPRA - MIAX Options',
+      'publisher_id': 28,
+      'venue': 'XMIO'},
+     {'dataset': 'OPRA.PILLAR',
+      'description': 'OPRA - NYSE Arca Options',
+      'publisher_id': 29,
+      'venue': 'ARCO'},
+     {'dataset': 'OPRA.PILLAR',
+      'description': 'OPRA - Options Price Reporting Authority',
+      'publisher_id': 30,
+      'venue': 'OPRA'},
+     {'dataset': 'OPRA.PILLAR',
+      'description': 'OPRA - MIAX Pearl',
+      'publisher_id': 31,
+      'venue': 'MPRL'},
+     {'dataset': 'OPRA.PILLAR',
+      'description': 'OPRA - Nasdaq Options',
+      'publisher_id': 32,
+      'venue': 'XNDQ'},
+     {'dataset': 'OPRA.PILLAR',
+      'description': 'OPRA - Nasdaq BX Options',
+      'publisher_id': 33,
+      'venue': 'XBXO'},
+     {'dataset': 'OPRA.PILLAR',
+      'description': 'OPRA - Cboe C2 Options',
+      'publisher_id': 34,
+      'venue': 'C2OX'},
+     {'dataset': 'OPRA.PILLAR',
+      'description': 'OPRA - Nasdaq PHLX',
+      'publisher_id': 35,
+      'venue': 'XPHL'},
+     {'dataset': 'OPRA.PILLAR',
+      'description': 'OPRA - Cboe BZX Options',
+      'publisher_id': 36,
+      'venue': 'BATO'},
+     {'dataset': 'OPRA.PILLAR',
+      'description': 'OPRA - MEMX Options',
+      'publisher_id': 37,
+      'venue': 'MXOP'},
+     {'dataset': 'IEXG.TOPS',
+      'description': 'IEX TOPS',
+      'publisher_id': 38,
+      'venue': 'IEXG'},
+     {'dataset': 'DBEQ.BASIC',
+      'description': 'DBEQ Basic - NYSE Texas',
+      'publisher_id': 39,
+      'venue': 'XCHI'},
+     {'dataset': 'DBEQ.BASIC',
+      'description': 'DBEQ Basic - NYSE National',
+      'publisher_id': 40,
+      'venue': 'XCIS'},
+     {'dataset': 'DBEQ.BASIC',
+      'description': 'DBEQ Basic - IEX',
+      'publisher_id': 41,
+      'venue': 'IEXG'},
+     {'dataset': 'DBEQ.BASIC',
+      'description': 'DBEQ Basic - MIAX Pearl',
+      'publisher_id': 42,
+      'venue': 'EPRL'},
+     {'dataset': 'ARCX.PILLAR',
+      'description': 'NYSE Arca Integrated',
+      'publisher_id': 43,
+      'venue': 'ARCX'},
+     {'dataset': 'XNYS.BBO',
+      'description': 'NYSE BBO',
+      'publisher_id': 44,
+      'venue': 'XNYS'},
+     {'dataset': 'XNYS.TRADES',
+      'description': 'NYSE Trades',
+      'publisher_id': 45,
+      'venue': 'XNYS'},
+     {'dataset': 'XNAS.QBBO',
+      'description': 'Nasdaq QBBO',
+      'publisher_id': 46,
+      'venue': 'XNAS'},
+     {'dataset': 'XNAS.NLS',
+      'description': 'Nasdaq Trades',
+      'publisher_id': 47,
+      'venue': 'XNAS'},
+     {'dataset': 'EQUS.PLUS',
+      'description': 'Databento US Equities Plus - NYSE Texas',
+      'publisher_id': 48,
+      'venue': 'XCHI'},
+     {'dataset': 'EQUS.PLUS',
+      'description': 'Databento US Equities Plus - NYSE National',
+      'publisher_id': 49,
+      'venue': 'XCIS'},
+     {'dataset': 'EQUS.PLUS',
+      'description': 'Databento US Equities Plus - IEX',
+      'publisher_id': 50,
+      'venue': 'IEXG'},
+     {'dataset': 'EQUS.PLUS',
+      'description': 'Databento US Equities Plus - MIAX Pearl',
+      'publisher_id': 51,
+      'venue': 'EPRL'},
+     {'dataset': 'EQUS.PLUS',
+      'description': 'Databento US Equities Plus - Nasdaq',
+      'publisher_id': 52,
+      'venue': 'XNAS'},
+     {'dataset': 'EQUS.PLUS',
+      'description': 'Databento US Equities Plus - NYSE',
+      'publisher_id': 53,
+      'venue': 'XNYS'},
+     {'dataset': 'EQUS.PLUS',
+      'description': 'Databento US Equities Plus - FINRA/Nasdaq TRF Carteret',
+      'publisher_id': 54,
+      'venue': 'FINN'},
+     {'dataset': 'EQUS.PLUS',
+      'description': 'Databento US Equities Plus - FINRA/NYSE TRF',
+      'publisher_id': 55,
+      'venue': 'FINY'},
+     {'dataset': 'EQUS.PLUS',
+      'description': 'Databento US Equities Plus - FINRA/Nasdaq TRF Chicago',
+      'publisher_id': 56,
+      'venue': 'FINC'},
+     {'dataset': 'IFEU.IMPACT',
+      'description': 'ICE Europe Commodities',
+      'publisher_id': 57,
+      'venue': 'IFEU'},
+     {'dataset': 'NDEX.IMPACT',
+      'description': 'ICE Endex',
+      'publisher_id': 58,
+      'venue': 'NDEX'},
+     {'dataset': 'DBEQ.BASIC',
+      'description': 'Databento US Equities Basic - Consolidated',
+      'publisher_id': 59,
+      'venue': 'DBEQ'},
+     {'dataset': 'EQUS.PLUS',
+      'description': 'EQUS Plus - Consolidated',
+      'publisher_id': 60,
+      'venue': 'EQUS'},
+     {'dataset': 'OPRA.PILLAR',
+      'description': 'OPRA - MIAX Sapphire',
+      'publisher_id': 61,
+      'venue': 'SPHR'},
+     {'dataset': 'EQUS.ALL',
+      'description': 'Databento US Equities (All Feeds) - NYSE Texas',
+      'publisher_id': 62,
+      'venue': 'XCHI'},
+     {'dataset': 'EQUS.ALL',
+      'description': 'Databento US Equities (All Feeds) - NYSE National',
+      'publisher_id': 63,
+      'venue': 'XCIS'},
+     {'dataset': 'EQUS.ALL',
+      'description': 'Databento US Equities (All Feeds) - IEX',
+      'publisher_id': 64,
+      'venue': 'IEXG'},
+     {'dataset': 'EQUS.ALL',
+      'description': 'Databento US Equities (All Feeds) - MIAX Pearl',
+      'publisher_id': 65,
+      'venue': 'EPRL'},
+     {'dataset': 'EQUS.ALL',
+      'description': 'Databento US Equities (All Feeds) - Nasdaq',
+      'publisher_id': 66,
+      'venue': 'XNAS'},
+     {'dataset': 'EQUS.ALL',
+      'description': 'Databento US Equities (All Feeds) - NYSE',
+      'publisher_id': 67,
+      'venue': 'XNYS'},
+     {'dataset': 'EQUS.ALL',
+      'description': 'Databento US Equities (All Feeds) - FINRA/Nasdaq TRF Carteret',
+      'publisher_id': 68,
+      'venue': 'FINN'},
+     {'dataset': 'EQUS.ALL',
+      'description': 'Databento US Equities (All Feeds) - FINRA/NYSE TRF',
+      'publisher_id': 69,
+      'venue': 'FINY'},
+     {'dataset': 'EQUS.ALL',
+      'description': 'Databento US Equities (All Feeds) - FINRA/Nasdaq TRF Chicago',
+      'publisher_id': 70,
+      'venue': 'FINC'},
+     {'dataset': 'EQUS.ALL',
+      'description': 'Databento US Equities (All Feeds) - Cboe BZX',
+      'publisher_id': 71,
+      'venue': 'BATS'},
+     {'dataset': 'EQUS.ALL',
+      'description': 'Databento US Equities (All Feeds) - Cboe BYX',
+      'publisher_id': 72,
+      'venue': 'BATY'},
+     {'dataset': 'EQUS.ALL',
+      'description': 'Databento US Equities (All Feeds) - Cboe EDGA',
+      'publisher_id': 73,
+      'venue': 'EDGA'},
+     {'dataset': 'EQUS.ALL',
+      'description': 'Databento US Equities (All Feeds) - Cboe EDGX',
+      'publisher_id': 74,
+      'venue': 'EDGX'},
+     {'dataset': 'EQUS.ALL',
+      'description': 'Databento US Equities (All Feeds) - Nasdaq BX',
+      'publisher_id': 75,
+      'venue': 'XBOS'},
+     {'dataset': 'EQUS.ALL',
+      'description': 'Databento US Equities (All Feeds) - Nasdaq PSX',
+      'publisher_id': 76,
+      'venue': 'XPSX'},
+     {'dataset': 'EQUS.ALL',
+      'description': 'Databento US Equities (All Feeds) - MEMX',
+      'publisher_id': 77,
+      'venue': 'MEMX'},
+     {'dataset': 'EQUS.ALL',
+      'description': 'Databento US Equities (All Feeds) - NYSE American',
+      'publisher_id': 78,
+      'venue': 'XASE'},
+     {'dataset': 'EQUS.ALL',
+      'description': 'Databento US Equities (All Feeds) - NYSE Arca',
+      'publisher_id': 79,
+      'venue': 'ARCX'},
+     {'dataset': 'EQUS.ALL',
+      'description': 'Databento US Equities (All Feeds) - Long-Term Stock Exchange',
+      'publisher_id': 80,
+      'venue': 'LTSE'},
+     {'dataset': 'XNAS.BASIC',
+      'description': 'Nasdaq Basic - Nasdaq',
+      'publisher_id': 81,
+      'venue': 'XNAS'},
+     {'dataset': 'XNAS.BASIC',
+      'description': 'Nasdaq Basic - FINRA/Nasdaq TRF Carteret',
+      'publisher_id': 82,
+      'venue': 'FINN'},
+     {'dataset': 'XNAS.BASIC',
+      'description': 'Nasdaq Basic - FINRA/Nasdaq TRF Chicago',
+      'publisher_id': 83,
+      'venue': 'FINC'},
+     {'dataset': 'IFEU.IMPACT',
+      'description': 'ICE Europe - Off-Market Trades',
+      'publisher_id': 84,
+      'venue': 'XOFF'},
+     {'dataset': 'NDEX.IMPACT',
+      'description': 'ICE Endex - Off-Market Trades',
+      'publisher_id': 85,
+      'venue': 'XOFF'},
+     {'dataset': 'XNAS.NLS',
+      'description': 'Nasdaq NLS - Nasdaq BX',
+      'publisher_id': 86,
+      'venue': 'XBOS'},
+     {'dataset': 'XNAS.NLS',
+      'description': 'Nasdaq NLS - Nasdaq PSX',
+      'publisher_id': 87,
+      'venue': 'XPSX'},
+     {'dataset': 'XNAS.BASIC',
+      'description': 'Nasdaq Basic - Nasdaq BX',
+      'publisher_id': 88,
+      'venue': 'XBOS'},
+     {'dataset': 'XNAS.BASIC',
+      'description': 'Nasdaq Basic - Nasdaq PSX',
+      'publisher_id': 89,
+      'venue': 'XPSX'},
+     {'dataset': 'EQUS.SUMMARY',
+      'description': 'Databento Equities Summary',
+      'publisher_id': 90,
+      'venue': 'EQUS'},
+     {'dataset': 'XCIS.TRADESBBO',
+      'description': 'NYSE National Trades and BBO',
+      'publisher_id': 91,
+      'venue': 'XCIS'},
+     {'dataset': 'XNYS.TRADESBBO',
+      'description': 'NYSE Trades and BBO',
+      'publisher_id': 92,
+      'venue': 'XNYS'},
+     {'dataset': 'XNAS.BASIC',
+      'description': 'Nasdaq Basic - Consolidated',
+      'publisher_id': 93,
+      'venue': 'EQUS'},
+     {'dataset': 'EQUS.ALL',
+      'description': 'Databento US Equities (All Feeds) - Consolidated',
+      'publisher_id': 94,
+      'venue': 'EQUS'},
+     {'dataset': 'EQUS.MINI',
+      'description': 'Databento US Equities Mini',
+      'publisher_id': 95,
+      'venue': 'EQUS'},
+     {'dataset': 'XNYS.TRADES',
+      'description': 'NYSE Trades - Consolidated',
+      'publisher_id': 96,
+      'venue': 'EQUS'},
+     {'dataset': 'IFUS.IMPACT',
+      'description': 'ICE Futures US',
+      'publisher_id': 97,
+      'venue': 'IFUS'},
+     {'dataset': 'IFUS.IMPACT',
+      'description': 'ICE Futures US - Off-Market Trades',
+      'publisher_id': 98,
+      'venue': 'XOFF'},
+     {'dataset': 'IFLL.IMPACT',
+      'description': 'ICE Europe Financials',
+      'publisher_id': 99,
+      'venue': 'IFLL'},
+     {'dataset': 'IFLL.IMPACT',
+      'description': 'ICE Europe Financials - Off-Market Trades',
+      'publisher_id': 100,
+      'venue': 'XOFF'},
+     {'dataset': 'XEUR.EOBI',
+      'description': 'Eurex EOBI',
+      'publisher_id': 101,
+      'venue': 'XEUR'},
+     {'dataset': 'XEEE.EOBI',
+      'description': 'European Energy Exchange EOBI',
+      'publisher_id': 102,
+      'venue': 'XEEE'},
+     {'dataset': 'XEUR.EOBI',
+      'description': 'Eurex EOBI - Off-Market Trades',
+      'publisher_id': 103,
+      'venue': 'XOFF'},
+     {'dataset': 'XEEE.EOBI',
+      'description': 'European Energy Exchange EOBI - Off-Market Trades',
+      'publisher_id': 104,
+      'venue': 'XOFF'}
+     ]
+
+[]historical.metadata.list_datasets[]
+
+list all valid dataset ids on databento.
+
+use this method to list the available dataset ids (string identifiers),
+so you can use other methods which take the dataset parameter.
+
+[]parameters[]
+
+start_date
+
+optional | date or str
+
+the inclusive utc start date of the request range as a python date or
+iso 8601 date string. if none then first date available.
+
+end_date
+
+optional | date or str
+
+the exclusive utc end date of the request range as a python date or iso
+8601 date string. if none then last date available.
+
+[]returns[]
+
+list[str]
+
+a list of available dataset ids.
+
+[]
+
+api method
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    Historical.metadata.list_datasets(
+        start_date: date | str | None = None,
+        end_date: date | str | None = None,
+    ) -> list[str]
+
+[]
+
+example usage
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    import databento as db
+
+    client = db.Historical("db-HAaSXwJQW85bKXRg3gA5uHrhvnnM6")
+
+    datasets = client.metadata.list_datasets()
+    print(datasets)
+
+[]
+
+example response
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    [
+        "ARCX.PILLAR",
+        "DBEQ.BASIC",
+        "EPRL.DOM",
+        "EQUS.MINI",
+        "EQUS.SUMMARY",
+        "GLBX.MDP3",
+        "IEXG.TOPS",
+        "IFEU.IMPACT",
+        "NDEX.IMPACT",
+        "OPRA.PILLAR",
+        "XASE.PILLAR",
+        "XBOS.ITCH",
+        "XCHI.PILLAR",
+        "XCIS.TRADESBBO",
+        "XNAS.BASIC",
+        "XNAS.ITCH",
+        "XNYS.PILLAR",
+        "XPSX.ITCH"
+    ]
+
+[]historical.metadata.list_schemas[]
+
+list all available schemas for a dataset.
+
+[]parameters[]
+
+dataset
+
+required | dataset or str
+
+the dataset code (string identifier). must be one of the values from
+list_datasets.
+
+[]returns[]
+
+list[str]
+
+a list of available data schemas.
+
+[]
+
+api method
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    Historical.metadata.list_schemas(
+        dataset: Dataset | str,
+    ) -> list[str]
+
+[]
+
+example usage
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    import databento as db
+
+    client = db.Historical("db-HAaSXwJQW85bKXRg3gA5uHrhvnnM6")
+
+    schemas = client.metadata.list_schemas(dataset="GLBX.MDP3")
+    print(schemas)
+
+[]
+
+example response
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    [
+        "mbo",
+        "mbp-1",
+        "mbp-10",
+        "tbbo",
+        "trades",
+        "bbo-1s",
+        "bbo-1m",
+        "ohlcv-1s",
+        "ohlcv-1m",
+        "ohlcv-1h",
+        "ohlcv-1d",
+        "definition",
+        "statistics",
+        "status"
+    ]
+
+[]historical.metadata.list_fields[]
+
+list all fields for a particular schema and encoding.
+
+[]parameters[]
+
+schema
+
+required | schema or str
+
+the data record schema. must be one of the values from list_schemas.
+
+encoding
+
+required | encoding or str
+
+the data encoding. must be one of 'dbn', 'csv', or 'json'. 'dbn' is
+recommended.
+
+[]returns[]
+
+list[dict[str, str]]
+
+a list of field details objects.
+
+name
+
+str
+
+the field name.
+
+type
+
+str
+
+the field data type.
+
+[]
+
+api method
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    Historical.metadata.list_fields(
+        schema: Schema | str,
+        encoding: Encoding | str,
+    ) -> list[dict[str, str]]
+
+[]
+
+example usage
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    import databento as db
+
+    client = db.Historical("db-HAaSXwJQW85bKXRg3gA5uHrhvnnM6")
+
+    fields = client.metadata.list_fields(schema="trades", encoding="dbn")
+    print(fields)
+
+[]
+
+example response
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    [
+        {
+            "name": "length",
+            "type": "uint8_t"
+        },
+        {
+            "name": "rtype",
+            "type": "uint8_t"
+        },
+        {
+            "name": "publisher_id",
+            "type": "uint16_t"
+        },
+        {
+            "name": "instrument_id",
+            "type": "uint32_t"
+        },
+        {
+            "name": "ts_event",
+            "type": "uint64_t"
+        },
+        {
+            "name": "price",
+            "type": "int64_t"
+        },
+        {
+            "name": "size",
+            "type": "uint32_t"
+        },
+        {
+            "name": "action",
+            "type": "char"
+        },
+        {
+            "name": "side",
+            "type": "char"
+        },
+        {
+            "name": "flags",
+            "type": "uint8_t"
+        },
+        {
+            "name": "depth",
+            "type": "uint8_t"
+        },
+        {
+            "name": "ts_recv",
+            "type": "uint64_t"
+        },
+        {
+            "name": "ts_in_delta",
+            "type": "int32_t"
+        },
+        {
+            "name": "sequence",
+            "type": "uint32_t"
+        }
+    ]
+
+[]historical.metadata.list_unit_prices[]
+
+list unit prices for each feed mode and data schema in us dollars per
+gigabyte.
+
+[]parameters[]
+
+dataset
+
+required | dataset or str
+
+the dataset code (string identifier). must be one of the values from
+list_datasets.
+
+[]returns[]
+
+list[dict[str, any]]
+
+a list of maps of feed mode to schema to unit price.
+
+mode
+
+str
+
+the feed mode. will be one of "historical", "historical-streaming", or
+"live".
+
+unit_prices
+
+dict[str | float]
+
+a mapping of schemas to unit prices in us dollars per gigabyte.
+
+[]
+
+api method
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    Historical.metadata.list_unit_prices(
+        dataset: Dataset | str,
+    ) -> list[dict[str, Any]]
+
+[]
+
+example usage
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    import databento as db
+
+    client = db.Historical("db-HAaSXwJQW85bKXRg3gA5uHrhvnnM6")
+
+    unit_prices = client.metadata.list_unit_prices(dataset="OPRA.PILLAR")
+    print(unit_prices)
+
+[]
+
+example response
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    [
+        {
+            "mode": "historical",
+            "unit_prices": {
+                "mbp-1": 0.04,
+                "ohlcv-1s": 280.0,
+                "ohlcv-1m": 280.0,
+                "ohlcv-1h": 600.0,
+                "ohlcv-1d": 600.0,
+                "tbbo": 210.0,
+                "trades": 280.0,
+                "statistics": 11.0,
+                "definition": 5.0
+            }
+        },
+        {
+            "mode": "historical-streaming",
+            "unit_prices": {
+                "mbp-1": 0.04,
+                "ohlcv-1s": 280.0,
+                "ohlcv-1m": 280.0,
+                "ohlcv-1h": 600.0,
+                "ohlcv-1d": 600.0,
+                "tbbo": 210.0,
+                "trades": 280.0,
+                "statistics": 11.0,
+                "definition": 5.0
+            }
+        },
+        {
+            "mode": "live",
+            "unit_prices": {
+                "mbp-1": 0.05,
+                "ohlcv-1s": 336.0,
+                "ohlcv-1m": 336.0,
+                "ohlcv-1h": 720.0,
+                "ohlcv-1d": 720.0,
+                "tbbo": 252.0,
+                "trades": 336.0,
+                "statistics": 13.2,
+                "definition": 6.0
+            }
+        }
+    ]
+
+[]historical.metadata.get_dataset_condition[]
+
+get the dataset condition from databento.
+
+use this method to discover data availability and quality.
+
+[]parameters[]
+
+dataset
+
+required | dataset or str
+
+the dataset code (string identifier). must be one of the values from
+list_datasets.
+
+start_date
+
+optional | date or str
+
+the inclusive utc start date of the request range as a python date or
+iso 8601 date string. if none then first date available.
+
+end_date
+
+optional | date or str
+
+the inclusive utc end date of the request range as a python date or iso
+8601 date string. if none then last date available.
+
+[]returns[]
+
+list[dict[str, str | none]]
+
+a list of conditions per date.
+
+date
+
+str
+
+the day of the described data, as an iso 8601 date string.
+
+condition
+
+str
+
+the condition code describing the quality and availability of the data
+on the given day. possible values are listed below.
+
+last_modified_date
+
+str or none
+
+the date when any schema in the dataset on the given day was last
+generated or modified, as an iso 8601 date string. will be none when
+condition is 'missing'.
+
+possible values for condition:
+
+- available: the data is available with no known issues
+- degraded: the data is available, but there may be missing data or
+  other correctness issues
+- pending: the data is not yet available, but may be available soon
+- missing: the data is not available
+
+[]
+
+api method
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    Historical.metadata.get_dataset_condition(
+        dataset: Dataset | str,
+        start_date: date | str | None = None,
+        end_date: date | str | None = None,
+    ) -> list[dict[str, str | None]]
+
+[]
+
+example usage
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    import databento as db
+
+    client = db.Historical("db-HAaSXwJQW85bKXRg3gA5uHrhvnnM6")
+
+    conditions = client.metadata.get_dataset_condition(
+        dataset="GLBX.MDP3",
+        start_date="2022-06-06",
+        end_date="2022-06-10",
+    )
+    print(conditions)
+
+[]
+
+example response
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    [
+        {
+            "date": "2022-06-06",
+            "condition": "available",
+            "last_modified_date": "2024-05-18"
+        },
+        {
+            "date": "2022-06-07",
+            "condition": "available",
+            "last_modified_date": "2024-05-21"
+        },
+        {
+            "date": "2022-06-08",
+            "condition": "available",
+            "last_modified_date": "2024-05-21"
+        },
+        {
+            "date": "2022-06-09",
+            "condition": "available",
+            "last_modified_date": "2024-05-21"
+        },
+        {
+            "date": "2022-06-10",
+            "condition": "available",
+            "last_modified_date": "2024-05-22"
+        }
+    ]
+
+[]historical.metadata.get_dataset_range[]
+
+get the available range for the dataset given the user's entitlements.
+
+use this method to discover data availability. The start and end values
+in the response can be used with the timeseries.get_range and
+batch.submit_job endpoints.
+
+This endpoint will return the start and end timestamps over the entire
+dataset as well as the per-schema start and end timestamps under the
+schema key. in some cases, a schema's availability is a subset of the
+entire dataset availability.
+
+[]parameters[]
+
+dataset
+
+required | dataset or str
+
+the dataset code (string identifier). must be one of the values from
+list_datasets.
+
+[]returns[]
+
+dict[str, str | dict[str, str]]
+
+the available range for the dataset.
+
+start
+
+str
+
+the inclusive start of the available range as an iso 8601 timestamp.
+
+end
+
+str
+
+the exclusive end of the available range as an iso 8601 timestamp.
+
+schema
+
+dict[str, str]
+
+a mapping of schema names to per-schema start and end timestamps.
+
+[]
+
+api method
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    Historical.metadata.get_dataset_range(
+        dataset: Dataset | str,
+    ) -> dict[str, str | dict[str, str]]
+
+[]
+
+example usage
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    import databento as db
+
+    client = db.Historical("db-HAaSXwJQW85bKXRg3gA5uHrhvnnM6")
+
+    available_range = client.metadata.get_dataset_range(dataset="XNAS.BASIC")
+
+    print(available_range)
+
+[]
+
+example response
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    {
+        "start":"2018-05-01T00:00:00.000000000Z",
+        "end":"2025-01-30T00:00:00.000000000Z",
+        "schema": {
+            "mbo": {
+                "start":"2018-05-01T00:00:00.000000000Z",
+                "end":"2025-01-30T00:00:00.000000000Z"
+            },
+            "mbp-1": {
+                "start":"2018-05-01T00:00:00.000000000Z",
+                "end":"2025-01-30T00:00:00.000000000Z"
+            },
+            "mbp-10": {
+                "start":"2018-05-01T00:00:00.000000000Z",
+                "end":"2025-01-30T00:00:00.000000000Z"
+            },
+            "bbo-1s": {
+                "start":"2018-05-01T00:00:00.000000000Z",
+                "end":"2025-01-30T00:00:00.000000000Z"
+            },
+            "bbo-1m": {
+                "start":"2018-05-01T00:00:00.000000000Z",
+                "end":"2025-01-30T00:00:00.000000000Z"
+            },
+            "tbbo": {
+                "start":"2018-05-01T00:00:00.000000000Z",
+                "end":"2025-01-30T00:00:00.000000000Z"
+            },
+            "trades": {
+                "start":"2018-05-01T00:00:00.000000000Z",
+                "end":"2025-01-30T00:00:00.000000000Z"
+            },
+            "ohlcv-1s": {
+                "start":"2018-05-01T00:00:00.000000000Z",
+                "end":"2025-01-30T00:00:00.000000000Z"
+            },
+            "ohlcv-1m": {
+                "start":"2018-05-01T00:00:00.000000000Z",
+                "end":"2025-01-30T00:00:00.000000000Z"
+            },
+            "ohlcv-1h": {
+                "start":"2018-05-01T00:00:00.000000000Z",
+                "end":"2025-01-30T00:00:00.000000000Z"
+            },
+            "ohlcv-1d": {
+                "start":"2018-05-01T00:00:00.000000000Z",
+                "end":"2025-01-30T00:00:00.000000000Z"
+            },
+            "definition": {
+                "start":"2018-05-01T00:00:00.000000000Z",
+                "end":"2025-01-30T00:00:00.000000000Z"
+            },
+            "statistics": {
+                "start":"2018-05-01T00:00:00.000000000Z",
+                "end":"2025-01-30T00:00:00.000000000Z"
+            },
+            "status": {
+                "start":"2018-05-01T00:00:00.000000000Z",
+                "end":"2025-01-30T00:00:00.000000000Z"
+            },
+            "imbalance": {
+                "start":"2018-05-01T00:00:00.000000000Z",
+                "end":"2025-01-30T00:00:00.000000000Z"
+            }
+        }
+    }
+
+[]historical.metadata.get_record_count[]
+
+get the record count of the time series data query.
+
+this method may not be accurate for time ranges that are not discrete
+multiples of 10 minutes, potentially over-reporting the number of
+records in such cases. the definition schema is only accurate for
+discrete multiples of 24 hours.
+
+[]parameters[]
+
+dataset
+
+required | dataset or str
+
+the dataset code (string identifier). must be one of the values from
+list_datasets.
+
+start
+
+required | pd.timestamp, datetime, date, str, or int
+
+the inclusive start of the request range. takes pd.timestamp, python
+datetime, python date, iso 8601 string, or unix timestamp in
+nanoseconds. assumes utc as timezone unless otherwise specified.
+
+end
+
+optional | pd.timestamp, datetime, date, str, or int
+
+the exclusive end of the request range. takes pd.timestamp, python
+datetime, python date, iso 8601 string, or unix timestamp in
+nanoseconds. assumes utc as timezone unless otherwise specified.
+defaults to the forward filled value of start based on the resolution
+provided.
+
+symbols
+
+optional | iterable[str | int] or str or int
+
+the product symbols to filter for. takes up to 2,000 symbols per
+request. if 'all_symbols' or none then will select all symbols.
+
+schema
+
+optional | schema or str, default 'trades'
+
+the data record schema. must be one of the values from list_schemas.
+
+stype_in
+
+optional | stype or str, default 'raw_symbol'
+
+the symbology type of input symbols. must be one of 'raw_symbol',
+'instrument_id', 'parent', or 'continuous'.
+
+limit
+
+optional | int
+
+the maximum number of records to return. if none then no limit.
+
+[]returns[]
+
+int
+
+the record count.
+
+[]
+
+api method
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    Historical.metadata.get_record_count(
+        dataset: Dataset | str,
+        start: pd.Timestamp | datetime | date | str | int,
+        end: pd.Timestamp | datetime | date | str | int | None = None,
+        symbols: Iterable[str | int] | str | int | None = None,
+        schema: Schema | str = "trades",
+        stype_in: SType | str = "raw_symbol",
+        limit: int | None = None,
+    ) -> int
+
+[]
+
+example usage
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    import databento as db
+
+    client = db.Historical("db-HAaSXwJQW85bKXRg3gA5uHrhvnnM6")
+
+    count = client.metadata.get_record_count(
+        dataset="GLBX.MDP3",
+        symbols=["ESM2"],
+        schema="mbo",
+        start="2022-01-06",
+    )
+    print(count)
+
+[]
+
+example response
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    1329107
+
+[]historical.metadata.get_billable_size[]
+
+get the billable uncompressed raw binary size for historical streaming
+or batched files.
+
+this method may not be accurate for time ranges that are not discrete
+multiples of 10 minutes, potentially over-reporting the size in such
+cases. the definition schema is only accurate for discrete multiples of
+24 hours.
+
+  [info]
+
+  info
+
+  the amount billed will be based on the actual amount of bytes sent;
+  see our pricing documentation for more details.
+
+[]parameters[]
+
+dataset
+
+required | dataset or str
+
+the dataset code (string identifier). must be one of the values from
+list_datasets.
+
+start
+
+required | pd.timestamp, datetime, date, str, or int
+
+the inclusive start of the request range. takes pd.timestamp, python
+datetime, python date, iso 8601 string, or unix timestamp in
+nanoseconds. assumes utc as timezone unless otherwise specified.
+
+end
+
+optional | pd.timestamp, datetime, date, str, or int
+
+the exclusive end of the request range. takes pd.timestamp, python
+datetime, python date, iso 8601 string, or unix timestamp in
+nanoseconds. assumes utc as timezone unless otherwise specified.
+defaults to the forward filled value of start based on the resolution
+provided.
+
+symbols
+
+optional | iterable[str | int] or str or int
+
+the product symbols to filter for. takes up to 2,000 symbols per
+request. if 'all_symbols' or none then will select all symbols.
+
+schema
+
+optional | schema or str, default 'trades'
+
+the data record schema. must be one of the values from list_schemas.
+
+stype_in
+
+optional | stype or str, default 'raw_symbol'
+
+the symbology type of input symbols. must be one of 'raw_symbol',
+'instrument_id', 'parent', or 'continuous'.
+
+limit
+
+optional | int
+
+the maximum number of records to return. if none then no limit.
+
+[]returns[]
+
+int
+
+the size in number of bytes used for billing.
+
+[]
+
+api method
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    Historical.metadata.get_billable_size(
+        dataset: Dataset | str,
+        start: pd.Timestamp | datetime | date | str | int,
+        end: pd.Timestamp | datetime | date | str | int | None = None,
+        symbols: Iterable[str | int] | str | int | None = None,
+        schema: Schema | str = "trades",
+        stype_in: Stype | str = "raw_symbol",
+        limit: int | None = None,
+    ) -> int
+
+[]
+
+example usage
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    import databento as db
+
+    client = db.Historical("db-HAaSXwJQW85bKXRg3gA5uHrhvnnM6")
+
+    size = client.metadata.get_billable_size(
+        dataset="GLBX.MDP3",
+        symbols=["ESM2"],
+        schema="trades",
+        start="2022-06-06T00:00:00",
+        end="2022-06-10T12:10:00",
+    )
+    print(size)
+
+[]
+
+example response
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    99219648
+
+[]historical.metadata.get_cost[]
+
+get the cost in us dollars for a historical streaming or batch download
+request. this cost respects any discounts provided by flat rate plans.
+
+this method may not be accurate for time ranges that are not discrete
+multiples of 10 minutes, potentially over-reporting the cost in such
+cases. the definition schema is only accurate for discrete multiples of
+24 hours.
+
+  [info]
+
+  info
+
+  the amount billed will be based on the actual amount of bytes sent;
+  see our pricing documentation for more details.
+
+[]parameters[]
+
+dataset
+
+required | dataset or str
+
+the dataset code (string identifier). must be one of the values from
+list_datasets.
+
+start
+
+required | pd.timestamp, datetime, date, str, or int
+
+the inclusive start of the request range. takes pd.timestamp, python
+datetime, python date, iso 8601 string, or unix timestamp in
+nanoseconds. assumes utc as timezone unless otherwise specified.
+
+end
+
+optional | pd.timestamp, datetime, date, str, or int
+
+the exclusive end of the request range. takes pd.timestamp, python
+datetime, python date, iso 8601 string, or unix timestamp in
+nanoseconds. assumes utc as timezone unless otherwise specified.
+defaults to the forward filled value of start based on the resolution
+provided.
+
+mode
+
+optional | feedmode or str
+
+the data feed mode of the request. must be one of 'historical',
+'historical-streaming', or 'live'.
+
+symbols
+
+optional | iterable[str | int] or str or int
+
+the product symbols to filter for. takes up to 2,000 symbols per
+request. if 'all_symbols' or none then will select all symbols.
+
+schema
+
+optional | schema or str, default 'trades'
+
+the data record schema. must be one of the values from list_schemas.
+
+stype_in
+
+optional | stype or str, default 'raw_symbol'
+
+the symbology type of input symbols. must be one of 'raw_symbol',
+'instrument_id', 'parent', or 'continuous'.
+
+limit
+
+optional | int
+
+the maximum number of records to return. if none then no limit.
+
+[]returns[]
+
+float
+
+the cost in us dollars.
+
+[]
+
+api method
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    Historical.metadata.get_cost(
+        dataset: Dataset | str,
+        start: pd.Timestamp | datetime | date | str | int,
+        end: pd.Timestamp | datetime | date | str | int | None = None,
+        mode: FeedMode | str = "historical-streaming",
+        symbols: Iterable[str | int] | str | int | None = None,
+        schema: Schema | str = "trades",
+        stype_in: SType | str = "raw_symbol",
+        limit: int | None = None,
+    ) -> float
+
+[]
+
+example usage
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    import databento as db
+
+    client = db.Historical("db-HAaSXwJQW85bKXRg3gA5uHrhvnnM6")
+
+    cost = client.metadata.get_cost(
+        dataset="GLBX.MDP3",
+        symbols=["ESM2"],
+        schema="trades",
+        start="2022-06-06T00:00:00",
+        end="2022-06-10T12:10:00",
+    )
+    print(cost)
+
+[]
+
+example response
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    2.587353944778
+
+[]time series[]
+
+[]historical.timeseries.get_range[]
+
+makes a streaming request for time series data from databento.
+
+this is the primary method for getting historical market data,
+instrument definitions, and status data directly into your application.
+
+This method only returns after all of the data has been downloaded,
+which can take a long time. For large requests, consider using
+batch.submit_job instead.
+
+[]parameters[]
+
+dataset
+
+required | dataset or str
+
+the dataset code (string identifier). must be one of the values from
+list_datasets.
+
+start
+
+required | pd.timestamp, datetime, date, str, or int
+
+the inclusive start of the request range. filters on ts_recv if it
+exists in the schema, otherwise ts_event. takes pd.timestamp, python
+datetime, python date, iso 8601 string, or unix timestamp in
+nanoseconds. assumes utc as timezone unless otherwise specified.
+
+end
+
+optional | pd.timestamp, datetime, date, str, or int
+
+the exclusive end of the request range. filters on ts_recv if it exists
+in the schema, otherwise ts_event. takes pd.timestamp, python datetime,
+python date, iso 8601 string, or unix timestamp in nanoseconds. assumes
+utc as timezone unless otherwise specified. defaults to the forward
+filled value of start based on the resolution provided.
+
+symbols
+
+optional | iterable[str | int] or str or int
+
+the product symbols to filter for. takes up to 2,000 symbols per
+request. if more than 1 symbol is specified, the data is merged and
+sorted by time. if 'all_symbols' or none then will select all symbols.
+
+schema
+
+optional | schema or str, default 'trades'
+
+the data record schema. must be one of the values from list_schemas.
+
+stype_in
+
+optional | stype or str, default 'raw_symbol'
+
+the symbology type of input symbols. must be one of 'raw_symbol',
+'instrument_id', 'parent', or 'continuous'.
+
+stype_out
+
+optional | stype or str, default 'instrument_id'
+
+the symbology type of output symbols. must be one of 'raw_symbol',
+'instrument_id', 'parent', or 'continuous'.
+
+limit
+
+optional | int
+
+the maximum number of records to return. if none then no limit.
+
+path
+
+optional | pathlike[str] or str
+
+the file path to stream the data to. it is recommended to use the
+".dbn.zst" suffix.
+
+[]returns[]
+
+a dbnstore object.
+
+a full list of fields for each schema is available through
+historical.metadata.list_fields.
+
+[]
+
+api method
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    Historical.timeseries.get_range(
+        dataset: Dataset | str,
+        start: pd.Timestamp | datetime | date | str | int,
+        end: pd.Timestamp | datetime | date | str | int | None = None,
+        symbols: Iterable[str | int] | str | int | None = None,
+        schema: Schema | str = "trades",
+        stype_in: SType | str = "raw_symbol",
+        stype_out: SType | str = "instrument_id",
+        limit: int | None = None,
+        path: PathLike[str] | str | None = None,
+    ) -> DBNStore
+
+[]
+
+example usage
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    import databento as db
+
+    client = db.Historical("db-HAaSXwJQW85bKXRg3gA5uHrhvnnM6")
+
+    data = client.timeseries.get_range(
+        dataset="GLBX.MDP3",
+        symbols=["ESM2"],
+        schema="trades",
+        start="2022-06-06T00:00:00",
+        end="2022-06-10T00:10:00",
+        limit=1,
+    )
+    df = data.to_df()
+    print(df.iloc[0].to_json(indent=4))
+
+[]
+
+example response
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    {
+        "ts_event":1654473600070,
+        "rtype":0,
+        "publisher_id":1,
+        "instrument_id":3403,
+        "action":"T",
+        "side":"A",
+        "depth":0,
+        "price":4108.5,
+        "size":1,
+        "flags":0,
+        "ts_in_delta":18681,
+        "sequence":157862,
+        "symbol":"ESM2"
+    }
+
+[]historical.timeseries.get_range_async[]
+
+asynchronously request a historical time series data stream from
+databento.
+
+primary method for getting historical intraday market data, daily data,
+instrument definitions and market status data directly into your
+application.
+
+This method only returns after all of the data has been downloaded,
+which can take a long time. For large requests, consider using
+batch.submit_job instead.
+
+  [info]
+
+  info
+
+  this method is a coroutine and must be used with an await expression.
+
+[]parameters[]
+
+dataset
+
+required | dataset or str
+
+the dataset code (string identifier). must be one of the values from
+list_datasets.
+
+start
+
+required | pd.timestamp, datetime, date, str, or int
+
+the inclusive start of the request range. filters on ts_recv if it
+exists in the schema, otherwise ts_event. takes pd.timestamp, python
+datetime, python date, iso 8601 string, or unix timestamp in
+nanoseconds. assumes utc as timezone unless otherwise specified.
+
+end
+
+optional | pd.timestamp, datetime, date, str, or int
+
+the exclusive end of the request range. filters on ts_recv if it exists
+in the schema, otherwise ts_event. takes pd.timestamp, python datetime,
+python date, iso 8601 string, or unix timestamp in nanoseconds. assumes
+utc as timezone unless otherwise specified. defaults to the forward
+filled value of start based on the resolution provided.
+
+symbols
+
+optional | iterable[str | int] or str or int
+
+the product symbols to filter for. takes up to 2,000 symbols per
+request. if more than 1 symbol is specified, the data is merged and
+sorted by time. if 'all_symbols' or none then will select all symbols.
+
+schema
+
+optional | schema or str, default 'trades'
+
+the data record schema. must be one of the values from list_schemas.
+
+stype_in
+
+optional | stype or str, default 'raw_symbol'
+
+the symbology type of input symbols. must be one of 'raw_symbol',
+'instrument_id', 'parent', or 'continuous'.
+
+stype_out
+
+optional | stype or str, default 'instrument_id'
+
+the symbology type of output symbols. must be one of 'raw_symbol',
+'instrument_id', 'parent', or 'continuous'.
+
+limit
+
+optional | int
+
+the maximum number of records to return. if none then no limit.
+
+path
+
+optional | pathlike[str] or str
+
+the file path to stream the data to. it is recommended to use the
+".dbn.zst" suffix.
+
+[]returns[]
+
+a dbnstore object.
+
+a full list of fields for each schema is available through
+historical.metadata.list_fields.
+
+[]
+
+api method
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    Historical.timeseries.get_range_async(
+        dataset: Dataset | str,
+        start: pd.Timestamp | datetime | date | str | int,
+        end: pd.Timestamp | datetime | date | str | int | None = None,
+        symbols: Iterable[str | int] | str | int | None = None,
+        schema: Schema | str = "trades",
+        stype_in: SType | str = "raw_symbol",
+        stype_out: SType | str = "instrument_id",
+        limit: int | None = None,
+        path: PathLike[str] | str | None = None,
+    ) -> Awaitable[DBNStore]
+
+[]
+
+example usage
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    import asyncio
+    import databento as db
+
+    client = db.Historical("db-HAaSXwJQW85bKXRg3gA5uHrhvnnM6")
+
+    coro = client.timeseries.get_range_async(
+        dataset="GLBX.MDP3",
+        symbols=["ESM2"],
+        schema="trades",
+        start="2022-06-06T00:00:00",
+        end="2022-06-10T00:10:00",
+        limit=1,
+    )
+    data = asyncio.run(coro)
+
+    df = data.to_df()
+    print(df.iloc[0].to_json(indent=4))
+
+[]
+
+example response
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    {
+        "ts_event":1654473600070,
+        "rtype":0,
+        "publisher_id":1,
+        "instrument_id":3403,
+        "action":"T",
+        "side":"A",
+        "depth":0,
+        "price":4108.5,
+        "size":1,
+        "flags":0,
+        "ts_in_delta":18681,
+        "sequence":157862,
+        "symbol":"ESM2"
+    }
+
+[]symbology[]
+
+[]historical.symbology.resolve[]
+
+resolve a list of symbols from an input symbology type, to an output
+symbology type.
+
+take, for example, a raw symbol to an instrument id: esm2 → 3403.
+
+[]parameters[]
+
+dataset
+
+required | dataset or str
+
+the dataset code (string identifier). must be one of the values from
+list_datasets.
+
+symbols
+
+required | iterable[str | int] or str or int
+
+the symbols to resolve. takes up to 2,000 symbols per request. use
+'all_symbols' to request all symbols (not available for every dataset).
+
+stype_in
+
+required | stype or str
+
+the symbology type of input symbols. must be one of 'raw_symbol',
+'instrument_id', 'parent', or 'continuous'.
+
+stype_out
+
+required | stype or str
+
+the symbology type of output symbols. must be one of 'raw_symbol',
+'instrument_id', 'parent', or 'continuous'.
+
+start_date
+
+required | date or str
+
+the inclusive utc start date of the request range as a python date or
+iso 8601 date string.
+
+end_date
+
+optional | date or str
+
+the exclusive utc end date of the request range as a python date or iso
+8601 date string. defaults to the forward filled value of start based on
+the resolution provided.
+
+[]returns[]
+
+dict[str, any]
+
+the results for the symbology resolution.
+
+  [see also]
+
+  see also
+
+  for more information on symbology resolution, visit our symbology
+  documentation.
+
+result
+
+dict[str, list[dict[str, str]]
+
+the symbology mapping result. for each requested symbol, a list of
+symbology mappings is provided.
+
+symbols
+
+list[str]
+
+the requested symbols.
+
+stype_in
+
+str
+
+the requested input symbology type.
+
+stype_out
+
+str
+
+the requested output symbology type.
+
+start_date
+
+str
+
+the requested symbology start date as an iso 8601 date string.
+
+end_date
+
+str
+
+the requested symbology end date as an iso 8601 date string.
+
+partial
+
+list[str]
+
+the list of symbols, if any, that partially resolved inside the start
+date and end date interval.
+
+not_found
+
+list[str]
+
+the list of symbols, if any, that failed to resolve inside the start
+date and end date interval.
+
+message
+
+str
+
+a short message indicating the overall symbology result. can be one of:
+"ok", or "partially resolved", or "not found"
+
+status
+
+int
+
+a numerical status field indicating the overall symbology result. can be
+one of: 0 (ok), 1 (partially resolved), or 2 (not found).
+
+[]
+
+api method
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    Historical.symbology.resolve(
+        dataset: Dataset | str,
+        symbols: Iterable[str | int] | str | int,
+        stype_in: SType | str,
+        stype_out: SType | str,
+        start_date: date | str,
+        end_date: date | str | None = None,
+    ) -> dict[str, Any]
+
+[]
+
+example usage
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    import databento as db
+
+    client = db.Historical("db-HAaSXwJQW85bKXRg3gA5uHrhvnnM6")
+
+    result = client.symbology.resolve(
+        dataset="GLBX.MDP3",
+        symbols=["ESM2"],
+        stype_in="raw_symbol",
+        stype_out="instrument_id",
+        start_date="2022-06-01",
+        end_date="2022-06-30",
+    )
+    print(result)
+
+[]
+
+example response
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    {
+        "result": {
+            "ESM2": [
+                {
+                    "d0": "2022-06-01",
+                    "d1": "2022-06-26",
+                    "s": "3403"
+                }
+            ]
+        },
+        "symbols": [
+            "ESM2"
+        ],
+        "stype_in": "raw_symbol",
+        "stype_out": "instrument_id",
+        "start_date": "2022-06-01",
+        "end_date": "2022-06-30",
+        "partial": [],
+        "not_found": [],
+        "message": "OK",
+        "status": 0
+    }
+
+[]batch downloads[]
+
+batch downloads allow you to download data files directly from within
+your portal. for more information, see streaming vs. batch download.
+
+[]historical.batch.submit_job[]
+
+make a batch download job request.
+
+once a request is submitted, our system processes the request and
+prepares the batch files in the background. The status of your request
+and the files can be accessed from the Download center from your user
+portal.
+
+This method takes longer than a streaming request, but is advantageous
+for larger requests as it supports delivery mechanisms that allow
+multiple accesses of the data without additional cost for each
+subsequent download after the first.
+
+related: batch.list_jobs.
+
+[]parameters[]
+
+dataset
+
+required | dataset or str
+
+the dataset code (string identifier). must be one of the values from
+list_datasets.
+
+symbols
+
+required | iterable[str | int] or str or int
+
+the product symbols to filter for. takes up to 2,000 symbols per
+request. if more than 1 symbol is specified, the data is merged and
+sorted by time. if 'all_symbols' or none then will select all symbols.
+
+schema
+
+required | schema or str
+
+the data record schema. must be one of the values from list_schemas.
+
+start
+
+required | pd.timestamp, datetime, date, str, or int
+
+the inclusive start of the request range. filters on ts_recv if it
+exists in the schema, otherwise ts_event. takes pd.timestamp, python
+datetime, python date, iso 8601 string, or unix timestamp in
+nanoseconds. assumes utc as timezone unless otherwise specified.
+
+end
+
+optional | pd.timestamp, datetime, date, str, or int
+
+the exclusive end of the request range. filters on ts_recv if it exists
+in the schema, otherwise ts_event. takes pd.timestamp, python datetime,
+python date, iso 8601 string, or unix timestamp in nanoseconds. assumes
+utc as timezone unless otherwise specified. defaults to the forward
+filled value of start based on the resolution provided.
+
+encoding
+
+optional | encoding or str
+
+the data encoding. must be one of 'dbn', 'csv', 'json'. for fastest
+transfer speed, 'dbn' is recommended.
+
+compression
+
+optional | compression or str
+
+the data compression mode. must be either 'zstd', 'none', or none. for
+fastest transfer speed, 'zstd' is recommended.
+
+pretty_px
+
+optional | bool, default false
+
+if prices should be formatted to the correct scale (using the
+fixed-precision scalar 1e-9). only applicable for 'csv' or 'json'
+encodings.
+
+pretty_ts
+
+optional | bool, default false
+
+if timestamps should be formatted as iso 8601 strings. only applicable
+for 'csv' or 'json' encodings.
+
+map_symbols
+
+optional | bool, default false
+
+if a symbol field should be included with each text-encoded record. only
+applicable for 'csv' or 'json' encodings.
+
+split_symbols
+
+optional | bool, default false
+
+if files should be split by raw symbol. cannot be requested with
+'all_symbols'. cannot be used with limit.
+
+split_duration
+
+optional | duration or str, default 'day'
+
+the maximum time duration before batched data is split into multiple
+files. must be one of 'day', 'week', 'month', or 'none'. a week starts
+on sunday utc.
+
+split_size
+
+optional | int
+
+the maximum size (in bytes) of each batched data file before being
+split. must be an integer between 1e9 and 10e9 inclusive (1gb - 10gb).
+defaults to no split size.
+
+delivery
+
+optional | delivery or str, default 'download'
+
+the delivery mechanism for the batched data files once processed. only
+'download' is supported at this time.
+
+stype_in
+
+optional | stype or str, default 'raw_symbol'
+
+the symbology type of input symbols. must be one of 'raw_symbol',
+'instrument_id', 'parent', or 'continuous'.
+
+stype_out
+
+optional | stype or str, default 'instrument_id'
+
+the symbology type of output symbols. must be one of 'raw_symbol',
+'instrument_id', 'parent', or 'continuous'.
+
+limit
+
+optional | int
+
+the maximum number of records to return. if none then no limit. cannot
+be used with split_symbols.
+
+[]returns[]
+
+dict[str, any]
+
+the description of the submitted batch job.
+
+id
+
+str
+
+the unique job id for the request.
+
+user_id
+
+str
+
+the user id of the user who made the request.
+
+api_key
+
+str or none
+
+the api key name for the request (if basic auth was used).
+
+cost_usd
+
+float or none
+
+the cost of the job in us dollars (none until the job is done
+processing).
+
+dataset
+
+str
+
+the dataset code (string identifier).
+
+symbols
+
+str
+
+the list of symbols specified in the request.
+
+stype_in
+
+str
+
+the symbology type of input symbols.
+
+stype_out
+
+str
+
+the symbology type of output symbols.
+
+schema
+
+str
+
+the data record schema.
+
+start
+
+str
+
+the iso 8601 timestamp start of request time range (inclusive).
+
+end
+
+str
+
+the iso 8601 timestamp end of request time range (exclusive).
+
+limit
+
+int or none
+
+the maximum number of records to return.
+
+encoding
+
+str
+
+the data encoding.
+
+compression
+
+str
+
+the data compression mode.
+
+pretty_px
+
+bool
+
+if prices are formatted to the correct scale (using the fixed-precision
+scalar 1e-9).
+
+pretty_ts
+
+bool
+
+if timestamps are formatted as iso 8601 strings.
+
+map_symbols
+
+bool
+
+if a symbol field is included with each text-encoded record.
+
+split_symbols
+
+bool
+
+if files are split by raw symbol.
+
+split_duration
+
+str
+
+the maximum time interval for an individual file before splitting into
+multiple files.
+
+split_size
+
+int or none
+
+the maximum size for an individual file before splitting into multiple
+files.
+
+packaging
+
+str or none
+
+the packaging method of the batch data, one of 'none', 'zip', or 'tar'.
+
+delivery
+
+str
+
+the delivery mechanism of the batch data. only 'download' is supported
+at this time.
+
+record_count
+
+int or none
+
+the number of data records (none until the job is processed).
+
+billed_size
+
+int or none
+
+the size of the raw binary data used to process the batch job (used for
+billing purposes).
+
+actual_size
+
+int or none
+
+the total size of the result of the batch job after splitting and
+compression.
+
+package_size
+
+int or none
+
+the total size of the result of the batch job after any packaging
+(including metadata).
+
+state
+
+str
+
+the current status of the batch job. one of 'received', 'queued',
+'processing', 'done', or 'expired'.
+
+ts_received
+
+str
+
+the iso 8601 timestamp when databento received the batch job.
+
+ts_queued
+
+str or none
+
+the iso 8601 timestamp when the batch job was queued.
+
+ts_process_start
+
+str or none
+
+the iso 8601 timestamp when the batch job began processing (if it's
+begun).
+
+ts_process_done
+
+str or none
+
+the iso 8601 timestamp when the batch job finished processing (if it's
+finished).
+
+ts_expiration
+
+str or none
+
+the iso 8601 timestamp when the batch job will expire from the download
+center.
+
+[]
+
+api method
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    Historical.batch.submit_job(
+        dataset: Dataset | str,
+        symbols: Iterable[str | int] | str | int,
+        schema: Schema | str,
+        start: pd.Timestamp | datetime | date | str | int,
+        end: pd.Timestamp | datetime | date | str | int | None = None,
+        encoding: Encoding | str = "dbn",
+        compression: Compression | str = "zstd",
+        pretty_px: bool = False,
+        pretty_ts: bool = False,
+        map_symbols: bool = False,
+        split_symbols: bool = False,
+        split_duration: Duration | str = "day",
+        split_size: int | None = None,
+        delivery: Delivery | str = "download",
+        stype_in: SType | str = "raw_symbol",
+        stype_out: SType | str = "instrument_id",
+        limit: int | None = None,
+    ) -> dict[str, Any]
+
+[]
+
+example usage
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    import databento as db
+
+    client = db.Historical("db-HAaSXwJQW85bKXRg3gA5uHrhvnnM6")
+
+    details = client.batch.submit_job(
+        dataset="GLBX.MDP3",
+        symbols=["ESM2"],
+        schema="trades",
+        encoding="dbn",
+        start="2022-06-06T12:00:00+00:00",
+        end="2022-06-10T00:00:00+00:00",
+    )
+    print(details)
+
+[]
+
+example response
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    {
+        "id": "GLBX-20221217-MN5S5S4WAS",
+        "user_id": "NBPDLF33",
+        "api_key": "prod-001",
+        "cost_usd": None,
+        "dataset": "GLBX.MDP3",
+        "symbols": "ESM2",
+        "stype_in": "raw_symbol",
+        "stype_out": "instrument_id",
+        "schema": "trades",
+        "start": "2022-06-06T12:00:00.000000000Z",
+        "end": "2022-06-10T00:00:00.000000000Z",
+        "limit": None,
+        "encoding": "dbn",
+        "compression": "zstd",
+        "pretty_px": False,
+        "pretty_ts": False,
+        "map_symbols": False,
+        "split_symbols": False,
+        "split_duration": "day",
+        "split_size": None,
+        "packaging": None,
+        "delivery": "download",
+        "record_count": None,
+        "billed_size": None,
+        "actual_size": None,
+        "package_size": None,
+        "state": "queued",
+        "ts_received": "2022-12-17T00:36:37.844913000Z",
+        "ts_queued": None,
+        "ts_process_start": None,
+        "ts_process_done": None,
+        "ts_expiration": None
+    }
+
+[]historical.batch.list_jobs[]
+
+list batch job details for the user account.
+
+the job details will be sorted in order of ts_received.
+
+related: download center.
+
+[]parameters[]
+
+states
+
+optional | iterable[jobstate | str] or jobstate or str
+
+the filter for job states as a list of comma separated values. can
+include 'queued', 'processing', 'done', and 'expired'. defaults to all
+except 'expired'.
+
+since
+
+optional | pd.timestamp, datetime, date, str, or int
+
+the filter for timestamp submitted (will not include jobs prior to
+this). takes pd.timestamp, python datetime, python date, iso 8601
+string, or unix timestamp in nanoseconds. assumes utc as timezone unless
+otherwise specified.
+
+[]returns[]
+
+list[dict[str, any]]
+
+a list of batch job details. see batch.submit_job for a detailed list of
+returned values.
+
+[]
+
+api method
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    Historical.batch.list_jobs(
+        states: Iterable[JobState | str] | JobState | str | None = "queued,processing,done",
+        since: pd.Timestamp | datetime | date | str | int | None = None,
+    ) -> list[dict[str, Any]]
+
+[]
+
+example usage
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    import databento as db
+
+    client = db.Historical("db-HAaSXwJQW85bKXRg3gA5uHrhvnnM6")
+
+    jobs = client.batch.list_jobs(
+        states=["queued", "processing", "done"],
+        since="2022-06-01",
+    )
+    print(jobs)
+
+[]
+
+example response
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    [
+        {
+            "id": "GLBX-20221126-DBVXWPJJQN",
+            "user_id": "NBPDLF33",
+            "api_key": "prod-001",
+            "cost_usd": 23.6454,
+            "dataset": "GLBX.MDP3",
+            "symbols": "ZC.FUT,ES.FUT",
+            "stype_in": "parent",
+            "stype_out": "instrument_id",
+            "schema": "mbo",
+            "start": "2022-10-24T00:00:00.000000000Z",
+            "end": "2022-11-24T00:00:00.000000000Z",
+            "limit": None,
+            "encoding": "csv",
+            "compression": "zstd",
+            "pretty_px": False,
+            "pretty_ts": False,
+            "map_symbols": False,
+            "split_symbols": False,
+            "split_duration": "day",
+            "split_size": None,
+            "packaging": None,
+            "delivery": "download",
+            "record_count": 412160224,
+            "billed_size": 23080972544,
+            "actual_size": 8144595219,
+            "package_size": 8144628684,
+            "state": "done",
+            "ts_received": "2022-11-26T09:23:17.519708000Z",
+            "ts_queued": "2022-12-03T14:34:57.897790000Z",
+            "ts_process_start": "2022-12-03T14:35:00.495167000Z",
+            "ts_process_done": "2022-12-03T14:48:15.710116000Z",
+            "ts_expiration": "2023-01-02T14:48:15.710116000Z",
+            "progress": 100
+        },
+    ...
+
+[]historical.batch.list_files[]
+
+list files for a batch job.
+
+will include the manifest.json, the metadata.json, and batched data
+files.
+
+related: download center.
+
+[]parameters[]
+
+job_id
+
+required | str
+
+the batch job identifier.
+
+[]returns[]
+
+list[dict[str, any]]
+
+the file details for the batch job.
+
+filename
+
+str
+
+the file name.
+
+size
+
+int
+
+the size of the file in bytes.
+
+hash
+
+str
+
+the sha256 hash of the file.
+
+urls
+
+dict
+
+a map of download protocol to url.
+
+[]
+
+api method
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    Historical.batch.list_files(
+        job_id: str,
+    ) -> list[dict[str, Any]]
+
+[]
+
+example usage
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    import databento as db
+
+    client = db.Historical("db-HAaSXwJQW85bKXRg3gA5uHrhvnnM6")
+
+    files = client.batch.list_files(job_id="GLBX-20220610-5DEFXVTMSM")
+    print(files)
+
+[]
+
+example response
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    [
+        {
+            "filename": "metadata.json",
+            "size": 1102,
+            "hash": "sha256:0168d53e1705b69b1d6407f10bb3ab48aac492fa0f68f863cc9b092931cc67a7",
+            "urls": {
+                "https": "https://api.databento.com/v0/batch/download/46PCMCVF/GLBX-20230203-WF9WJYSCDU/metadata.json",
+                "ftp": "ftp://ftp.databento.com/46PCMCVF/GLBX-20230203-WF9WJYSCDU/metadata.json",
+            }
+        },
+        {
+            "filename": "glbx-mdp3-20220610.mbo.csv.zst",
+            "size": 21832,
+            "hash": "sha256:1218930af153b4953632216044ef87607afa467fc7ab7fbb1f031fceacf9d52a",
+            "urls": {
+                "https": "https://api.databento.com/v0/batch/download/46PCMCVF/GLBX-20230203-WF9WJYSCDU/glbx-mdp3-20220610.mbo.csv.zst",
+                "ftp": "ftp://ftp.databento.com/46PCMCVF/GLBX-20230203-WF9WJYSCDU/glbx-mdp3-20220610.mbo.csv.zst",
+            }
+        }
+    ]
+
+[]historical.batch.download[]
+
+download a batch job or a specific file to {output_dir}/{job_id}/.
+
+will automatically generate any necessary directories if they do not
+already exist.
+
+related: download center.
+
+[]parameters[]
+
+job_id
+
+required | str
+
+the batch job identifier.
+
+output_dir
+
+optional | pathlike[str] or str
+
+the directory to download the file(s) to. if none, defaults to the
+current working directory.
+
+filename_to_download
+
+optional | str
+
+the specific file to download. if none then will download all files for
+the batch job.
+
+keep_zip
+
+optional | bool, default false
+
+if true, and filename_to_download is none, all job files will be saved
+as a .zip archive in the output_dir.
+
+[]returns[]
+
+list[path]
+
+a list of paths to the downloaded files.
+
+[]
+
+api method
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    Historical.batch.download(
+        job_id: str,
+        output_dir: PathLike[str] | str | None = None
+        filename_to_download: str | None = None,
+        keep_zip: bool = False,
+    ) -> list[Path]
+
+[]
+
+example usage
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    import databento as db
+
+    client = db.Historical("db-HAaSXwJQW85bKXRg3gA5uHrhvnnM6")
+
+    # Download all files for the batch job
+    client.batch.download(
+        job_id="GLBX-20220610-5DEFXVTMSM",
+        output_dir="my_data/",
+    )
+
+    # Alternatively, you can download a specific file
+    client.batch.download(
+        job_id="GLBX-20220610-5DEFXVTMSM",
+        output_dir="my_data/",
+        filename_to_download="metadata.json",
+    )
+
+[]historical.batch.download_async[]
+
+asynchronously download a batch job or a specific file to
+{output_dir}/{job_id}/.
+
+will automatically generate any necessary directories if they do not
+already exist.
+
+related: download center.
+
+  [info]
+
+  info
+
+  this method is a coroutine and must be used with an await expression.
+
+[]parameters[]
+
+job_id
+
+required | str
+
+the batch job identifier.
+
+output_dir
+
+optional | pathlike[str] or str
+
+the directory to download the file(s) to. if none, defaults to the
+current working directory.
+
+filename_to_download
+
+optional | str
+
+the specific file to download. if none then will download all files for
+the batch job.
+
+keep_zip
+
+optional | bool, default false
+
+if true, and filename_to_download is none all job files will be saved as
+a .zip archive in the output_dir.
+
+[]returns[]
+
+list[path]
+
+a list of paths to the downloaded files.
+
+[]
+
+api method
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    Historical.batch.download_async(
+        job_id: str,
+        output_dir: PathLike[str] | str | None = None,
+        filename_to_download: str | None = None,
+        keep_zip: bool = False,
+    ) -> Awaitable[list[Path]]
+
+[]
+
+example usage
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    import asyncio
+    import databento as db
+
+    client = db.Historical("db-HAaSXwJQW85bKXRg3gA5uHrhvnnM6")
+
+    # Download all files for the batch job
+    coro = client.batch.download_async(
+        job_id="GLBX-20220610-5DEFXVTMSM",
+        output_dir="my_data/",
+    )
+    asyncio.run(coro)
+
+    # Alternatively, you can download a specific file
+    coro = client.batch.download_async(
+        job_id="GLBX-20220610-5DEFXVTMSM",
+        output_dir="my_data/",
+        filename_to_download="metadata.json",
+    )
+    asyncio.run(coro)
+
+[]helpers[]
+
+[]dbnstore[]
+
+the dbnstore object is an i/o helper class for working with dbn-encoded
+data. Typically, this object is created when performing historical
+requests. However, it can be created directly using DBN data on disk or
+in memory using provided factory methods:
+
+- DBNStore.from_bytes
+- DBNStore.from_file
+
+[]attributes[]
+
+nbytes
+
+int
+
+the size of the data in bytes.
+
+raw
+
+bytes
+
+the raw data from the i/o stream.
+
+metadata
+
+metadata
+
+the metadata header for the dbnstore.
+
+dataset
+
+str
+
+the dataset id.
+
+schema
+
+schema or none
+
+the data record schema. if none, the dbnstore may contain multiple
+schemas.
+
+symbols
+
+list[str]
+
+the query symbols for the data.
+
+stype_in
+
+stype or none
+
+the query input symbology type for the data. if none, the dbnstore may
+contain mixed stypes.
+
+stype_out
+
+stype
+
+the query output symbology type for the data.
+
+start
+
+pd.timestamp
+
+the query start for the data as a pd.timestamp.
+
+end
+
+pd.timestamp or none
+
+the query end for the data as a pd.timestamp. if none, the dbnstore data
+was created without a known end time.
+
+limit
+
+int or none
+
+the query limit for the data.
+
+encoding
+
+encoding
+
+the data encoding.
+
+compression
+
+compression
+
+return the data compression format (if any).
+
+mappings
+
+dict[str, list[dict[str, any]]]
+
+return the symbology mappings for the data.
+
+symbology
+
+dict[str, any]
+
+return the symbology resolution information for the data.
+
+[]dbnstore.from_bytes[]
+
+read data from a dbn byte stream.
+
+[]parameters[]
+
+data
+
+required | bytesio or bytes or io[bytes]
+
+the bytes to read from.
+
+[]returns[]
+
+a dbnstore object.
+
+[]
+
+api method
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    DBNStore.from_bytes(
+        data: BytesIO | bytes | IO[bytes],
+    ) -> DBNStore
+
+[]
+
+example usage
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    import databento as db
+
+    client = db.Historical("db-HAaSXwJQW85bKXRg3gA5uHrhvnnM6")
+
+    data = client.timeseries.get_range(
+        dataset="GLBX.MDP3",
+        symbols=["ESM2"],
+        schema="trades",
+        start="2022-06-06",
+    )
+
+    # Save streamed data to .dbn.zst
+    path = "GLBX-ESM2-20220606.trades.dbn.zst"
+    data.to_file(path)
+
+    # Open saved data as a byte stream.
+    with open(path, "rb") as saved:
+        stored_data = db.DBNStore.from_bytes(saved)
+
+    # Convert to dataframe
+    df = stored_data.to_df()
+    print(df.head())
+
+[]
+
+example response
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+                                                                   ts_event  rtype  publisher_id  instrument_id action  ... size  flags  ts_in_delta  sequence  symbol
+    ts_recv                                                                                                             ...
+    2022-06-06 00:00:00.070314216+00:00 2022-06-06 00:00:00.070033767+00:00      0             1           3403      T  ...    1      0        18681    157862    ESM2
+    2022-06-06 00:00:00.090544076+00:00 2022-06-06 00:00:00.089830441+00:00      0             1           3403      T  ...    1      0        18604    157922    ESM2
+    2022-06-06 00:00:00.807324169+00:00 2022-06-06 00:00:00.807018955+00:00      0             1           3403      T  ...    4      0        18396    158072    ESM2
+    2022-06-06 00:00:01.317722490+00:00 2022-06-06 00:00:01.317385867+00:00      0             1           3403      T  ...    1      0        22043    158111    ESM2
+    2022-06-06 00:00:01.317736158+00:00 2022-06-06 00:00:01.317385867+00:00      0             1           3403      T  ...    7      0        17280    158112    ESM2
+
+    [5 rows x 13 columns]
+
+[]dbnstore.from_file[]
+
+read data from a dbn file.
+
+  [see also]
+
+  see also
+
+  databento.read_dbn is an alias for dbnstore.from_file.
+
+[]parameters[]
+
+path
+
+required | pathlike[str] or str
+
+the file path to read from.
+
+[]returns[]
+
+a dbnstore object.
+
+[]
+
+api method
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    DBNStore.from_file(
+        path: PathLike[str] | str,
+    ) -> DBNStore
+
+[]
+
+example usage
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    import databento as db
+
+    client = db.Historical("db-HAaSXwJQW85bKXRg3gA5uHrhvnnM6")
+
+    data = client.timeseries.get_range(
+        dataset="GLBX.MDP3",
+        symbols=["ESM2"],
+        schema="trades",
+        start="2022-06-06",
+    )
+
+    # Save streamed data to .dbn.zst
+    path = "GLBX-ESM2-20220606.trades.dbn.zst"
+    data.to_file(path)
+
+    # Read saved .dbn.zst
+    stored_data = db.DBNStore.from_file(path)
+
+    # Convert to dataframe
+    df = stored_data.to_df()
+    print(df.head())
+
+[]
+
+example response
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+                                                                   ts_event  rtype  publisher_id  instrument_id action  ... size  flags  ts_in_delta  sequence  symbol
+    ts_recv                                                                                                             ...
+    2022-06-06 00:00:00.070314216+00:00 2022-06-06 00:00:00.070033767+00:00      0             1           3403      T  ...    1      0        18681    157862    ESM2
+    2022-06-06 00:00:00.090544076+00:00 2022-06-06 00:00:00.089830441+00:00      0             1           3403      T  ...    1      0        18604    157922    ESM2
+    2022-06-06 00:00:00.807324169+00:00 2022-06-06 00:00:00.807018955+00:00      0             1           3403      T  ...    4      0        18396    158072    ESM2
+    2022-06-06 00:00:01.317722490+00:00 2022-06-06 00:00:01.317385867+00:00      0             1           3403      T  ...    1      0        22043    158111    ESM2
+    2022-06-06 00:00:01.317736158+00:00 2022-06-06 00:00:01.317385867+00:00      0             1           3403      T  ...    7      0        17280    158112    ESM2
+
+    [5 rows x 13 columns]
+
+[]dbnstore.reader[]
+
+return an i/o reader for the data.
+
+[]returns[]
+
+a raw io stream for reading the dbnstore data.
+
+[]
+
+api method
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    DBNStore.reader() -> IO[bytes]
+
+[]
+
+example usage
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    import databento as db
+
+    client = db.Historical("db-HAaSXwJQW85bKXRg3gA5uHrhvnnM6")
+
+    bento = client.timeseries.get_range(
+        dataset="GLBX.MDP3",
+        symbols="ZWZ3",
+        start="2022-06-06",
+    )
+
+    # Create an IO stream reader
+    reader = bento.reader
+
+[]dbnstore.replay[]
+
+replay data by passing records sequentially to the given callback.
+
+refer to the list of fields by schema article for documentation on the
+fields contained with each record type.
+
+[]parameters[]
+
+callback
+
+required | callable
+
+the callback function or method to be dispatched on every event.
+
+[]returns[]
+
+none
+
+[]
+
+api method
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    DBNStore.replay(
+        callback: Callable[[DBNRecord], None],
+    ) -> None
+
+[]
+
+example usage
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    import databento as db
+
+    client = db.Historical("db-HAaSXwJQW85bKXRg3gA5uHrhvnnM6")
+
+    data = client.timeseries.get_range(
+        dataset="GLBX.MDP3",
+        symbols=["ESM2"],
+        start="2022-06-06",
+    )
+
+    def print_large_trades(trade):
+        size = getattr(trade, "size", 0)
+        if size >= 200:
+            print(trade)
+
+    data.replay(print_large_trades)
+
+[]
+
+example response
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    TradeMsg { hd: RecordHeader { length: 12, rtype: Mbp0, publisher_id: GlbxMdp3Glbx, instrument_id: 3403, ts_event: 1654524078339857609 }, price: 4164.000000000, size: 291, action: 'T', side: 'B', flags: 0, depth: 0, ts_recv: 1654524078342408839, ts_in_delta: 20352, sequence: 3605032 }
+    TradeMsg { hd: RecordHeader { length: 12, rtype: Mbp0, publisher_id: GlbxMdp3Glbx, instrument_id: 3403, ts_event: 1654524133736900455 }, price: 4160.000000000, size: 216, action: 'T', side: 'B', flags: 0, depth: 0, ts_recv: 1654524133737794739, ts_in_delta: 28024, sequence: 3659203 }
+    TradeMsg { hd: RecordHeader { length: 12, rtype: Mbp0, publisher_id: GlbxMdp3Glbx, instrument_id: 3403, ts_event: 1654538295588752739 }, price: 4140.000000000, size: 200, action: 'T', side: 'B', flags: 0, depth: 0, ts_recv: 1654538295589900967, ts_in_delta: 21708, sequence: 10031624 }
+
+[]dbnstore.request_full_definitions[]
+
+request for full instrument definition(s) for all symbols based on the
+metadata properties. this is useful for retrieving the instrument
+definitions for saved dbn data.
+
+a timeseries.get_range request is made to obtain the definitions data
+which will incur a cost.
+
+[]parameters[]
+
+client
+
+required | historical
+
+the historical client to use for the request (contains the api key).
+
+path
+
+optional | pathlike[str] or str
+
+the path to stream the data to on disk (will then return a dbnstore).
+
+[]returns[]
+
+a dbnstore object.
+
+a full list of fields for each schema is available through
+historical.metadata.list_fields.
+
+[]
+
+api method
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    DBNStore.request_full_definitions(
+        client: Historical,
+        path: PathLike[str] | str | None = None,
+    ) -> DBNStore
+
+[]
+
+example usage
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    import databento as db
+
+    client = db.Historical(
+        key="db-HAaSXwJQW85bKXRg3gA5uHrhvnnM6",
+    )
+
+    trades = client.timeseries.get_range(
+        dataset="GLBX.MDP3",
+        symbols=["ES.FUT"],
+        stype_in="parent",
+        schema="trades",
+        start="2022-06-06",
+    )
+
+    definitions = trades.request_full_definitions(client).to_df()
+    definitions = definitions.sort_values(["expiration", "symbol"]).set_index("expiration")
+
+    print(definitions[["symbol"]])
+
+[]
+
+example response
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+                                  symbol
+    expiration
+    2022-06-17 13:30:00+00:00       ESM2
+    2022-06-17 13:30:00+00:00  ESM2-ESH3
+    2022-06-17 13:30:00+00:00  ESM2-ESM3
+    2022-06-17 13:30:00+00:00  ESM2-ESU2
+    2022-06-17 13:30:00+00:00  ESM2-ESZ2
+    2022-09-16 13:30:00+00:00       ESU2
+    2022-09-16 13:30:00+00:00  ESU2-ESH3
+    2022-09-16 13:30:00+00:00  ESU2-ESM3
+    2022-09-16 13:30:00+00:00  ESU2-ESU3
+    2022-09-16 13:30:00+00:00  ESU2-ESZ2
+    2022-12-16 14:30:00+00:00       ESZ2
+    2022-12-16 14:30:00+00:00  ESZ2-ESH3
+    2022-12-16 14:30:00+00:00  ESZ2-ESM3
+    2022-12-16 14:30:00+00:00  ESZ2-ESU3
+    2023-03-17 13:30:00+00:00       ESH3
+    2023-03-17 13:30:00+00:00  ESH3-ESM3
+    2023-03-17 13:30:00+00:00  ESH3-ESU3
+    2023-03-17 13:30:00+00:00  ESH3-ESZ3
+    2023-06-16 13:30:00+00:00       ESM3
+    2023-06-16 13:30:00+00:00  ESM3-ESU3
+    2023-06-16 13:30:00+00:00  ESM3-ESZ3
+    2023-09-15 13:30:00+00:00       ESU3
+    2023-09-15 13:30:00+00:00  ESU3-ESH4
+    2023-09-15 13:30:00+00:00  ESU3-ESZ3
+    2023-12-15 14:30:00+00:00       ESZ3
+    2023-12-15 14:30:00+00:00  ESZ3-ESH4
+    2024-03-15 13:30:00+00:00       ESH4
+    2024-03-15 13:30:00+00:00  ESH4-ESM4
+    2024-06-21 13:30:00+00:00       ESM4
+    2024-09-20 13:30:00+00:00       ESU4
+    2024-12-20 14:30:00+00:00       ESZ4
+    2025-12-19 14:30:00+00:00       ESZ5
+    2026-12-18 14:30:00+00:00       ESZ6
+
+[]dbnstore.request_symbology[]
+
+request to resolve symbology mappings based on the metadata properties.
+
+[]parameters[]
+
+client
+
+required | historical
+
+the historical client to use for the request (contains the api key).
+
+[]returns[]
+
+dict[str, any]
+
+a result including a map of input symbol to output symbol across a date
+range.
+
+[]
+
+api method
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    DBNStore.request_symbology(
+        client: Historical,
+    ) -> dict[str, Any]
+
+[]
+
+example usage
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    import databento as db
+
+    client = db.Historical("db-HAaSXwJQW85bKXRg3gA5uHrhvnnM6")
+
+    data = client.timeseries.get_range(
+        dataset="GLBX.MDP3",
+        symbols=["ESM2"],
+        schema="trades",
+        start="2022-06-06",
+    )
+
+    # Save streamed data to .dbn.zst
+    data.to_file("GLBX-ESM2-20201229.trades.dbn.zst")
+
+    # Read saved .dbn.zst
+    stored_data = db.DBNStore.from_file("GLBX-ESM2-20201229.trades.dbn.zst")
+
+    # Request symbology from .dbn.zst metadata
+    symbology = stored_data.request_symbology(client=client)
+    print(symbology)
+
+[]
+
+example response
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    {
+        "result": {
+            "ESM2": [
+                {
+                    "d0": "2022-06-06",
+                    "d1": "2022-06-07",
+                    "s": "3403"
+                }
+            ]
+        },
+        "symbols": [
+            "ESM2"
+        ],
+        "stype_in": "raw_symbol",
+        "stype_out": "instrument_id",
+        "start_date": "2022-06-06",
+        "end_date": "2022-06-07",
+        "partial": [],
+        "not_found": [],
+        "message": "OK",
+        "status": 0
+    }
+
+[]dbnstore.to_csv[]
+
+write data to a file in csv format.
+
+[]parameters[]
+
+path
+
+required | pathlike[str] or str
+
+the file path to write to.
+
+pretty_ts
+
+optional | bool, default true
+
+whether timestamp columns are converted to tz-aware pandas.timestamp
+(utc).
+
+pretty_px
+
+optional | bool, default true
+
+whether price columns are correctly scaled as display prices.
+
+map_symbols
+
+optional | bool, default true
+
+if symbology mappings from the metadata should be used to create a
+'symbol' column, mapping the instrument id to its native symbol for
+every record.
+
+compression
+
+optional | compression or str
+
+the output compression for writing. must be either 'zstd' or 'none'.
+
+schema
+
+optional | schema or str
+
+the data record schema for the output csv. must be one of the values
+from list_schemas. this is only required when reading a dbnstore with
+mixed record types.
+
+mode
+
+optional | str
+
+the file write mode to use, either "x" or "w". defaults to "w".
+
+[]returns[]
+
+none
+
+[]
+
+api method
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    DBNStore.to_csv(
+        path: PathLike[str] | str,
+        pretty_ts: bool = True,
+        pretty_px: bool = True,
+        map_symbols: bool = True,
+        compression: Compression | str = Compression.NONE,
+        schema: Schema | str | None = None,
+        mode: Literal["w", "x"] = "w",
+    ) -> None
+
+[]
+
+example usage
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    import databento as db
+
+    client = db.Historical("db-HAaSXwJQW85bKXRg3gA5uHrhvnnM6")
+
+    data = client.timeseries.get_range(
+        dataset="GLBX.MDP3",
+        symbols=["ESM2"],
+        schema="trades",
+        start="2022-06-06",
+    )
+
+    # Save streamed data to .csv
+    data.to_csv("GLBX-ESM2-20220606-trades.csv")
+
+[]dbnstore.to_df[]
+
+converts data to a pandas dataframe.
+
+  [info]
+
+  info
+
+  the dataframe index will be set to ts_recv if it exists in the schema,
+  otherwise it will be set to ts_event.
+
+  [see also]
+
+  see also
+
+  while not optimized for use with live data due to their
+  column-oriented format, pandas DataFrames can still be used with live
+  data by first streaming DBN data to a file, then converting to a
+  DataFrame with DBNStore.from_file().to_df(). see this example for more
+  information.
+
+[]parameters[]
+
+price_type
+
+optional | pricetype or str, default "float"
+
+the price type to use for price fields. if "fixed", prices will have a
+type of int in fixed decimal format; each unit representing 1e-9 or
+0.000000001. if "float", prices will have a type of float. if "decimal",
+prices will be instances of decimal.decimal.
+
+pretty_ts
+
+optional | bool, default true
+
+whether timestamp columns are converted to tz-aware pandas.timestamp.
+the timezone can be specified using the tz parameter.
+
+map_symbols
+
+optional | bool, default true
+
+if symbology mappings from the metadata should be used to create a
+'symbol' column, mapping the instrument id to its raw symbol for every
+record.
+
+schema
+
+optional | schema or str
+
+the data record schema for the output dataframe. must be one of the
+values from list_schemas. this is only required when reading a dbnstore
+with mixed record types.
+
+tz
+
+optional | datetime.tzinfo or str, default utc
+
+if pretty_ts is true, all timestamps will be converted to the specified
+timezone.
+
+count
+
+optional | int
+
+if set, instead of returning a single dataframe a dataframeiterator
+instance will be returned. when iterated, this object will yield a
+dataframe with at most count elements until the entire contents of the
+dbnstore are exhausted.
+
+[]returns[]
+
+a pandas dataframe object.
+
+[]
+
+api method
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    DBNStore.to_df(
+        price_type: PriceType | str = "float",
+        pretty_ts: bool = True,
+        map_symbols: bool = True,
+        schema: Schema | str | None = None,
+        tz: datetime.tzinfo | str = zoneinfo.ZoneInfo("UTC"),
+        count: int | None = None,
+    ) -> pd.DataFrame | DataFrameIterator
+
+[]
+
+example usage
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    import databento as db
+
+    client = db.Historical("db-HAaSXwJQW85bKXRg3gA5uHrhvnnM6")
+
+    data = client.timeseries.get_range(
+        dataset="GLBX.MDP3",
+        schema="trades",
+        symbols=["ESM2"],
+        start="2022-03-06",
+    )
+
+    df = data.to_df()
+    print(df.head())
+
+[]
+
+example response
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+                                                                   ts_event  rtype  publisher_id  instrument_id action  ... size  flags  ts_in_delta  sequence  symbol
+    ts_recv                                                                                                             ...
+    2022-03-06 23:00:00.039463300+00:00 2022-03-06 23:00:00.036436177+00:00      0             1           3403      T  ...    1      0        18828      5178    ESM2
+    2022-03-06 23:00:01.098111252+00:00 2022-03-06 23:00:01.097477845+00:00      0             1           3403      T  ...    1      0        19122      6816    ESM2
+    2022-03-06 23:00:04.612334175+00:00 2022-03-06 23:00:04.611714663+00:00      0             1           3403      T  ...    1      0        18687     10038    ESM2
+    2022-03-06 23:00:04.613776789+00:00 2022-03-06 23:00:04.613240435+00:00      0             1           3403      T  ...    1      0        18452     10045    ESM2
+    2022-03-06 23:00:06.881864467+00:00 2022-03-06 23:00:06.880575603+00:00      0             1           3403      T  ...    1      0        18478     11343    ESM2
+
+    [5 rows x 13 columns]
+
+[]dbnstore.to_file[]
+
+write data to a dbn file.
+
+[]parameters[]
+
+path
+
+required | pathlike[str] or str
+
+the file path to write to.
+
+mode
+
+optional | str
+
+the file write mode to use, either "x" or "w". defaults to "w".
+
+compression
+
+optional | compression or str
+
+the compression format to write. if none, uses the same compression as
+the underlying data.
+
+[]returns[]
+
+a dbnstore object.
+
+[]
+
+api method
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    DBNStore.to_file(
+        path: PathLike[str] | str,
+        mode: Literal["w", "x"] = "w",
+        compression: Compression | str | None = None,
+    ) -> None
+
+[]
+
+example usage
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    import databento as db
+
+    client = db.Historical("db-HAaSXwJQW85bKXRg3gA5uHrhvnnM6")
+
+    data = client.timeseries.get_range(
+        dataset="GLBX.MDP3",
+        symbols=["ESM2"],
+        schema="trades",
+        start="2022-06-06",
+    )
+
+    # Save streamed data to .dbn.zst
+    data.to_file("GLBX-ESM2-20220606.trades.dbn.zst")
+
+[]dbnstore.to_json[]
+
+write data to a file in json format.
+
+[]parameters[]
+
+path
+
+required | pathlike[str] or str
+
+the file path to write to.
+
+pretty_ts
+
+optional | bool, default true
+
+whether timestamp columns are converted to tz-aware pandas.timestamp
+(utc).
+
+pretty_px
+
+optional | bool, default true
+
+whether price columns are correctly scaled as display prices.
+
+map_symbols
+
+optional | bool, default true
+
+if symbology mappings from the metadata should be used to create a
+'symbol' column, mapping the instrument id to its raw symbol for every
+record.
+
+compression
+
+optional | compression or str
+
+the output compression for writing. must be either 'zstd' or 'none'.
+
+schema
+
+optional | schema or str
+
+the data record schema for the output json. must be one of the values
+from list_schemas. this is only required when reading a dbnstore with
+mixed record types.
+
+mode
+
+optional | str
+
+the file write mode to use, either "x" or "w". defaults to "w".
+
+[]returns[]
+
+none
+
+[]
+
+api method
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    DBNStore.to_json(
+        path: PathLike[str] | str,
+        pretty_ts: bool = True,
+        pretty_px: bool = True,
+        map_symbols: bool = True,
+        compression: Compression | str = Compression.NONE,
+        schema: Schema | str | None = None,
+        mode: Literal["w", "x"] = "w",
+    ) -> None
+
+[]
+
+example usage
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    import databento as db
+
+    client = db.Historical("db-HAaSXwJQW85bKXRg3gA5uHrhvnnM6")
+
+    data = client.timeseries.get_range(
+        dataset="GLBX.MDP3",
+        symbols=["ESM2"],
+        schema="trades",
+        start="2022-06-06",
+    )
+
+    # Save streamed data to .json
+    data.to_json("GLBX-ESM2-20220606-trades.json")
+
+[]dbnstore.to_ndarray[]
+
+converts data to a numpy n-dimensional array. each element will contain
+a python representation of the binary fields as a tuple.
+
+[]parameters[]
+
+schema
+
+optional | schema or str
+
+the data record schema for the output array. must be one of the values
+from list_schemas. this is only required when reading a dbnstore with
+mixed record types.
+
+count
+
+optional | int
+
+if set, instead of returning a single np.ndarray a ndarrayiterator
+instance will be returned. when iterated, this object will yield a
+np.ndarray with at most count elements until the entire contents of the
+dbnstore are exhausted.
+
+[]returns[]
+
+a numpy.ndarray object.
+
+[]
+
+api method
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    DBNStore.to_ndarray(
+        schema: Schema | str | None = None,
+        count: int | None = None,
+    ) -> np.ndarray | NDArrayIterator
+
+[]
+
+example usage
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    import databento as db
+
+    client = db.Historical("db-HAaSXwJQW85bKXRg3gA5uHrhvnnM6")
+
+    data = client.timeseries.get_range(
+        dataset="GLBX.MDP3",
+        symbols=["ESM2"],
+        start="2022-06-06",
+    )
+
+    array = data.to_ndarray()
+    print(array[0])
+
+[]
+
+example response
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    (12, 0, 1, 3403, 1654473600070033767, 4108500000000, 1, b'T', b'A', 0, 0, 1654473600070314216, 18681, 157862)
+
+[]dbnstore.to_parquet[]
+
+write data to a file in apache parquet format.
+
+[]parameters[]
+
+path
+
+required | pathlike[str] or str
+
+the file path to write the data to.
+
+price_type
+
+optional | pricetype or str, default "float"
+
+the price type to use for price fields. if "fixed", prices will have a
+type of int in fixed decimal format; each unit representing 1e-9 or
+0.000000001. if "float", prices will have a type of float.
+
+pretty_ts
+
+optional | bool, default true
+
+whether timestamp columns are converted to tz-aware
+pyarrow.timestamptype (utc).
+
+map_symbols
+
+optional | bool, default true
+
+if symbology mappings from the metadata should be used to create a
+'symbol' column, mapping the instrument id to its raw symbol for every
+record.
+
+schema
+
+optional | schema or str
+
+the data record schema for the output parquet file. must be one of the
+values from list_schemas. this is only required when reading a dbnstore
+with mixed record types.
+
+mode
+
+optional | str
+
+the file write mode to use, either "x" or "w". defaults to "w".
+
+**kwargs
+
+optional | any
+
+keyword arguments to pass to pyarrow.parquet.parquetwriter. these can be
+used to override the default behavior of the writer.
+
+[]
+
+api method
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    DBNStore.to_parquet(
+        path: PathLike[str] | str,
+        price_type: PriceType | str = "float",
+        pretty_ts: bool = True,
+        map_symbols: bool = True,
+        schema: Schema | str | None = None,
+        mode: Literal["w", "x"] = "w",
+        **kwargs: Any,
+    ) -> None
+
+[]
+
+example usage
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    import databento as db
+
+    client = db.Historical("db-HAaSXwJQW85bKXRg3gA5uHrhvnnM6")
+
+    data = client.timeseries.get_range(
+        dataset="GLBX.MDP3",
+        symbols=["ESM2"],
+        schema="trades",
+        start="2022-06-06",
+    )
+
+    # Save streamed data to .parquet
+    data.to_parquet("GLBX-ESM2-20220606-trades.parquet")
+
+[]dbnstore.__iter__[]
+
+using for; records will be iterated one at a time. iteration will stop
+when there are no more records in the dbnstore instance.
+
+refer to the list of fields by schema article for documentation on the
+fields contained with each record type.
+
+[]
+
+api method
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    DBNStore.__iter__() -> Iterator[DBNRecord]
+
+[]
+
+example usage
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    import databento as db
+
+    client = db.Historical("db-HAaSXwJQW85bKXRg3gA5uHrhvnnM6")
+
+    data = client.timeseries.get_range(
+        dataset="GLBX.MDP3",
+        symbols=["ESM2"],
+        start="2022-06-06",
+    )
+
+    for trade in data:
+        size = getattr(trade, "size", 0)
+        if size >= 200:
+            print(trade)
+
+[]
+
+example response
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    TradeMsg { hd: RecordHeader { length: 12, rtype: Mbp0, publisher_id: GlbxMdp3Glbx, instrument_id: 3403, ts_event: 1654524078339857609 }, price: 4164.000000000, size: 291, action: 'T', side: 'B', flags: 0, depth: 0, ts_recv: 1654524078342408839, ts_in_delta: 20352, sequence: 3605032 }
+    TradeMsg { hd: RecordHeader { length: 12, rtype: Mbp0, publisher_id: GlbxMdp3Glbx, instrument_id: 3403, ts_event: 1654524133736900455 }, price: 4160.000000000, size: 216, action: 'T', side: 'B', flags: 0, depth: 0, ts_recv: 1654524133737794739, ts_in_delta: 28024, sequence: 3659203 }
+    TradeMsg { hd: RecordHeader { length: 12, rtype: Mbp0, publisher_id: GlbxMdp3Glbx, instrument_id: 3403, ts_event: 1654538295588752739 }, price: 4140.000000000, size: 200, action: 'T', side: 'B', flags: 0, depth: 0, ts_recv: 1654538295589900967, ts_in_delta: 21708, sequence: 10031624 }
+
+[]dbnstore.insert_symbology_json[]
+
+insert json symbology data which may be obtained from a symbology
+request or loaded from a file.
+
+[]parameters[]
+
+json_data
+
+required | str or mapping[str, any] or textio
+
+the json data to insert.
+
+clear_existing
+
+optional | bool
+
+if existing symbology data should be cleared from the internal mappings.
+
+[]
+
+api method
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    DBNStore.insert_symbology_json(
+        json_data: str | Mapping[str, Any] | TextIO,
+        clear_existing: bool = True,
+    ) -> None
+
+[]
+
+example usage
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    import databento as db
+
+    client = db.Historical("db-HAaSXwJQW85bKXRg3gA5uHrhvnnM6")
+
+    data = client.timeseries.get_range(
+        dataset="XNAS.ITCH",
+        symbols=["ALL_SYMBOLS"],
+        schema="trades",
+        start="2022-06-06",
+        end="2022-06-07",
+    )
+
+    # Request symbology for all symbols and then insert this data
+    symbology_json = data.request_symbology(client)
+    data.insert_symbology_json(symbology_json, clear_existing=True)
+
+[]map_symbols_csv[]
+
+use a symbology.json file to map a symbols column onto an existing csv
+file. the result is written to out_file.
+
+[]parameters[]
+
+symbology_file
+
+required | pathlike[str] or str
+
+path to a symbology.json file to use as a symbology source.
+
+csv_file
+
+required | pathlike[str] or str
+
+path to a csv file that contains encoded dbn data; must contain a
+ts_recv or ts_event and instrument_id column.
+
+out_file
+
+optional | pathlike[str] or str
+
+path to a file to write results to. if unspecified, _mapped will be
+appended to the csv_file name.
+
+[]returns[]
+
+path to the written file.
+
+[]
+
+api method
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    map_symbols_csv(
+        symbology_file: PathLike[str] | str,
+        csv_file: PathLike[str] | str,
+        out_file: PathLike[str] | str | None = None,
+    ) -> Path:
+
+[]
+
+example usage
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    import databento as db
+
+    result = db.map_symbols_csv(
+        "symbology.json",
+        "xnas-itch-20230821-20230825.ohlcv-1d.csv",
+    )
+
+    print(result.read_text())
+
+[]
+
+example response
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    ts_event,rtype,publisher_id,instrument_id,open,high,low,close,volume,symbol
+    1692576000000000000,35,2,523,133550000000,135200000000,132710000000,134360000000,11015261,AMZN
+    1692576000000000000,35,2,7290,439090000000,472900000000,437260000000,470990000000,11098972,NVDA
+    1692576000000000000,35,2,10157,217000000000,233500000000,217000000000,233380000000,21336884,TSLA
+    1692576000000000000,35,2,7130,430170000000,434700000000,0,433000000000,68661,NOC
+    1692662400000000000,35,2,7132,431610000000,438480000000,0,437740000000,86950,NOC
+    1692662400000000000,35,2,10161,236710000000,241550000000,229560000000,232870000000,17069349,TSLA
+    1692662400000000000,35,2,523,135320000000,135900000000,133740000000,134200000000,8133698,AMZN
+    1692662400000000000,35,2,7293,475120000000,483440000000,453340000000,457910000000,11700447,NVDA
+    1692748800000000000,35,2,523,135120000000,137860000000,133220000000,137060000000,11430081,AMZN
+    1692748800000000000,35,2,7296,463190000000,518870000000,452080000000,502150000000,13361964,NVDA
+    1692748800000000000,35,2,7135,0,440000000000,0,434030000000,68411,NOC
+    1692748800000000000,35,2,10163,236590000000,243750000000,226500000000,240810000000,13759234,TSLA
+    1692835200000000000,35,2,7287,508190000000,512600000000,466720000000,468700000000,21611800,NVDA
+    1692835200000000000,35,2,10154,242000000000,244140000000,228180000000,229980000000,13724054,TSLA
+    1692835200000000000,35,2,7126,433650000000,437730000000,0,429880000000,54570,NOC
+    1692835200000000000,35,2,521,137250000000,137820000000,131410000000,131880000000,11990573,AMZN
+
+[]map_symbols_json[]
+
+use a symbology.json file to insert a symbols key into records of an
+existing json file. the result is written to out_file.
+
+[]parameters[]
+
+symbology_file
+
+required | pathlike[str] or str
+
+path to a symbology.json file to use as a symbology source.
+
+json_file
+
+required | pathlike[str] or str
+
+path to a json file that contains encoded dbn data.
+
+out_file
+
+optional | pathlike[str] or str
+
+path to a file to write results to. if unspecified, _mapped will be
+appended to the csv_file name.
+
+[]returns[]
+
+path to the written file.
+
+[]
+
+api method
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    map_symbols_json(
+        symbology_file: PathLike[str] | str,
+        json_file: PathLike[str] | str,
+        out_file: PathLike[str] | str | None = None,
+    ) -> Path:
+
+[]
+
+example usage
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    import databento as db
+
+    result = db.map_symbols_json(
+        "symbology.json",
+        "xnas-itch-20230821-20230825.ohlcv-1d.json",
+    )
+
+    print(result.read_text())
+
+[]
+
+example response
+
+python
+
+[]
+
+pythonc++rusthttp
+
+[]
+
+    {"hd":{"ts_event":"1692576000000000000","rtype":35,"publisher_id":2,"instrument_id":523},"open":"133550000000","high":"135200000000","low":"132710000000","close":"134360000000","volume":"11015261","symbol":"AMZN"}
+    {"hd":{"ts_event":"1692576000000000000","rtype":35,"publisher_id":2,"instrument_id":7290},"open":"439090000000","high":"472900000000","low":"437260000000","close":"470990000000","volume":"11098972","symbol":"NVDA"}
+    {"hd":{"ts_event":"1692576000000000000","rtype":35,"publisher_id":2,"instrument_id":10157},"open":"217000000000","high":"233500000000","low":"217000000000","close":"233380000000","volume":"21336884","symbol":"TSLA"}
+    {"hd":{"ts_event":"1692576000000000000","rtype":35,"publisher_id":2,"instrument_id":7130},"open":"430170000000","high":"434700000000","low":"0","close":"433000000000","volume":"68661","symbol":"NOC"}
+    {"hd":{"ts_event":"1692662400000000000","rtype":35,"publisher_id":2,"instrument_id":10161},"open":"236710000000","high":"241550000000","low":"229560000000","close":"232870000000","volume":"17069349","symbol":"TSLA"}
+    {"hd":{"ts_event":"1692662400000000000","rtype":35,"publisher_id":2,"instrument_id":523},"open":"135320000000","high":"135900000000","low":"133740000000","close":"134200000000","volume":"8133698","symbol":"AMZN"}
+    {"hd":{"ts_event":"1692662400000000000","rtype":35,"publisher_id":2,"instrument_id":7293},"open":"475120000000","high":"483440000000","low":"453340000000","close":"457910000000","volume":"11700447","symbol":"NVDA"}
+    {"hd":{"ts_event":"1692662400000000000","rtype":35,"publisher_id":2,"instrument_id":7132},"open":"431610000000","high":"438480000000","low":"0","close":"437740000000","volume":"86950","symbol":"NOC"}
+    {"hd":{"ts_event":"1692748800000000000","rtype":35,"publisher_id":2,"instrument_id":523},"open":"135120000000","high":"137860000000","low":"133220000000","close":"137060000000","volume":"11430081","symbol":"AMZN"}
+    {"hd":{"ts_event":"1692748800000000000","rtype":35,"publisher_id":2,"instrument_id":7296},"open":"463190000000","high":"518870000000","low":"452080000000","close":"502150000000","volume":"13361964","symbol":"NVDA"}
+    {"hd":{"ts_event":"1692748800000000000","rtype":35,"publisher_id":2,"instrument_id":7135},"open":"0","high":"440000000000","low":"0","close":"434030000000","volume":"68411","symbol":"NOC"}
+    {"hd":{"ts_event":"1692748800000000000","rtype":35,"publisher_id":2,"instrument_id":10163},"open":"236590000000","high":"243750000000","low":"226500000000","close":"240810000000","volume":"13759234","symbol":"TSLA"}
+    {"hd":{"ts_event":"1692835200000000000","rtype":35,"publisher_id":2,"instrument_id":7287},"open":"508190000000","high":"512600000000","low":"466720000000","close":"468700000000","volume":"21611800","symbol":"NVDA"}
+    {"hd":{"ts_event":"1692835200000000000","rtype":35,"publisher_id":2,"instrument_id":10154},"open":"242000000000","high":"244140000000","low":"228180000000","close":"229980000000","volume":"13724054","symbol":"TSLA"}
+    {"hd":{"ts_event":"1692835200000000000","rtype":35,"publisher_id":2,"instrument_id":7126},"open":"433650000000","high":"437730000000","low":"0","close":"429880000000","volume":"54570","symbol":"NOC"}
+    {"hd":{"ts_event":"1692835200000000000","rtype":35,"publisher_id":2,"instrument_id":521},"open":"137250000000","high":"137820000000","low":"131410000000","close":"131880000000","volume":"11990573","symbol":"AMZN"}
+
+[]
+
+Python []
+
+Python C++ Rust HTTP/Raw
+
+[]

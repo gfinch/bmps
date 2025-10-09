@@ -65,6 +65,17 @@ case class Candle(
 
     def engulfs(other: Candle): Boolean = bodyHeight > other.bodyHeight
     def isOpposite(other: Candle): Boolean = isBullish && other.isBearish || isBearish && other.isBullish
+    def mergeWithPrevious(previous: Candle): Candle = {
+        require(duration == CandleDuration.OneMinute, "Can only merge one minute candles")
+        Candle(
+            previous.open,
+            Level(Seq(previous.high.value, high.value).max),
+            Level(Seq(previous.low.value, low.value).min),
+            close,
+            previous.timestamp,
+            CandleDuration.TwoMinute
+        )
+    }
 
     lazy val isEndOfDay: Boolean = {
         val zone = ZoneId.of("UTC") //Because the candles are offset to NY Time already.

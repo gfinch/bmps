@@ -13,3 +13,4 @@ target/
 .scalafmt.conf
 
 .DS_Store
+.env

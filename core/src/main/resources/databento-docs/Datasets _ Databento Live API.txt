@@ -1,0 +1,2230 @@
+Quickstart
+
+Set up Databento
+
+Choose a service
+
+Build your first application
+
+New user guides
+
+[]Examples and tutorials
+
+[]Equities
+
+Equities: Introduction
+
+Top pre-market movers
+
+Find average spread for a symbol
+
+Calculate synthetic NBBO from prop feeds
+
+[]Futures
+
+Futures: Introduction
+
+Volume, open interest, and settlement prices
+
+Futures trading hours
+
+Get options chain for a futures product
+
+[]Options
+
+Equity options: Introduction
+
+Options on futures: Introduction
+
+All options with a given underlying
+
+Join options with underlying prices
+
+US equity options volume by venue
+
+Resample US equity options NBBO
+
+Estimate implied volatility
+
+Get symbols for 0DTE options
+
+Calculate daily statistics for equity options
+
+[]Live data
+
+Handle multiple record types
+
+Stream live data to a file
+
+Estimate Databento feed latency
+
+Calculate TICK and TRIN indicators
+
+Subscribe to MBO snapshot
+
+Compare on-exchange and off-exchange trade volume
+
+[]Historical data
+
+Request a large number of symbols
+
+Programmatic batch downloads
+
+Best bid, best offer, and midprice
+
+Custom OHLCV bars from trades
+
+Join schemas on instrument ID
+
+Plot a candlestick chart
+
+Calculate VWAP and RSI
+
+End-of-day pricing and portfolio valuation
+
+Benchmark portfolio performance
+
+Market halts, volatility interrupts, and price bands
+
+Resample OHLCV from 1-minute to 5-minute
+
+[]Symbology
+
+Continuous contracts
+
+Parent symbology
+
+Symbology mapping for live data
+
+Dataset symbols
+
+[]Instrument definitions
+
+Finding liquid instruments
+
+Handling tick sizes
+
+[]Order book
+
+Types of order book events
+
+State management of resting orders
+
+Limit order book construction
+
+Microprice and book imbalance
+
+Queue position of an order
+
+[]Algorithmic trading
+
+A high-frequency liquidity-taking strategy
+
+Build prediction models with machine learning
+
+Execution slippage and markouts
+
+Matching engine latencies
+
+Using messaging rates as a proxy for implied volatility
+
+Mean reversion and portfolio optimization
+
+Pairs trading based on cointegration
+
+Build a real-time stock screener
+
+[]Corporate actions
+
+Dividends
+
+New listings
+
+Splits and reverse splits
+
+Mergers and demergers
+
+[]Adjustment factors
+
+Applying adjustment factors
+
+Handling multiple stock selections
+
+[]Security master
+
+Enrich instrument definitions
+
+Listings and delistings
+
+Market capitalization change
+
+Core concepts
+
+[]Schemas and data formats
+
+What's a schema?
+
+Market by order (MBO)
+
+Market by price (MBP-10)
+
+Market by price (MBP-1)
+
+BBO on trade (TBBO)
+
+BBO on interval (BBO)
+
+Trades
+
+Aggregate bars (OHLCV)
+
+Instrument definitions
+
+Imbalance
+
+Statistics
+
+Status
+
+Corporate actions
+
+Adjustment factors
+
+Security master
+
+[]Standards and conventions
+
+Common fields, enums and types
+
+Normalization
+
+Symbology
+
+Databento Binary Encoding
+
+Zstandard (zstd)
+
+MBO snapshots
+
+Reference data enums
+
+[]Architecture
+
+Databento architecture
+
+Timestamping
+
+Locations and network connectivity
+
+Dedicated connectivity
+
+Databento NTP service
+
+Performance optimization
+
+[]Venues and datasets
+
+CME Globex MDP 3.0
+
+Cboe BYX Depth
+
+Cboe BYZ Depth
+
+Cboe EDGA Depth
+
+Cboe EDGX Depth
+
+Databento US Equities Basic
+
+Databento US Equities Mini
+
+Databento US Equities Summary
+
+Eurex Exchange
+
+European Energy Exchange
+
+ICE Endex iMpact
+
+ICE Europe Commodities iMpact
+
+ICE Europe Financials iMpact
+
+ICE Futures US iMpact
+
+IEX TOPS
+
+MEMX Memoir
+
+MIAX Depth of Market
+
+Nasdaq Basic with NLS Plus
+
+Nasdaq TotalView-ITCH
+
+NYSE American Integrated
+
+NYSE Arca Integrated
+
+NYSE Texas Integrated
+
+NYSE National Trades and BBO
+
+NYSE Integrated
+
+OPRA Pillar
+
+Corporate actions
+
+Adjustment factors
+
+Security master
+
+API Reference
+
+[]Historical API
+
+[]Basics
+
+Overview
+
+Authentication
+
+Schemas and conventions
+
+Datasets
+
+Symbology
+
+Encodings
+
+Compression
+
+Dates and times
+
+Errors
+
+Rate limits
+
+Size limits
+
+Metered pricing
+
+Versioning
+
+[]Client
+
+Historical
+
+[]Metadata
+
+....list_publishers
+
+....list_datasets
+
+....list_schemas
+
+....list_fields
+
+....list_unit_prices
+
+....get_dataset_condition
+
+....get_dataset_range
+
+....get_record_count
+
+....get_billable_size
+
+....get_cost
+
+[]Time series
+
+....get_range
+
+....get_range_async
+
+[]Symbology
+
+....resolve
+
+[]Batch downloads
+
+....submit_job
+
+....list_jobs
+
+....list_files
+
+....download
+
+....download_async
+
+[]Helpers
+
+DBNStore
+
+....from_bytes
+
+....from_file
+
+....reader
+
+....replay
+
+....request_full_definitions
+
+....request_symbology
+
+....to_csv
+
+....to_df
+
+....to_file
+
+....to_json
+
+....to_ndarray
+
+....to_parquet
+
+....__iter__
+
+....insert_symbology_json
+
+map_symbols_csv
+
+map_symbols_json
+
+[]Live API
+
+[]Basics
+
+Overview
+
+Host and port
+
+Authentication
+
+Schemas and conventions
+
+Datasets
+
+Symbology
+
+Dates and times
+
+Intraday replay
+
+Snapshot
+
+System messages
+
+Errors
+
+Connection limits
+
+Metered pricing
+
+Encodings
+
+Compression
+
+Protocol
+
+Error detection
+
+Recovering after a disconnection
+
+Maintenance schedule
+
+[]Message flows
+
+Authentication
+
+Subscription
+
+Intraday historical subscription
+
+Starting the session
+
+[]Gateway control messages
+
+Greeting message
+
+Challenge request
+
+Authentication response
+
+[]Client control messages
+
+Authentication request
+
+Subscription request
+
+Session start
+
+[]Reference API
+
+[]Basics
+
+Overview
+
+Authentication
+
+Symbology
+
+Dates and times
+
+Errors
+
+Rate limits
+
+[]Client
+
+Reference
+
+[]Corporate actions
+
+....get_range
+
+[]Adjustment factors
+
+....get_range
+
+[]Security master
+
+....get_last
+
+....get_range
+
+Resources
+
+[]FAQs
+
+Client libraries vs. APIs
+
+Streaming vs. batch download
+
+Usage-based pricing and credits
+
+Instruments and products
+
+Venues and publishers
+
+MBP-1 vs. TBBO vs. BBO schemas
+
+[]Portal
+
+Data catalog
+
+Batch download
+
+Data usage
+
+API keys
+
+Download center
+
+Team
+
+Billing
+
+Plans and live data
+
+[]Release notes
+
+[]C++
+
+0.42.0 - 2025-08-19
+
+0.41.0 - 2025-08-12
+
+0.40.0 - 2025-07-29
+
+0.39.1 - 2025-07-22
+
+0.39.0 - 2025-07-15
+
+0.38.2 - 2025-07-01
+
+0.38.1 - 2025-06-25
+
+0.38.0 - 2025-06-10
+
+0.37.1 - 2025-06-03
+
+0.37.0 - 2025-06-03
+
+0.36.0 - 2025-05-27
+
+0.35.1 - 2025-05-20
+
+0.35.0 - 2025-05-13
+
+0.34.2 - 2025-05-06
+
+0.34.1 - 2025-04-29
+
+0.34.0 - 2025-04-22
+
+0.33.0 - 2025-04-15
+
+0.32.1 - 2025-04-07
+
+0.32.0 - 2025-04-02
+
+0.31.0 - 2025-03-18
+
+0.30.0 - 2025-02-11
+
+0.29.0 - 2025-02-04
+
+0.28.0 - 2025-01-21
+
+0.27.0 - 2025-01-07
+
+0.26.0 - 2024-12-17
+
+0.25.0 - 2024-11-12
+
+0.24.0 - 2024-10-22
+
+0.23.0 - 2024-09-25
+
+0.22.0 - 2024-08-27
+
+0.21.0 - 2024-07-30
+
+0.20.1 - 2024-07-16
+
+0.20.0 - 2024-07-09
+
+0.19.1 - 2024-06-25
+
+0.19.0 - 2024-06-04
+
+0.18.1 - 2024-05-22
+
+0.18.0 - 2024-05-14
+
+0.17.1 - 2024-04-08
+
+0.17.0 - 2024-04-01
+
+0.16.0 - 2024-03-01
+
+0.15.0 - 2024-01-16
+
+0.14.1 - 2023-12-18
+
+0.14.0 - 2023-11-23
+
+0.13.1 - 2023-10-23
+
+0.13.0 - 2023-09-21
+
+0.12.0 - 2023-08-24
+
+0.11.0 - 2023-08-10
+
+0.10.0 - 2023-07-20
+
+0.9.1 - 2023-07-11
+
+0.9.0 - 2023-06-13
+
+0.8.0 - 2023-05-16
+
+0.7.0 - 2023-04-28
+
+0.6.1 - 2023-03-28
+
+0.6.0 - 2023-03-24
+
+0.5.0 - 2023-03-13
+
+0.4.0 - 2023-03-02
+
+0.3.0 - 2023-01-06
+
+0.2.0 - 2022-12-01
+
+0.1.0 - 2022-11-07
+
+[]Python
+
+0.65.0 - TBD
+
+0.64.0 - 2025-09-30
+
+0.63.0 - 2025-09-02
+
+0.62.0 - 2025-08-19
+
+0.61.0 - 2025-08-12
+
+0.60.0 - 2025-08-05
+
+0.59.0 - 2025-07-15
+
+0.58.0 - 2025-07-08
+
+0.57.1 - 2025-06-17
+
+0.57.0 - 2025-06-10
+
+0.56.0 - 2025-06-03
+
+0.55.1 - 2025-06-02
+
+0.55.0 - 2025-05-29
+
+0.54.0 - 2025-05-13
+
+0.53.0 - 2025-04-29
+
+0.52.0 - 2025-04-15
+
+0.51.0 - 2025-04-08
+
+0.50.0 - 2025-03-18
+
+0.49.0 - 2025-03-04
+
+0.48.0 - 2025-01-21
+
+0.47.0 - 2024-12-17
+
+0.46.0 - 2024-12-10
+
+0.45.0 - 2024-11-12
+
+0.44.1 - 2024-10-29
+
+0.44.0 - 2024-10-22
+
+0.43.1 - 2024-10-15
+
+0.43.0 - 2024-10-09
+
+0.42.0 - 2024-09-23
+
+0.41.0 - 2024-09-03
+
+0.40.0 - 2024-08-27
+
+0.39.3 - 2024-08-20
+
+0.39.2 - 2024-08-13
+
+0.39.1 - 2024-08-13
+
+0.39.0 - 2024-07-30
+
+0.38.0 - 2024-07-23
+
+0.37.0 - 2024-07-09
+
+0.36.3 - 2024-07-02
+
+0.36.2 - 2024-06-25
+
+0.36.1 - 2024-06-18
+
+0.36.0 - 2024-06-11
+
+0.35.0 - 2024-06-04
+
+0.34.1 - 2024-05-21
+
+0.34.0 - 2024-05-14
+
+0.33.0 - 2024-04-16
+
+0.32.0 - 2024-04-04
+
+0.31.1 - 2024-03-20
+
+0.31.0 - 2024-03-05
+
+0.30.0 - 2024-02-22
+
+0.29.0 - 2024-02-13
+
+0.28.0 - 2024-02-01
+
+0.27.0 - 2024-01-23
+
+0.26.0 - 2024-01-16
+
+0.25.0 - 2024-01-09
+
+0.24.1 - 2023-12-15
+
+0.24.0 - 2023-11-23
+
+0.23.1 - 2023-11-10
+
+0.23.0 - 2023-10-26
+
+0.22.1 - 2023-10-24
+
+0.22.0 - 2023-10-23
+
+0.21.0 - 2023-10-11
+
+0.20.0 - 2023-09-21
+
+0.19.1 - 2023-09-08
+
+0.19.0 - 2023-08-25
+
+0.18.1 - 2023-08-16
+
+0.18.0 - 2023-08-14
+
+0.17.0 - 2023-08-10
+
+0.16.1 - 2023-08-03
+
+0.16.0 - 2023-07-25
+
+0.15.2 - 2023-07-19
+
+0.15.1 - 2023-07-06
+
+0.15.0 - 2023-07-05
+
+0.14.1 - 2023-06-16
+
+0.14.0 - 2023-06-14
+
+0.13.0 - 2023-06-02
+
+0.12.0 - 2023-05-01
+
+0.11.0 - 2023-04-13
+
+0.10.0 - 2023-04-07
+
+0.9.0 - 2023-03-10
+
+0.8.1 - 2023-03-05
+
+0.8.0 - 2023-03-03
+
+0.7.0 - 2023-01-10
+
+0.6.0 - 2022-12-02
+
+0.5.0 - 2022-11-07
+
+0.4.0 - 2022-09-14
+
+0.3.0 - 2022-08-30
+
+[]HTTP API
+
+0.35.0 - TBD
+
+0.34.1 - 2025-06-17
+
+0.34.0 - 2025-06-09
+
+0.33.0 - 2024-12-10
+
+0.32.0 - 2024-11-26
+
+0.31.0 - 2024-11-12
+
+0.30.0 - 2024-09-24
+
+0.29.0 - 2024-09-03
+
+0.28.0 - 2024-06-25
+
+0.27.0 - 2024-06-04
+
+0.26.0 - 2024-05-14
+
+0.25.0 - 2024-03-26
+
+0.24.0 - 2024-03-06
+
+0.23.0 - 2024-02-15
+
+0.22.0 - 2024-02-06
+
+0.21.0 - 2024-01-30
+
+0.20.0 - 2024-01-18
+
+0.19.0 - 2023-10-17
+
+0.18.0 - 2023-10-11
+
+0.17.0 - 2023-10-04
+
+0.16.0 - 2023-09-26
+
+0.15.0 - 2023-09-19
+
+0.14.0 - 2023-08-29
+
+0.13.0 - 2023-08-23
+
+0.12.0 - 2023-08-10
+
+0.11.0 - 2023-07-25
+
+0.10.0 - 2023-07-06
+
+0.9.0 - 2023-06-01
+
+0.8.0 - 2023-05-01
+
+0.7.0 - 2023-04-07
+
+0.6.0 - 2023-03-10
+
+0.5.0 - 2023-03-03
+
+0.4.0 - 2022-12-02
+
+0.3.0 - 2022-08-30
+
+0.2.0 - 2021-12-10
+
+0.1.0 - 2021-08-30
+
+[]Raw API
+
+0.7.0 - TBD
+
+0.6.4 - 2025-09-28
+
+0.6.3 - 2025-09-07
+
+0.6.2 - 2025-08-02
+
+0.6.1 - 2025-06-29
+
+0.6.0 - 2025-05-24
+
+0.5.6 - 2025-04-06
+
+0.5.5 - 2024-12-01
+
+0.5.4 - 2024-10-02
+
+0.5.3 - 2024-10-02
+
+0.5.1 - 2024-07-24
+
+2024-07-20
+
+2024-06-25
+
+0.5.0 - 2024-05-25
+
+0.4.6 - 2024-04-13
+
+0.4.5 - 2024-03-25
+
+0.4.4 - 2024-03-23
+
+0.4.3 - 2024-02-13
+
+0.4.2 - 2024-01-06
+
+0.4.0 - 2023-11-08
+
+0.3.0 - 2023-10-20
+
+0.2.0 - 2023-07-23
+
+0.1.0 - 2023-05-01
+
+[]Rust
+
+0.35.0 - TBD
+
+0.34.1 - 2025-09-30
+
+0.34.0 - 2025-09-23
+
+0.33.1 - 2025-08-26
+
+0.33.0 - 2025-08-19
+
+0.32.0 - 2025-08-12
+
+0.31.0 - 2025-07-30
+
+0.30.0 - 2025-07-22
+
+0.29.0 - 2025-07-15
+
+0.28.0 - 2025-07-01
+
+0.27.1 - 2025-06-25
+
+0.27.0 - 2025-06-10
+
+0.26.2 - 2025-06-03
+
+0.26.1 - 2025-05-30
+
+0.26.0 - 2025-05-28
+
+0.25.0 - 2025-05-13
+
+0.24.0 - 2025-04-22
+
+0.23.0 - 2025-04-15
+
+0.22.0 - 2025-04-01
+
+0.21.0 - 2025-03-18
+
+0.20.0 - 2025-02-12
+
+0.19.0 - 2025-01-21
+
+0.18.0 - 2025-01-08
+
+0.17.0 - 2024-12-17
+
+0.16.0 - 2024-11-12
+
+0.15.0 - 2024-10-22
+
+0.14.1 - 2024-10-08
+
+0.14.0 - 2024-10-01
+
+0.13.0 - 2024-09-25
+
+0.12.1 - 2024-08-27
+
+0.12.0 - 2024-07-30
+
+0.11.4 - 2024-07-16
+
+0.11.3 - 2024-07-09
+
+0.11.2 - 2024-06-25
+
+0.11.1 - 2024-06-11
+
+0.11.0 - 2024-06-04
+
+0.10.0 - 2024-05-22
+
+0.9.1 - 2024-05-15
+
+0.9.0 - 2024-05-14
+
+0.8.0 - 2024-04-01
+
+0.7.1 - 2024-03-05
+
+0.7.0 - 2024-03-01
+
+0.6.0 - 2024-01-16
+
+0.5.0 - 2023-11-23
+
+0.4.2 - 2023-10-23
+
+0.4.1 - 2023-10-06
+
+0.4.0 - 2023-09-21
+
+0.3.0 - 2023-09-13
+
+0.2.1 - 2023-08-25
+
+0.2.0 - 2023-08-10
+
+0.1.0 - 2023-08-02
+
+[]Data
+
+2025-09-23
+
+2025-08-26
+
+2025-08-05
+
+2025-07-25
+
+2025-07-06
+
+2025-07-01
+
+2025-06-27
+
+2025-06-17
+
+2025-06-10
+
+2025-05-20
+
+2025-05-07
+
+2025-04-05
+
+2025-04-01
+
+2025-03-13
+
+2025-02-26
+
+2025-02-01
+
+2025-01-15
+
+2024-12-14
+
+2024-12-03
+
+2024-12-02
+
+2024-10-22
+
+2024-10-24
+
+2024-07-05
+
+2024-06-25
+
+2024-06-18
+
+2024-05-07
+
+2024-01-18
+
+2023-11-17
+
+2023-10-04
+
+2023-08-29
+
+2023-07-23
+
+2023-05-01
+
+2023-04-28
+
+2023-03-07
+
+[] collapse all
+
+[]
+
+menu
+
+[]
+
+[] [] [] []
+
+[]
+
+[]
+
+log in api key support
+
+api key
+
+prod-001
+
+[]
+
+prod-001
+
+support log in portal
+
+sign up
+
+test user
+
+test@databento.com
+
+api key
+
+[]api reference - live[]
+
+you can receive live data from databento via our live apis, namely the
+Databento Raw API.
+
+The Raw API is a simple socket-based, subscription-style protocol.
+Clients communicate with our live data gateways through a regular TCP/IP
+socket. To make it easier to integrate the API, we also provide official
+client libraries that simplify the code you need to write.
+
+You can use our live APIs to subscribe to real-time data in your
+application. You can also use the APIs to request intraday historical
+data and instrument definitions for any number of products in a venue.
+
+LIVE DATA
+
+Client Libraries
+
+[python]
+
+python
+
+[c++]
+
+c++
+
+[rust]
+
+rust
+
+APIs
+
+[raw]
+
+raw
+
+[raw]
+
+raw
+
+[]
+
+[]
+
+[] 215
+
+[]basics[]
+
+[]overview[]
+
+the raw api is a proprietary wire protocol used between raw api clients
+and our live data gateways. The following specification of this protocol
+prescribes encoding and decoding, a data model, valid message
+structures, and messaging behavior. This protocol is strictly an
+application layer protocol and relies on TCP for transport.
+
+The protocol's main uses are subscribing to live market data and
+performing intraday playback for data from the last 24 hours.
+
+[]host and port[]
+
+the live api host to connect to depends on the dataset you'd like to
+subscribe to. To get the Live API host for a dataset:
+
+1.  Take the dataset ID, e.g. GLBX.MDP3, and convert it to lowercase
+2.  Replace periods with dashes, e.g. glbx.mdp3 becomes glbx-mdp3
+3.  Append .lsg.databento.com
+
+the live api port is always 13000.
+
+for example, to connect to glbx.mdp3, you'd open a tcp connection with
+glbx-mdp3.lsg.databento.com:13000.
+
+  [warning]
+
+  warning
+
+  please connect to the public dns hostname and not the resolved ip, as
+  this may change.
+
+[]authentication[]
+
+databento uses api keys to authenticate requests. You can view and
+manage your keys on the API Keys page of your portal.
+
+Each API key is a 32-character string.
+
+Our API relies on a challenge-response authentication mechanism (CRAM)
+to ensure your API key is never sent over an unsecured network.
+
+To authenticate, the server sends a challenge request message, to which
+the client must reply with an authentication request message. The server
+will then reply with an authentication response message to indicate
+whether the authentication succeeded.
+
+for a detailed description of the algorithm, see the authentication
+message flow.
+
+[]schemas and conventions[]
+
+a schema is a data record format represented as a collection of
+different data fields. Our datasets support multiple schemas, such as
+order book, tick data, bar aggregates, and so on. You can see a full
+list from our List of market data schemas.
+
+You can get a list of all supported schemas for any given dataset using
+the MetadataListSchemas method. The same information can also be found
+on each dataset's detail page found through the Explore feature.
+
+The following table provides details about the data types and
+conventions used for various fields that you will commonly encounter in
+the data.
+
+  Name                   Field           Description
+  ---------------------- --------------- --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  Dataset                dataset         A unique string name assigned to each dataset by Databento. Full list of datasets can be found from the metadata.
+  Publisher ID           publisher_id    A unique 16-bit unsigned integer assigned to each publisher by Databento. Full list of publisher IDs can be found from the metadata.
+  Instrument ID          instrument_id   A unique 32-bit unsigned integer assigned to each instrument by the venue. Information about instrument IDs for any given dataset can be found in the symbology.
+  Order ID               order_id        A unique 64-bit unsigned integer assigned to each order by the venue.
+  Timestamp (event)      ts_event        The matching-engine-received timestamp expressed as the number of nanoseconds since the UNIX epoch.
+  Timestamp (receive)    ts_recv         The capture-server-received timestamp expressed as the number of nanoseconds since the UNIX epoch.
+  Timestamp delta (in)   ts_in_delta     The matching-engine-sending timestamp expressed as the number of nanoseconds before ts_recv. See timestamping guide.
+  Timestamp out          ts_out          The Databento gateway-sending timestamp expressed as the number of nanoseconds since the UNIX epoch. See timestamping guide.
+  Price                  price           The price expressed as signed integer where every 1 unit corresponds to 1e-9, i.e. 1/1,000,000,000 or 0.000000001.
+  Book side              side            The side that initiates the event. Can be Ask for a sell order (or sell aggressor in a trade), Bid for a buy order (or buy aggressor in a trade), or None where no side is specified by the original source.
+  Size                   size            The order quantity.
+  Flag                   flag            A bit field indicating event end, message characteristics, and data quality.
+  Action                 action          The event type or order book operation. Can be Add, Cancel, Modify, cleaR book, Trade, Fill, or None.
+  Sequence number        sequence        The original message sequence number from the venue.
+
+[]datasets[]
+
+databento provides time series datasets for a variety of markets,
+sourced from different publishers. Our available datasets can be browsed
+through the search feature on our site.
+
+Each dataset is assigned a unique string identifier (dataset ID) in the
+form PUBLISHER.DATASET, such as GLBX.MDP3. For publishers that are also
+markets, we use standard four-character ISO 10383 Market Identifier
+Codes (MIC). Otherwise, Databento arbitrarily assigns a four-character
+identifier for the publisher.
+
+These dataset IDs are also found on the Data catalog and Download
+request features of the Databento user portal.
+
+When a publisher provides multiple data products with different levels
+of granularity, Databento subscribes to the most-granular product. We
+then provide this dataset with alternate schemas to make it easy to work
+with the level of detail most appropriate for your application.
+
+More information about different types of venues and publishers is
+available in our knowledge base.
+
+[]symbology[]
+
+databento's live api supports several ways to select an instrument in a
+dataset. An instrument is specified using a symbol and a symbology type,
+also referred to as an stype. The supported symbology types are:
+
+- Raw symbology (raw_symbol) original string symbols used by the
+  publisher in the source data.
+- Instrument ID symbology (instrument_id) unique numeric ID assigned to
+  each instrument by the publisher.
+- Parent symbology (parent) groups instruments related to the market for
+  the same underlying.
+- Continuous contract symbology (continuous) proprietary symbology that
+  specifies instruments based on certain systematic rules.
+
+  [info]
+
+  info
+
+  in the live api, existing subscriptions to continuous contracts will
+  not be remapped to different instruments. However, submitting a new
+  identical subscription may result in a new mapping.
+
+When subscribing to live data, an input symbology type can be specified.
+By default, our client libraries will use raw symbology for the input
+type. Not all symbology types are supported for every dataset.
+
+For live data, symbology mappings are provided through SymbolMappingMsg
+records. these records are sent after the session has started and can be
+used to map the instrument_id from a data record's header to a text
+symbol.
+
+for more about symbology at databento, see our standards and
+conventions.
+
+[]dates and times[]
+
+timestamps returned with live data are 64-bit integers representing unix
+nanoseconds.
+
+these timestamps are always in utc. To localize from other timezones,
+the conversion to and from UTC should be implemented on the client side.
+
+The raw API control messages support UNIX nanoseconds and datetime
+string formatting based on ISO 8601 as listed below. All times are given
+in UTC, and the timezone cannot be set.
+
+- yyyy-mm-dd, e.g. "2022-02-28" (midnight UTC)
+- yyyy-mm-ddTHH:MM, e.g. "2022-02-28T23:50"
+- yyyy-mm-ddTHH:MM:SS, e.g. "2022-02-28T23:50:59"
+- yyyy-mm-ddTHH:MM:SS.NNNNNNNNN, e.g. "2022-02-28T23:50:59.123456789"
+
+[]intraday replay[]
+
+our live api offers intraday replay within the last 24 hours. Users can
+connect to the live service and request data from a particular start
+time. Data will be filtered on ts_event for all schemas except CBBO and
+BBO, which will be filtered on ts_recv.
+
+A different start time can be specified for each subscription. There can
+be multiple subscriptions for the same schema, with each subscription
+having a different start time. When the session starts, records will be
+immediately replayed for each schema. A replay completed SystemMsg will
+be sent for each replayed schema once it catches up to real-time data.
+Once a session has started, newly added subscriptions are not eligible
+for intraday replay.
+
+As a special case for the GLBX.MDP3 dataset, we also provide replay of
+the entire weekly session in the MBO and definition schemas outside of
+the 24-hour window to aid with recovery, as these schemas are highly
+stateful.
+
+The Raw API accepts an ISO 8601 string or a UNIX timestamp in
+nanoseconds for the start time. refer to the dates and times article for
+more information on how our raw api handles timestamps.
+
+[]snapshot[]
+
+users can request a snapshot for a live subscription to obtain the
+recent order book state without replaying the whole trading session.
+this is only supported for the mbo schema.
+
+more details can be found in this article.
+
+[]system messages[]
+
+our live api uses a system record (systemmsg) to indicate non-error
+information to clients.
+
+one use is heartbeating, to ensure the tcp connection remains open and
+to help clients detect a connection issue. A heartbeat will only be sent
+if no other data record was sent to the client during the heartbeat
+interval. The interval between heartbeat messages can be configured by
+setting heartbeat_interval_s in the Authentication request. For
+heartbeats, msg will be "Heartbeat".
+
+The layout of these records changed in DBN version 2. you can use the
+version field in the metadata header to check the dbn version.
+
+[]version 1[]
+
+  Field   Type       Description
+  ------- ---------- -------------------------------
+  msg     char[64]   The message from the gateway.
+
+  [info]
+
+  info
+
+  for datasets on dbn version 1 where code is not populated, you should
+  parse the msg field to determine the type of message.
+
+[]versions 2 and above[]
+
+  Field   Type        Description
+  ------- ----------- --------------------------------------------------------
+  msg     char[303]   The message from the gateway.
+  code    uint8_t     Describes the type of system message. See table below.
+
+[]system code variants[]
+
+  Variant                 code Description
+  --------------------- ------ ----------------------------------------------------------------------------------------------------------
+  HEARTBEAT                  0 A message sent in the absence of other records to indicate the connection remains open.
+  SUBSCRIPTION_ACK           1 An acknowledgement of a subscription request.
+  SLOW_READER_WARNING        2 The gateway has detected this session is falling behind real-time data.
+  REPLAY_COMPLETED           3 Indicates a replay subscription has caught up with real-time data. This message will be sent per schema.
+  END_OF_INTERVAL            4 Signals that all records for interval-based schemas have been published for the given timestamp.
+
+[]errors[]
+
+our live api uses an error record (errormsg) to indicate failures to
+clients. These are sent as data records to the client after the session
+has been started.
+
+The layout of these records changed in DBN version 2. you can use the
+version field in the metadata header to check the dbn version.
+
+[]version 1[]
+
+  Field   Type       Description
+  ------- ---------- --------------------
+  err     char[64]   The error message.
+
+  [info]
+
+  info
+
+  for datasets on dbn version 1 where code is not populated, you should
+  parse the err field to determine the type of message.
+
+[]versions 2 and above[]
+
+  Field     Type        Description
+  --------- ----------- --------------------------------------------------------------------------------
+  err       char[302]   The error message.
+  code      uint8_t     Describes the type of error message. See table below.
+  is_last   uint8_t     Boolean flag indicating whether this is the last in a series of error records.
+
+[]error code variants[]
+
+  Variant                     code Description
+  ------------------------- ------ --------------------------------------------------------------------------------
+  AuthFailed                     1 The authentication step failed.
+  ApiKeyDeactivated              2 The user account or API key were deactivated.
+  ConnectionLimitExceeded        3 The user has exceeded their open connection limit.
+  SymbolResolutionFailed         4 One or more symbols failed to resolve.
+  InvalidSubscription            5 There was an issue with a subscription request (other than symbol resolution).
+  InternalError                  6 An error occurred in the gateway.
+
+[]connection limits[]
+
+with our live api, there is a limit of 10 simultaneous connections
+(sessions) per (dataset) per team for Usage-based and Standard plans.
+Unlimited and Enterprise plans will be limited to 50 simultaneous
+connections per dataset per team. Creating additional API keys will not
+affect the maximum number of connections per team.
+
+In addition, a single gateway will allow at most five incoming
+connections per second from the same IP address. If an IP address goes
+over this limit, incoming connections will be immediately closed by the
+gateway - existing connections will not be affected. if this happens,
+clients should wait one second before retrying.
+
+[]subscription rate limits[]
+
+symbol resolution is a relatively slow operation, as such, subscription
+requests are throttled to prevent abuse and accidental performance
+impact on other users. Subscriptions above the limit of 3 per second
+will not be rejected; instead, the gateway will wait until the session
+is back under the rate limit before processing it. the gateway will send
+a subscription acknowledgement when it has finished processing a
+subscription request.
+
+[]metered pricing[]
+
+databento only charges for the data that you use. You can find rates
+(per MB) for the various datasets and estimate pricing on our Data
+catalog. We meter the data by its uncompressed size in binary encoding.
+
+When you stream the data, you are billed incrementally for each outbound
+byte of data sent from our live gateway.
+
+If your connection becomes unresponsive while streaming our data, our
+live gateway will send data up to the TCP connection's receive window
+size, and you will not be billed for data over this limit.
+
+Duplicate subscriptions within the same session will be deduplicated and
+not incur additional charges. separate sessions with identical
+subscriptions will incur repeated charges.
+
+access to metadata, symbology, and account management is free.
+
+related: billing management.
+
+[]encodings[]
+
+dbn
+
+databento binary encoding (dbn) is an extremely fast message encoding
+and highly-compressible storage format for normalized market data. It
+includes a self-describing metadata header and adopts a binary format
+with zero-copy serialization.
+
+We recommend using our Python, C++, or Rust client libraries to read DBN
+files locally. A CLI tool is also available for converting DBN files to
+CSV or JSON.
+
+JSON
+
+JavaScript Object Notation (JSON) is a flexible text file format with
+broad language support and wide adoption across web apps.
+
+Our JSON data records follow the JSON lines specification, where each
+line of the file is a JSON record. lines use unix-style \n separators.
+
+[]compression[]
+
+databento provides options for compressing files from our api.
+
+zstd
+
+the zstd compression option uses the zstandard format. This adds a
+slight performance cost to encoding and decoding.
+
+Read more about working with Zstandard-compressed files.
+
+none
+
+The none compression option disables compression entirely, resulting
+larger data transfer. by default, live data is uncompressed.
+
+[]protocol[]
+
+the raw api protocol is divided into two main parts: control messages
+and data records.
+
+all messages sent by the client to the gateway are control messages.
+
+[]control messages[]
+
+control messages are used for authentication and subscribing to the
+gateway, and are encoded as ASCII text. A single control message is
+composed by a series of key=value pairs (called fields from now)
+separated by the | character.
+
+Every control message terminates with a newline character (\n).
+
+A control message can have optional and required fields. A control
+message which contains an unknown field or does not contain a required
+field will be considered invalid by the gateway. Control messages are
+limited to 64KiB; messages exceeding this length are invalid. after an
+invalid control message, the gateway will terminate the session with an
+error message.
+
+an example of a correctly-formatted subscription request control message
+is schema=trades|stype_in=raw_symbol|symbols=spy\n.
+
+[]data records[]
+
+once authenticated with the gateway, the gateway will not send any new
+control messages; subsequent messages will always be data records.
+
+If compression is enabled, the data record stream will need to be
+decompressed with the compression algorithm of choice before decoding.
+
+Data records are sent in the encoding specified during authentication.
+Unlike in the historical API, the CSV encoding is not supported.
+
+In the DBN encoding, the records will be sequentially streamed. In the
+JSON encoding, the records will follow the JSON lines specification,
+where each line of the file is a json object. lines use unix-style \n
+separators.
+
+[]the ts_out parameter[]
+
+if the client chose to set the ts_out parameter during the
+authentication, the gateway will send its send timestamp with every data
+record. The format will vary per encoding.
+
+In the dbn encoding, the ts_out is a 64-bit unsigned integer appended to
+every data record. in the json encoding, the ts_out is added as an
+additional field within each json object.
+
+[]error detection[]
+
+when maintaining a raw api connection, clients should monitor their
+connection for errors.
+
+there are three main ways in which a session can enter an error state:
+
+- Hung connection: The client is not receiving any data from the gateway
+- Disconnect without error: The client is explicitly disconnected by the
+  gateway, without receiving an error message
+- Disconnect with error: The client is explicitly disconnected by the
+  gateway. Immediately prior to being disconnected, the client will
+  receive an error record or a Raw API error response (that is,
+  containing success=0)
+
+[]hung connection[]
+
+to detect hung connections, clients are instructed to make use of system
+heartbeats. Clients can configure a heartbeat interval when
+authenticating by setting the heartbeat_interval_s parameter on the
+authentication request message. If the heartbeat interval is not set by
+the client, it will default to 30 seconds.
+
+Once a session is started, if no data is sent by the gateway for the
+entirety of a heartbeat interval, the gateway will send a system message
+to the client to indicate a heartbeat. If the gateway is regularly
+sending other messages to the client (for example, MboMsg), heartbeats
+will not be sent.
+
+Once a session is started, if a client does not receive any messages
+from the gateway for the duration of one heartbeat interval plus two
+seconds, the session can be considered hung. clients are instructed to
+disconnect from the gateway and reconnect upon detecting hung
+connections.
+
+clients with unstable internet connections may need larger intervals
+than two seconds to ensure the connection is truly hung, as opposed to
+merely delayed.
+
+[]disconnect without error[]
+
+from the point of view of the client, a disconnect is detected when the
+underlying tcp session is closed. Upon being disconnected, clients are
+instructed to wait one second and initiate a new connection. waiting too
+short an interval to reconnect may trigger the gateway's rate limiter.
+
+  [see also]
+
+  see also
+
+  connection limits for more details.
+
+[]disconnect with error[]
+
+from the point of view of the client, a disconnect with error is
+detected when the underlying tcp session is closed after an errormsg or
+a raw api error response is received.
+
+clients disconnected with an error are instructed to not reconnect
+automatically. In the vast majority of cases, reconnecting and
+resubscribing with the same parameters will lead to the same errors
+being received again. the error sent to the client will indicate the
+issue to be fixed prior to resubscribing.
+
+[]recovering after a disconnection[]
+
+when reconnecting to the gateway, clients should resubscribe to all
+desired symbols. In order to avoid missing data after a reconnection,
+there are three main approaches to recovery:
+
+- Natural refresh
+- Intraday replay
+- Snapshot (MBO only)
+
+the best approach to recovery will depend on the client's use case and
+specific needs.
+
+[]natural refresh[]
+
+to recover via natural refresh, clients can resubscribe to all desired
+symbols without the start or snapshot parameters. this means no data
+will be replayed, and the client will immediately receive the newest
+messages upon subscribing.
+
+this recovery approach is the fastest (since there's no data replay),
+and is recommended for stateless schemas such as mbp-10, in cases where
+the client only requires the current state of each instrument.
+
+[]intraday replay[]
+
+to recover via intraday replay, clients should store the last ts_event
+and the number of records received with that last timestamp, per schema
+and instrument. The ts_event and record count should be continuously
+updated when processing incoming records.
+
+When reconnecting, clients should set the start parameter of the
+resubscription to the lowest stored ts_event across all instruments for
+that schema. The gateway will then send all records starting from that
+timestamp (including records with the exact same ts_event).
+
+The resubscription may lead to duplicated data being sent to the client.
+Clients who require that each message is delivered exactly once are
+instructed to:
+
+- Discard all records with a lower ts_event than the stored one for the
+  corresponding instrument
+- Discard the first N records with the same ts_event as the stored one
+  for the corresponding instrument, where N is the number of records
+  already seen with that ts_event prior to the disconnection. This is
+  important in case there are multiple events with the same ts_event and
+  the client is disconnected halfway through processing those events
+
+This recovery approach is recommended when clients require the
+uninterrupted history of records for the desired schema (for example,
+when using the Trades schema to construct a ticker tape). However, this
+approach can take a longer time to synchronize with the live stream,
+depending on how long the client was disconnected.
+
+For the CBBO and BBO schemas where filtering is based on ts_recv,
+clients should store the last ts_recv per instrument. When reconnecting,
+clients should set the start parameter to the resubscription of the
+lowest stored ts_recv across all instruments. The gateway will then send
+all records starting from that timestamp (including records with the
+same ts_recv). since cbbo and bbo are stateless schemas, you should
+always refer to the most recent record per instrument.
+
+[]snapshot (mbo only)[]
+
+when resubscribing to the mbo schema, clients can request a snapshot to
+receive the current state of the book after a disconnection. This
+eliminates the need to replay the missed messages and leads to faster
+synchronization with the live stream. this recovery approach is
+generally recommended over intraday replay when using the mbo schema.
+
+[]maintenance schedule[]
+
+we restart our live gateways on sunday at the following times:
+
+- CME Globex. 09:30 UTC
+- All ICE venues. 09:45 UTC
+- All other datasets. 10:30 UTC
+
+All clients will be disconnected during this time.
+
+Additionally, we may restart our gateways mid-week. While we generally
+post these mid-week restarts on our status page, we may perform these
+restarts without notice due to an urgent fix. You should configure your
+client to handle reconnecting automatically.
+
+While exchanges are closed on Saturday, our systems are still connected
+to the exchange feeds. The exchange may send test data, and our gateways
+will disseminate this data to all connected clients. if you are not
+interested in receiving this test data, we recommend you disconnect
+after the friday close and reconnect on sunday after the scheduled
+restart.
+
+  [info]
+
+  info
+
+  any test data sent through the live api will not be seen in our
+  historical data.
+
+[]message flows[]
+
+[]authentication[]
+
+the authentication message flow is initiated by the gateway.
+
+the gateway will send a greeting message followed by a challenge
+request.
+
+The client must then issue an authentication request, which the gateway
+will respond to with an authentication response
+
+[]example[]
+
+for the purpose of this example, assume the api key is
+db-89s9vcvwddkpdqj5pb30fyj9mnum6.
+
+when connecting to the gateway, the gateway will send two messages:
+
+lsg_version=0.2.0\n
+
+cram=j5pwmhz6vwxrujm4cowqrqeqe0bimizt\n
+
+to generate the response, the client first concatenates the cram value
+and their api key in the format $cram|$key.
+
+in this example, this would be
+j5pwmhz6vwxrujm4cowqrqeqe0bimizt|db-89s9vcvwddkpdqj5pb30fyj9mnum6.
+
+the concatenated string is then hashed with sha-256. In this example, it
+produces
+6d3c875bb9f8cf503c3ed83ee5f476a3ad53f0c67706c51cf42d2db5ad8ff5a9.
+
+This result is then concatenated with the last five bytes of the API key
+(also referred to as the bucket_id) in the format $auth-$bucket_id
+
+With this, the authentication response string is generated as
+6d3c875bb9f8cf503c3ed83ee5f476a3ad53f0c67706c51cf42d2db5ad8ff5a9-mNUM6.
+
+The client then sends the authentication message containing this string
+to the gateway:
+
+auth=6d3c875bb9f8cf503c3ed83ee5f476a3ad53f0c67706c51cf42d2db5ad8ff5a9-mNUM6|dataset=GLBX.MDP3|encoding=dbn|ts_out=0\n
+
+If the key is valid, the gateway will reply with a successful response:
+success=1|session_id=135567\n
+
+[]subscription[]
+
+after authenticating, the client can subscribe to live data.
+
+to subscribe, the client must send a subscription request to the
+gateway.
+
+Subscriptions from multiple symbols and schemas can be made in the same
+session. Different datasets require separate connections.
+
+The same symbol can have separate subscriptions in different schemas.
+
+A subscription will not take effect until the session is started.
+
+Once a subscription is sent to the gateway, it cannot be unsubscribed
+from. in order to remove a subscription, the client must disconnect from
+the gateway and establish a new session.
+
+if a subscription fails on the gateway, the gateway will send one or
+more errormsg records to the client and the session will be terminated.
+
+[]example[]
+
+to subscribe to trades for all e-mini s&p mini 500 futures on cme, the
+client would send:
+
+schema=trades|stype_in=parent|symbols=es.fut\n
+
+[]intraday historical subscription[]
+
+after authenticating, the client can subscribe to intraday historical
+data.
+
+the subscription mechanism is similar to live data: the client must send
+a subscription request to the gateway, containing the start parameter
+which can be formatted as nanoseconds since the UNIX epoch or as a
+datetime string of one of the formats listed in Dates and times.
+
+When handling an intraday historical subscription, the gateway will send
+all messages beginning from the specified timestamp and, after catching
+up in time, will continue sending live data as it arrives.
+
+This makes intraday historical subscriptions the ideal way to deal with
+application restarts on the client side.
+
+Our gateways keep data from up to the last 24 hours to serve via the
+intraday historical API. requests for data over 24 hours old will be
+rejected.
+
+[]example[]
+
+to subscribe to trades for all e-mini s&p 500 futures on cme starting
+from 2023-04-05 00:00:00 utc, the client would send:
+
+schema=trades|stype_in=parent|symbols=es.fut|start=1680652800000000000\n
+
+or
+
+schema=trades|stype_in=parent|symbols=es.fut|start=2023-04-05t00:00:00\n
+
+[]starting the session[]
+
+once the gateway receives the session start message, it will start
+streaming data messages to the client and will continue until the
+connection is terminated.
+
+Once the session has started, it's still possible to send new
+subscriptions to the gateway, as long as they do not contain the start
+field.
+
+  [info]
+
+  info
+
+  a session cannot be started more than once.
+
+[]example[]
+
+after authenticating, to subscribe to trades for all e-mini s&p 500
+futures on cme starting from 2023-04-05 00:00:00 utc, the client would
+send:
+
+schema=trades|stype_in=parent|symbols=es.fut|start=1680652800000000000\n
+
+then, when ready to receive data, the client would send:
+
+start_session=1\n
+
+after this, the gateway will begin streaming data records to the client.
+
+[]gateway control messages[]
+
+[]greeting message[]
+
+the message sent by the gateway immediately after a client connects.
+
+[]fields[]
+
+lsg_version
+
+required | string
+
+the live gateway version.
+
+[]
+
+example message
+
+raw
+
+[]
+
+pythonc++rustraw
+
+[]
+
+    lsg_version=0.2.0\n
+
+[]challenge request[]
+
+the gateway sends this message immediately following the greeting
+message to authenticate the client.
+
+[]fields[]
+
+cram
+
+required | string
+
+a randomly-generated challenge string. must be encoded by the client
+into the response.
+
+[]
+
+example message
+
+raw
+
+[]
+
+pythonc++rustraw
+
+[]
+
+    cram=j5pwMHz6vwXruJM4cOwQrQeQE0bImIzT\n
+
+[]authentication response[]
+
+the gateway sends this response following the client's authentication
+request.
+
+[]fields[]
+
+success
+
+required | string
+
+set to 1 if the client was successfully authenticated, 0 otherwise.
+
+error
+
+optional | string
+
+a description of the authentication error if the client was not
+successfully authenticated.
+
+session_id
+
+optional | string
+
+a unique identifier representing the established session.
+
+[]
+
+example message
+
+raw
+
+[]
+
+pythonc++rustraw
+
+[]
+
+    success=1|session_id=100322\n
+
+[]client control messages[]
+
+[]authentication request[]
+
+authenticates the session against the gateway and sets the dataset for
+the session.
+
+[]fields[]
+
+auth
+
+required | string
+
+the authentication response. generated based on the client api key and
+the cram challenge sent by the gateway. see authentication for a
+detailed walkthrough of the process.
+
+dataset
+
+required | string
+
+the dataset code (string identifier). must be one of the values from
+metadata.list_datasets.
+
+encoding
+
+optional | string
+
+the encoding to be used for the data sent by the gateway. defaults to
+dbn.
+
+compression
+
+optional | string
+
+the compression to be used for the data sent by the gateway. defaults to
+none.
+
+ts_out
+
+optional | int8_t
+
+if set to 1, the gateway will prepend the timestamp at which the message
+was processed to every data record. defaults to 0.
+
+pretty_px
+
+optional | int8_t
+
+if set to 1, the gateway will format fixed-precision fields as a decimal
+string. only applicable for json encoding. defaults to 0.
+
+pretty_ts
+
+optional | int8_t
+
+if set to 1, the gateway will format timestamp fields as iso 8601
+strings. only applicable for json encoding. defaults to 0.
+
+heartbeat_interval_s
+
+optional | uint32_t
+
+overrides the interval in seconds at which the gateway will send
+heartbeat records. defaults to the gateway's default interval.
+
+[]
+
+example message
+
+raw
+
+[]
+
+pythonc++rustraw
+
+[]
+
+    auth=6c476f2214fa0509607a968b7d62e3a3b605ee740f9c6d70f1bd3a34a9213f61-mNUM6|dataset=GLBX.MDP3|encoding=dbn|ts_out=0\n
+
+[]
+
+example response
+
+raw
+
+[]
+
+pythonc++rustraw
+
+[]
+
+    success=1|session_id=135567\n
+
+[]subscription request[]
+
+add a new subscription to the session.
+
+supports multiple subscriptions for different schemas, which enables
+rich data streams containing mixed record types.
+
+specify an optional start time for intraday replay with subscriptions
+made before starting the session.
+
+please note there is no unsubscribe method. Subscriptions end when the
+TCP connection closes.
+
+When subscribing to many symbols, a subscription can be split across
+multiple control messages so as to avoid exceeding the maximum length.
+It's recommended to chunk the symbols in groups of 500. all but the last
+message should include is_last=0 to indicate to the gateway that another
+part of the subscription remains.
+
+[]fields[]
+
+schema
+
+required | string
+
+the data record schema code (string identifier). must be one of the
+values from metadata.list_schemas.
+
+stype_in
+
+required | string
+
+the symbology type of input symbols.
+
+symbols
+
+required | string
+
+a comma-separated list of symbols to filter for. setting this value to
+all_symbols will subscribe to all the symbols in the dataset.
+
+start
+
+optional | string or uint64_t
+
+the inclusive start of subscription replay. filters on ts_event except
+for cbbo and bbo schemas, which filter on ts_recv. takes an iso 8601
+string or a unix timestamp in nanoseconds. must be within the last 24
+hours. pass 0 to request all available data. cannot be specified after
+the session is started.
+
+snapshot
+
+optional | int8_t
+
+request subscription with snapshot. when snapshot=1, start must be
+absent.
+
+id
+
+optional | uint32_t
+
+a numerical identifier for the subscription.
+
+is_last
+
+optional | int8_t
+
+0 indicates more requests will be sent with the same parameters other
+than symbols and the gateway should wait to process the request.
+is_last=1 is the default and instructs the gateway to process the
+request immediately.
+
+[]
+
+example message
+
+raw
+
+[]
+
+pythonc++rustraw
+
+[]
+
+    schema=trades|start=1671717080706865759|stype_in=raw_symbol|symbols=SPY,QQQ\n
+
+[]session start[]
+
+after receiving this message, the gateway will start streaming data
+records to the client.
+
+  [info]
+
+  info
+
+  this message should only be sent once per session.
+
+[]fields[]
+
+start_session
+
+required | ignored
+
+the value sent here is irrelevant.
+
+[]
+
+example message
+
+raw
+
+[]
+
+pythonc++rustraw
+
+[]
+
+    start_session=0\n
+
+[]
+
+Python []
+
+Python C++ Rust HTTP/Raw
+
+[]
