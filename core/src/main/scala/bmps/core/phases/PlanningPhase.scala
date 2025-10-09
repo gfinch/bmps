@@ -12,6 +12,7 @@ import bmps.core.api.run.PhaseRunner
 import bmps.core.models.SystemStatePhase
 import bmps.core.models.CandleDuration
 import bmps.core.io.PolygonAPISource
+import bmps.core.io.DatabentoSource
 
 class PlanningEventGenerator(swingService: SwingService = new SwingService(1)) extends EventGenerator with TradingDate {
     def initialize(state: SystemState, options: Map[String, String] = Map.empty): SystemState = {
@@ -42,8 +43,9 @@ class PlanningEventGenerator(swingService: SwingService = new SwingService(1)) e
 }
 
 class PlanningSource extends CandleSource {
-    // lazy val apiSource = new PolygonAPISource(CandleDuration.OneHour)
-    lazy val source = new ParquetSource(CandleDuration.OneHour)
+    // lazy val source = new PolygonAPISource(CandleDuration.OneHour)
+    // lazy val source = new ParquetSource(CandleDuration.OneHour)
+    lazy val source = new DatabentoSource(CandleDuration.OneHour)
 
     def candles(state: SystemState): Stream[IO, Candle] = {
         val (startMs, endMs, zoneId) = computePlanningWindow(state)
@@ -61,7 +63,7 @@ class PlanningSource extends CandleSource {
         val startDate = MarketCalendar.getTradingDaysBack(tradingDay, 2)
         
         val startDateTime = ZonedDateTime.of(startDate, LocalTime.of(9, 0), zoneId)
-        val endDateTime = ZonedDateTime.of(tradingDay, LocalTime.of(16, 0), zoneId)
+        val endDateTime = ZonedDateTime.of(tradingDay, LocalTime.of(9, 0), zoneId)
         val startMs = startDateTime.toInstant.toEpochMilli
         val endMs = endDateTime.toInstant.toEpochMilli
         (startMs, endMs, zoneId)

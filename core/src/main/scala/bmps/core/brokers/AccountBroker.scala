@@ -96,6 +96,7 @@ trait AccountBroker {
 
 class LeadAccountBroker(val brokers: List[AccountBroker], riskDollars: Double = 550.0) extends AccountBroker {
     final val TenMinutes = Duration.ofMinutes(10).toMillis()
+    final val FiveMinutes = Duration.ofMinutes(5).toMillis()
 
     val accountId = "LeadAccountBroker"
     val riskPerTrade = riskDollars
@@ -234,7 +235,7 @@ class LeadAccountBroker(val brokers: List[AccountBroker], riskDollars: Double = 
 
     //Rule: If the order is planned for 10 minutes and wicks above or below, cancel it.
     private def cancelOldPlannedOrderWickOutside(order: Order, candle: Candle): Order = {
-        if (order.status == Planned && order.timestamp + TenMinutes <= candle.timestamp) {
+        if (order.status == Planned && order.timestamp + FiveMinutes <= candle.timestamp) {
             val reason = CancelReason.TenMinuteWickOutside
             order.orderType match {
                 case OrderType.Long => 

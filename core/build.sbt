@@ -31,3 +31,9 @@ libraryDependencies += "ch.qos.logback" % "logback-classic" % "1.4.11"
 
 // Note: running in-process (non-forked) is preferred for interactive debugging.
 // Removed the forked-run JVM settings to keep sbt in-process.
+
+// Forward environment variables to the running application
+run / envVars := Map(
+  "DATABENTO_KEY" -> sys.env.getOrElse("DATABENTO_KEY", ""),
+  "POLY_KEY" -> sys.env.getOrElse("POLY_KEY", "")
+)

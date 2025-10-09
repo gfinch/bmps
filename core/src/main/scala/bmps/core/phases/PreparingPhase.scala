@@ -12,6 +12,7 @@ import bmps.core.api.run.PhaseRunner
 import bmps.core.models.SystemStatePhase
 import bmps.core.io.PolygonAPISource
 import bmps.core.models.CandleDuration
+import bmps.core.io.DatabentoSource
 
 class PreparingEventGenerator(swingService: SwingService = new SwingService(1)) extends EventGenerator with TradingDate {
 
@@ -46,7 +47,8 @@ class PreparingEventGenerator(swingService: SwingService = new SwingService(1)) 
 
 class PreparingSource extends CandleSource {
     // lazy val source = new PolygonAPISource(CandleDuration.OneMinute)
-    lazy val source = new ParquetSource(CandleDuration.OneMinute)
+    // lazy val source = new ParquetSource(CandleDuration.OneMinute)
+    lazy val source = new DatabentoSource(CandleDuration.OneMinute)
 
     def candles(state: SystemState): Stream[IO, Candle] = {
         val (startMs, endMs, zoneId) = computePreparingWindow(state)
