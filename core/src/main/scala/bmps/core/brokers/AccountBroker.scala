@@ -13,6 +13,7 @@ sealed trait BrokerType
 object BrokerType {
     case object LeadAccountBroker extends BrokerType
     case object SimulatedAccountBroker extends BrokerType
+    case object TradovateAccountBroker extends BrokerType
 }
 
 case class OrderReport(orders: List[SerializableOrder], winning: Int, losing: Int,

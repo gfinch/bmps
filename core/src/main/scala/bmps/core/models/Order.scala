@@ -16,6 +16,12 @@ object OrderType {
     case object Short extends OrderType
 }
 
+sealed trait ContractType
+object ContractType {
+    case object ES extends ContractType
+    case object MES extends ContractType
+}
+
 sealed trait EntryType
 object EntryType {
     case object EngulfingOrderBlock extends EntryType
@@ -143,5 +149,5 @@ object SerializableOrder {
             potential = potential,
             cancelReason = order.cancelReason
         )
-    } 
+    }
 }

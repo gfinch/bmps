@@ -25,6 +25,7 @@ lazy val core = (project in file("core"))
   )
 
 lazy val console = (project in file("console"))
+  .dependsOn(core)
   .settings(
     name := "bmps-console",
     libraryDependencies ++= Seq(
@@ -35,5 +36,5 @@ lazy val console = (project in file("console"))
       "io.circe" %% "circe-parser" % "0.14.6",
       "ch.qos.logback" % "logback-classic" % "1.4.11"
     ),
-    Compile / mainClass := Some("bmps.console.ConsoleClient")
+    Compile / mainClass := Some("bmps.console.TradovateBrokerTest")
   )

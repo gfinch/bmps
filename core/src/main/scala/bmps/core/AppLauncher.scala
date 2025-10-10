@@ -34,6 +34,7 @@ object AppLauncher extends IOApp.Simple {
       
       val brokerType = brokerTypeString match {
         case "SimulatedAccountBroker" => BrokerType.SimulatedAccountBroker
+        case "TradeovateBroker" => BrokerType.TradovateAccountBroker
         case _ => throw new IllegalArgumentException(s"Unknown broker type: $brokerTypeString")
       }
       
