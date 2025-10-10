@@ -122,6 +122,7 @@ object RestServer {
         (tradingDateResult, phaseResult) match {
           case (Right(tradingDate), Right(phase)) =>
             eventStore.getEvents(tradingDate, phase).flatMap { case (events, isComplete) =>
+              println(s"$phase isComplete: $isComplete")
               Ok(PhaseEventsResponse(events, isComplete).asJson)
             }.handleErrorWith { err =>
               logger.error(s"Failed to retrieve events for $tradingDate/$phase", err)

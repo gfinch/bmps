@@ -13,6 +13,7 @@ import java.time.ZoneId
 import java.time.Instant
 import java.time.Duration
 import bmps.core.models.Candle
+import bmps.core.models.ContractType
 
 object OrderService {
 
@@ -35,6 +36,15 @@ object OrderService {
         state.orders.find { order => 
             order.status == OrderStatus.Planned && shouldPlaceOrder(order, state)
         }
+    }
+
+    def determineContracts(order: Order, riskPerTrade: Double): (ContractType, Int) = {
+        require(order.atRiskPerContract > 0, "atRiskPerContract must be positive")
+        require(riskPerTrade > 0, "riskPerTrade must be positive")
+        val mesContracts: Int = Math.floor(riskPerTrade / order.atRiskPerContract).toInt
+        if (mesContracts >= 50) {
+            (ContractType.ES, Math.round(mesContracts.toDouble / 50.0).toInt)
+        } else (ContractType.MES, mesContracts)
     }
 
     private def shouldPlaceOrder(order: Order, state: SystemState): Boolean = {
