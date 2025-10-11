@@ -10,4 +10,4 @@ libraryDependencies ++= Seq(
 )
 
 // Set main class for running
-Compile / mainClass := Some("bmps.console.TradovateBrokerTest")
+Compile / mainClass := Some("bmps.console.ConsoleClient")
