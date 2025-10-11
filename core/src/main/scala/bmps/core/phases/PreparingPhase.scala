@@ -10,11 +10,13 @@ import bmps.core.models.{SystemState, Event, Candle}
 import bmps.core.api.intf.{EventGenerator, CandleSource}
 import bmps.core.api.run.PhaseRunner
 import bmps.core.models.SystemStatePhase
-import bmps.core.io.PolygonAPISource
 import bmps.core.models.CandleDuration
-import bmps.core.io.DatabentoSource
+import bmps.core.io.DataSource
+import bmps.core.utils.TimestampUtils.midnight
+import bmps.core.utils.TimestampUtils
+import breeze.linalg.min
 
-class PreparingEventGenerator(swingService: SwingService = new SwingService(1)) extends EventGenerator with TradingDate {
+class PreparingEventGenerator(swingService: SwingService = new SwingService(1)) extends EventGenerator {
 
     def initialize(state: SystemState, options: Map[String, String] = Map.empty): SystemState = {
         val earliestPlanZone = state.planZones.filter(_.isActive).map(_.startTime).minOption
@@ -28,9 +30,7 @@ class PreparingEventGenerator(swingService: SwingService = new SwingService(1)) 
         val (swings, directionOption) = swingService.computeSwings(updatedCandles)
         val newDirection = directionOption.getOrElse(state.swingDirection)
         val withSwings = state.copy(tradingCandles = updatedCandles, tradingSwingPoints = swings, swingDirection = newDirection)
-        val (updatedState, _) = if (isInTradingDate(withSwings.tradingDay, candle.timestamp)) {
-            LiquidityZoneService.processLiquidityZones(withSwings, candle)
-        } else (withSwings, List.empty)
+        val (updatedState, _) = LiquidityZoneService.processLiquidityZones(withSwings, candle)
 
         val newSwingPoints = updatedState.tradingSwingPoints.drop(state.tradingSwingPoints.length)
         val allEvents = newSwingPoints.map(Event.fromSwingPoint)
@@ -45,29 +45,24 @@ class PreparingEventGenerator(swingService: SwingService = new SwingService(1)) 
     }
 }
 
-class PreparingSource extends CandleSource {
-    // lazy val source = new PolygonAPISource(CandleDuration.OneMinute)
-    // lazy val source = new ParquetSource(CandleDuration.OneMinute)
-    lazy val source = new DatabentoSource(CandleDuration.OneMinute)
-
+class PreparingSource(dataSource: DataSource) extends CandleSource {
     def candles(state: SystemState): Stream[IO, Candle] = {
-        val (startMs, endMs, zoneId) = computePreparingWindow(state)
-        source.candlesInRangeStream(startMs, endMs, zoneId)
+        val (plannedStart, endMs) = computePreparingWindow(state)
+        val minPrestart = state.tradingReplayStartTime.map(s => if (s < plannedStart) s else plannedStart).getOrElse(plannedStart)
+        val startMs = state.tradingCandles.lastOption.map(_.timestamp + 1).getOrElse(minPrestart)
+        println(s"Planned: $plannedStart, MinPrestart: $minPrestart, StartMs: $startMs")
+        dataSource.candlesInRangeStream(startMs, endMs)
     }
 
-    private def computePreparingWindow(state: SystemState): (Long, Long, java.time.ZoneId) = {
-        import java.time.{ZoneId, ZonedDateTime, LocalTime}
-        val zoneId = ZoneId.of("America/New_York")
-        val tradingDay = state.tradingDay
-        val endDateTime = ZonedDateTime.of(tradingDay, LocalTime.of(9, 30), zoneId)
-        val defaultStartTime = endDateTime.minusHours(12).toInstant().toEpochMilli()
-        val startMs = state.tradingReplayStartTime.getOrElse(defaultStartTime)
-        val endMs = endDateTime.toInstant.toEpochMilli
-        (startMs, endMs, zoneId)
+    private def computePreparingWindow(state: SystemState): (Long, Long) = {
+        val startMs = TimestampUtils.midnight(state.tradingDay)
+        val endMs = TimestampUtils.newYorkOpen(state.tradingDay)
+        
+        (startMs, endMs)
     }
 }
 
 object PreparingPhaseBuilder {
-    def build() = new PhaseRunner(new PreparingSource(), new PreparingEventGenerator())
+    def build(dataSource: DataSource) = new PhaseRunner(new PreparingSource(dataSource), new PreparingEventGenerator())
 }
 

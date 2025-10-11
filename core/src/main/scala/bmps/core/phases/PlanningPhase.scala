@@ -11,14 +11,15 @@ import bmps.core.api.intf.{EventGenerator, CandleSource}
 import bmps.core.api.run.PhaseRunner
 import bmps.core.models.SystemStatePhase
 import bmps.core.models.CandleDuration
-import bmps.core.io.PolygonAPISource
 import bmps.core.io.DatabentoSource
+import bmps.core.utils.TimestampUtils
+import bmps.core.io.DataSource
 
-class PlanningEventGenerator(swingService: SwingService = new SwingService(1)) extends EventGenerator with TradingDate {
+class PlanningEventGenerator(swingService: SwingService = new SwingService(1)) extends EventGenerator {
     def initialize(state: SystemState, options: Map[String, String] = Map.empty): SystemState = {
         options.get("tradingDate") match {
             case Some(tradeDate) =>
-                val localDate = parseTradingDate(tradeDate)
+                val localDate = TimestampUtils.toNewYorkLocalDate(tradeDate)
                 state.copy(systemStatePhase = SystemStatePhase.Planning, tradingDay = localDate)
             case None =>
                 state.copy(systemStatePhase = SystemStatePhase.Planning)
@@ -31,9 +32,8 @@ class PlanningEventGenerator(swingService: SwingService = new SwingService(1)) e
         val newDirection = directionOption.getOrElse(state.swingDirection)
         val withSwings = state.copy(planningCandles = updatedCandles, planningSwingPoints = swings, swingDirection = newDirection)
         val (withZones, zoneEvents) = PlanZoneService.processPlanZones(withSwings)
-        val (updatedState, liquidEvents) = if (!isInTradingDate(withSwings.tradingDay, candle.timestamp)) {
-            LiquidityZoneService.processLiquidityZones(withZones, candle)
-        } else (withZones, List.empty)
+        val (updatedState, liquidEvents) = LiquidityZoneService.processLiquidityZones(withZones, candle)
+        
         val newSwingPoints = updatedState.planningSwingPoints.drop(state.planningSwingPoints.length)
 
         val allEvents = newSwingPoints.map(Event.fromSwingPoint) ++ zoneEvents ++ liquidEvents 
@@ -42,34 +42,28 @@ class PlanningEventGenerator(swingService: SwingService = new SwingService(1)) e
     }
 }
 
-class PlanningSource extends CandleSource {
-    // lazy val source = new PolygonAPISource(CandleDuration.OneHour)
-    // lazy val source = new ParquetSource(CandleDuration.OneHour)
-    lazy val source = new DatabentoSource(CandleDuration.OneHour)
-
+class PlanningSource(dataSource: DataSource) extends CandleSource {
     def candles(state: SystemState): Stream[IO, Candle] = {
-        val (startMs, endMs, zoneId) = computePlanningWindow(state)
-        source.candlesInRangeStream(startMs, endMs, zoneId)
+        val (plannedStart, endMs) = computePlanningWindow(state)
+
+        //On restart, start at the last candle received
+        val startMs = state.planningCandles.lastOption.map(_.timestamp + 1).getOrElse(plannedStart)
+        dataSource.candlesInRangeStream(startMs, endMs)
     }
 
-    private def computePlanningWindow(state: SystemState): (Long, Long, java.time.ZoneId) = {
+    private def computePlanningWindow(state: SystemState): (Long, Long) = {
         import java.time.{ZoneId, ZonedDateTime, LocalTime}
         import bmps.core.utils.MarketCalendar
-        
-        val zoneId = ZoneId.of("America/New_York")
+
         val tradingDay = state.tradingDay
-        
-        // Calculate the date that's 2 trading days before tradingDay
         val startDate = MarketCalendar.getTradingDaysBack(tradingDay, 2)
         
-        val startDateTime = ZonedDateTime.of(startDate, LocalTime.of(9, 0), zoneId)
-        val endDateTime = ZonedDateTime.of(tradingDay, LocalTime.of(9, 0), zoneId)
-        val startMs = startDateTime.toInstant.toEpochMilli
-        val endMs = endDateTime.toInstant.toEpochMilli
-        (startMs, endMs, zoneId)
+        val startMs = TimestampUtils.midnight(startDate)
+        val endMs = TimestampUtils.nineAM(tradingDay)
+        (startMs, endMs)
     }
 }
 
 object PlanningPhaseBuilder {
-    def build() = new PhaseRunner(new PlanningSource(), new PlanningEventGenerator())
+    def build(dataSource: DataSource) = new PhaseRunner(new PlanningSource(dataSource), new PlanningEventGenerator())
 }

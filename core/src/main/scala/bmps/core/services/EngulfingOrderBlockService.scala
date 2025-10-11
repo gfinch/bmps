@@ -43,8 +43,8 @@ object EngulfingOrderBlockService {
         require(order.entryType == EntryType.EngulfingOrderBlock, s"Called EngulfingOrderBlock.shouldPlace order with ${order.entryType}")
         val candle = state.tradingCandles.last
         val orderIsReady = order.orderType match {
-            case OrderType.Long => candle.close.value >= order.entryPoint && candle.timestamp > order.timestamp
-            case OrderType.Short => candle.close.value <= order.entryPoint && candle.timestamp > order.timestamp
+            case OrderType.Long => candle.close >= order.entryPoint && candle.timestamp > order.timestamp
+            case OrderType.Short => candle.close <= order.entryPoint && candle.timestamp > order.timestamp
             case _ => false
         }
         val recentFailedOrder = recentEOBLossOrder(state.orders, candle)
@@ -88,16 +88,16 @@ object EngulfingOrderBlockService {
         
         if (recentCandles.isEmpty) return false // Not enough data, don't allow it
         
-        val avgBodyHeight = recentCandles.map(_.bodyHeight.value).sum / recentCandles.length
+        val avgBodyHeight = recentCandles.map(_.bodyHeight).sum / recentCandles.length
         
         // Engulfing candle should be at least 1.2x average size
-        val isTestSubstantial = test.bodyHeight.value >= avgBodyHeight * 1.2
+        val isTestSubstantial = test.bodyHeight >= avgBodyHeight * 1.2
         
         // Engulfing should be at least 1.5x the subject candle
-        val engulfsSignificantly = test.bodyHeight.value >= subject.bodyHeight.value * 1.5
+        val engulfsSignificantly = test.bodyHeight >= subject.bodyHeight * 1.5
         
         // Subject should not be a doji (very small body)
-        val subjectNotDoji = subject.bodyHeight.value > avgBodyHeight * 0.3
+        val subjectNotDoji = subject.bodyHeight > avgBodyHeight * 0.3
         
         // NEW: Check that engulfing candle doesn't consume too much of the prior move
         val doesntConsumeMove = !engulfingConsumesTooMuchMove(test, subject, state, idx)
@@ -118,7 +118,7 @@ object EngulfingOrderBlockService {
         subject.direction match {
             case Direction.Down => 
                 // For bullish engulfing, check for preceding downtrend
-                val priceDecline = startCandle.high.value - subject.low.value
+                val priceDecline = startCandle.high - subject.low
                 val avgCandleRange = calculateAvgRange(state.tradingCandles.slice(idx - lookbackPeriod, idx + 1))
                 
                 // Price should have declined at least 2x the average candle range
@@ -126,7 +126,7 @@ object EngulfingOrderBlockService {
                 
             case Direction.Up =>
                 // For bearish engulfing, check for preceding uptrend
-                val priceIncline = subject.high.value - startCandle.low.value
+                val priceIncline = subject.high - startCandle.low
                 val avgCandleRange = calculateAvgRange(state.tradingCandles.slice(idx - lookbackPeriod, idx + 1))
                 
                 // Price should have inclined at least 2x the average candle range
@@ -140,7 +140,7 @@ object EngulfingOrderBlockService {
     private def calculateAvgRange(candles: Seq[Candle]): Double = {
         if (candles.isEmpty) 0.0
         else {
-            val totalRange = candles.map(c => c.high.value - c.low.value).sum
+            val totalRange = candles.map(c => c.high - c.low).sum
             totalRange / candles.length
         }
     }
@@ -156,8 +156,8 @@ object EngulfingOrderBlockService {
         subject.direction match {
             case Direction.Down =>
                 // For bullish engulfing after downtrend
-                val totalDecline = startCandle.high.value - subject.low.value
-                val engulfingRetracement = test.close.value - subject.low.value
+                val totalDecline = startCandle.high - subject.low
+                val engulfingRetracement = test.close - subject.low
                 
                 // If engulfing candle retraces more than 60% of the move, it's too late
                 val retracementPercent = if (totalDecline > 0) engulfingRetracement / totalDecline else 0.0
@@ -165,8 +165,8 @@ object EngulfingOrderBlockService {
                 
             case Direction.Up =>
                 // For bearish engulfing after uptrend
-                val totalIncline = subject.high.value - startCandle.low.value
-                val engulfingRetracement = subject.high.value - test.close.value
+                val totalIncline = subject.high - startCandle.low
+                val engulfingRetracement = subject.high - test.close
                 
                 // If engulfing candle retraces more than 60% of the move, it's too late
                 val retracementPercent = if (totalIncline > 0) engulfingRetracement / totalIncline else 0.0
@@ -188,8 +188,8 @@ object EngulfingOrderBlockService {
         if (recentSwings.length < 4) return false // Need at least 4 swings to detect consolidation
         
         // Separate highs and lows
-        val swingHighs = recentSwings.filter(_.direction == Direction.Down).map(_.level.value)
-        val swingLows = recentSwings.filter(_.direction == Direction.Up).map(_.level.value)
+        val swingHighs = recentSwings.filter(_.direction == Direction.Down).map(_.level)
+        val swingLows = recentSwings.filter(_.direction == Direction.Up).map(_.level)
         
         if (swingHighs.length < 2 || swingLows.length < 2) return false
         
@@ -224,10 +224,10 @@ object EngulfingOrderBlockService {
         
         // 5. Price has touched both boundaries multiple times
         val touchesTopBoundary = recentCandles.count(c => 
-            c.high.value >= highestHigh - (overallRange * 0.1)
+            c.high >= highestHigh - (overallRange * 0.1)
         )
         val touchesBottomBoundary = recentCandles.count(c => 
-            c.low.value <= lowestLow + (overallRange * 0.1)
+            c.low <= lowestLow + (overallRange * 0.1)
         )
         val multipleTouches = touchesTopBoundary >= 2 && touchesBottomBoundary >= 2
         

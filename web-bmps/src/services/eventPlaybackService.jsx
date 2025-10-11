@@ -398,6 +398,16 @@ class EventPlaybackService {
   }
 
   /**
+   * Get the New York offset for a phase
+   * @param {string} phase - Phase to get offset for
+   * @returns {number|null} New York offset in milliseconds, or null if not available
+   */
+  getNewYorkOffset(phase) {
+    const buffer = eventBufferManager.getBuffer(phase)
+    return buffer.getNewYorkOffset()
+  }
+
+  /**
    * Get playback state for phase
    * @param {string} phase - Phase to check
    * @returns {boolean} True if playing
@@ -426,6 +436,10 @@ class EventPlaybackService {
     const currentTs = this.getCurrentTimestamp(phase)
     
     console.debug(`Publishing ${visibleEvents.length} visible events for ${phase} at timestamp ${currentTs}`)
+    // Log all visible events for debugging
+    visibleEvents.forEach(event => {
+      console.debug(`[${phase}] Event:`, event)
+    })
     
     // Notify all listeners of the change
     this.notifyListeners({

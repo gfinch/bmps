@@ -7,6 +7,37 @@ import { createChart, BaselineSeries } from 'lightweight-charts'
 import restApiService from '../services/restApiService.jsx'
 import phaseService from '../services/phaseService.jsx'
 
+/**
+ * Converts a UTC timestamp (in milliseconds) to New York local time (DST-safe).
+ * Returns a Unix timestamp in seconds (offset from UTC).
+ */
+function utcMsToNewYorkSeconds(utcMs) {
+  const utcDate = new Date(utcMs);
+
+  // Format the UTC instant as if it were in New York time
+  const fmt = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    hour12: false,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+
+  // Break down the parts and reconstruct a New York-local time in UTC
+  const parts = fmt.formatToParts(utcDate);
+  const get = (t) => parts.find(p => p.type === t)?.value ?? '00';
+
+  // Build ISO string and parse as UTC — this "shifts" the time correctly
+  const localStr = `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}:${get('second')}Z`;
+  const localDate = new Date(localStr);
+
+  // Return seconds (TradingView wants seconds, not milliseconds)
+  return Math.floor(localDate.getTime() / 1000);
+}
+
 export default function ResultsPage() {
   const navigate = useNavigate()
   const chartContainerRef = useRef()
@@ -198,23 +229,31 @@ export default function ResultsPage() {
         return
       }
 
-      // Calculate cumulative P&L
+            // Calculate cumulative P&L
       let cumulativePnL = 0
       const pnlData = completedOrders.map(order => {
         const status = typeof order.status === 'object' ? Object.keys(order.status)[0] : order.status
         const pnl = status === 'Profit' ? order.potential : -order.atRisk
         cumulativePnL += pnl
-
+        
         return {
-          time: order.closeTimestamp / 1000, // Convert to seconds for TradingView
+          time: utcMsToNewYorkSeconds(order.closeTimestamp),
           value: cumulativePnL
         }
       })
 
-      // Add starting point at 0 if we have data
+      // Add starting point at 0 at market open (9:30 AM NY time)
       if (pnlData.length > 0) {
-        const firstTime = pnlData[0].time
-        pnlData.unshift({ time: firstTime - 1, value: 0 })
+        // Get the date of the first trade and set time to 9:30 AM NY
+        const firstTradeDate = new Date(pnlData[0].time * 1000)
+        const marketOpenDate = new Date(firstTradeDate)
+        marketOpenDate.setUTCHours(13, 30, 0, 0) // 9:30 AM NY = 13:30 UTC (or 14:30 during DST)
+        
+        // Convert market open time to NY timezone seconds
+        const marketOpenMs = marketOpenDate.getTime()
+        const marketOpenSeconds = utcMsToNewYorkSeconds(marketOpenMs)
+        
+        pnlData.unshift({ time: marketOpenSeconds, value: 0 })
       }
 
             // Create baseline series
@@ -342,9 +381,9 @@ export default function ResultsPage() {
       
       return {
         id: index + 1,
-        date: closeDate.toLocaleDateString(),
+        date: closeDate.toLocaleDateString('en-US', { timeZone: 'America/New_York' }),
         dateISO: dateISO,
-        time: closeDate.toLocaleTimeString(),
+        time: closeDate.toLocaleTimeString('en-US', { timeZone: 'America/New_York' }),
         type: orderType,
         price: order.entryPoint,
         quantity: order.contracts,

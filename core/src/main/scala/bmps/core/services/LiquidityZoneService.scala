@@ -4,132 +4,78 @@ import bmps.core.models.SystemState
 import bmps.core.models.Event
 import bmps.core.models.DaytimeExtreme
 import bmps.core.models.ExtremeType
-import bmps.core.models.Level
 import bmps.core.models.Candle
 
 import java.time.{LocalDate, LocalTime, ZoneId, ZonedDateTime, Instant}
+import bmps.core.utils.TimestampUtils
+import bmps.core.utils.MarketCalendar
+import bmps.core.models.Market
+import bmps.core.models.Market._
+import bmps.core.models.ExtremeType
+import bmps.core.models.ExtremeType._
+
+case class ExtremeKey(market: Market, extremeType: ExtremeType)
 
 object LiquidityZoneService {
 
-    private val eastern = ZoneId.of("America/New_York")
-
-    // Extracted helper: build/update daytime extremes based on the last candle and market windows.
-    private def updateDaytimeExtremes(state: SystemState, lastCandle: Candle): List[DaytimeExtreme] = {
-        val tradingDay = state.tradingDay
-
-        // helper to build epoch millis for a given date and local time in eastern
-        def toMillis(date: LocalDate, time: LocalTime): Long = {
-            ZonedDateTime.of(date, time, eastern).toInstant.toEpochMilli
-        }
-
-        // Market windows (as specified). Note: New York windows are on the day before the trading day.
-        val nyOpenPrev = toMillis(tradingDay.minusDays(1), LocalTime.of(9, 30))
-        val nyClosePrev = toMillis(tradingDay.minusDays(1), LocalTime.of(16, 0))
-
-        val asiaOpenPrev = toMillis(tradingDay.minusDays(1), LocalTime.of(18, 0))
-        val asiaClose = toMillis(tradingDay, LocalTime.of(2, 0))
-
-        val londonOpen = toMillis(tradingDay, LocalTime.of(3, 0))
-        val londonClose = toMillis(tradingDay, LocalTime.of(9, 30))
-
-        // description helpers
-        def desc(exchange: String, typ: String) = s"$exchange - $typ"
-
-        // We'll lazily create extremes only when we see a candle during the market window.
-        val ts = lastCandle.timestamp
-
-        def within(open: Long, close: Long, t: Long): Boolean = t >= open && t <= close
-
-        // Use a mutable map keyed by description so we can create/update entries easily
-        import scala.collection.mutable
-        val map = mutable.LinkedHashMap[String, DaytimeExtreme]()
-        // seed map with any existing extremes (preserve previously created values)
-        state.daytimeExtremes.foreach(de => map.put(de.description, de))
-
-        def ensureAndUpdate(exchange: String, open: Long, close: Long): Unit = {
-            if (within(open, close, ts)) {
-                val lowDesc = desc(exchange, "Low")
-                val highDesc = desc(exchange, "High")
-
-                // create if missing
-                if (!map.contains(lowDesc)) {
-                    val de = DaytimeExtreme(Level(lastCandle.low.value), ExtremeType.Low, lastCandle.timestamp, None, lowDesc)
-                    map.put(lowDesc, de)
-                } else {
-                    val cur = map(lowDesc)
-                    if (lastCandle.low.value < cur.level.value) map.put(lowDesc, cur.copy(level = Level(lastCandle.low.value)))
-                }
-
-                if (!map.contains(highDesc)) {
-                    val de = DaytimeExtreme(Level(lastCandle.high.value), ExtremeType.High, lastCandle.timestamp, None, highDesc)
-                    map.put(highDesc, de)
-                } else {
-                    val cur = map(highDesc)
-                    if (lastCandle.high.value > cur.level.value) {
-                        map.put(highDesc, cur.copy(level = Level(lastCandle.high.value)))
-                    }
-                }
-            }
-        }
-
-        // New York uses previous trading day window
-        ensureAndUpdate("New York", nyOpenPrev, nyClosePrev)
-        ensureAndUpdate("Asia", asiaOpenPrev, asiaClose)
-        ensureAndUpdate("London", londonOpen, londonClose)
-
-        // After creating/updating extremes for the current candle, end-date any existing extremes
-        // that are now surpassed by another daytime extreme of the same type.
-        val origMap = state.daytimeExtremes.map(de => de.description -> de).toMap
-
-        // For every original extreme that is still open, if any other updated extreme of the
-        // same ExtremeType has moved past it (higher for High, lower for Low), then close it
-        // at the current candle timestamp.
-        for ((desc, orig) <- origMap if orig.endTime.isEmpty) {
-            // find any other updated extreme that surpasses the original
-            val others = map.values.filter(de => de.description != desc && de.extremeType == orig.extremeType)
-            val shouldClose = orig.extremeType match {
-                // only consider 'other' extremes that were created/updated after the original extreme's start
-                case ExtremeType.High => others.exists(o => o.timestamp > orig.timestamp && o.level.value > orig.level.value)
-                case ExtremeType.Low  => others.exists(o => o.timestamp > orig.timestamp && o.level.value < orig.level.value)
-            }
-
-            if (shouldClose) {
-                // update the map entry to include endTime if not already set
-                map.get(desc).foreach { cur =>
-                    if (cur.endTime.isEmpty) map.put(desc, cur.copy(endTime = Some(ts)))
-                }
-            }
-        }
-
-        map.values.toList
-    }
-
-    // Generate events for any new or changed DaytimeExtremes by comparing original and updated lists.
-    private def generateDaytimeExtremeEvents(original: List[DaytimeExtreme], updated: List[DaytimeExtreme]): List[Event] = {
-        // index by description for quick lookup
-        val origMap = original.map(de => de.description -> de).toMap
-        val updMap = updated.map(de => de.description -> de).toMap
-
-
-        // For every updated extreme, emit an event when it's new, its level changed, or its endTime changed.
-        val createdOrChanged = updated.filter { de =>
-            origMap.get(de.description) match {
-                case None => true
-                case Some(orig) =>
-                    val levelChanged = orig.level.value != de.level.value
-                    val endTimeChanged = orig.endTime != de.endTime
-                    if (levelChanged) true
-                    else if (endTimeChanged) true
-                    else false
-            }
-        }
-
-        createdOrChanged.map(Event.fromDaytimeExtreme)
-    }
+    private final val AllKeys = Seq(
+        ExtremeKey(NewYork, High),
+        ExtremeKey(NewYork, Low),
+        ExtremeKey(Asia, High),
+        ExtremeKey(Asia, Low),
+        ExtremeKey(London, High),
+        ExtremeKey(London, Low)
+    )
 
     def processLiquidityZones(state: SystemState, lastCandle: Candle): (SystemState, List[Event]) = {
-        val updated = updateDaytimeExtremes(state, lastCandle)
-        val events = generateDaytimeExtremeEvents(state.daytimeExtremes, updated)
-        (state.copy(daytimeExtremes = updated), events)
+        val tradingDay = state.tradingDay
+        val priorTradingDay = MarketCalendar.getTradingDaysBack(tradingDay, 1)
+
+        val updatedState = AllKeys.foldLeft(state) { (rState, key) => 
+            key match { 
+                case ExtremeKey(NewYork, High) if TimestampUtils.isInMarketOpen(priorTradingDay, lastCandle.timestamp) =>
+                    ensureAndUpdateHigh(rState, lastCandle, NewYork)
+                case ExtremeKey(NewYork, Low) if TimestampUtils.isInMarketOpen(priorTradingDay, lastCandle.timestamp) =>
+                    ensureAndUpdateLow(rState, lastCandle, NewYork)
+                case ExtremeKey(Asia, High) if TimestampUtils.isInAsiaOpen(tradingDay, lastCandle.timestamp) =>
+                    ensureAndUpdateHigh(rState, lastCandle, Asia)
+                case ExtremeKey(Asia, Low) if TimestampUtils.isInAsiaOpen(tradingDay, lastCandle.timestamp) =>
+                    ensureAndUpdateLow(rState, lastCandle, Asia)
+                case ExtremeKey(London, High) if TimestampUtils.isInLondonOpen(tradingDay, lastCandle.timestamp) =>
+                    ensureAndUpdateHigh(rState, lastCandle, London)
+                case ExtremeKey(London, Low) if TimestampUtils.isInLondonOpen(tradingDay, lastCandle.timestamp) =>
+                    ensureAndUpdateLow(rState, lastCandle, London)
+                case _ => rState
+            }
+        }
+
+        val events = {
+            val changedExtremes = updatedState.daytimeExtremes.filter(e => !state.daytimeExtremes.contains(e))
+            changedExtremes.map(Event.fromDaytimeExtreme)
+        }
+
+        (updatedState, events)
+    }
+
+    private def ensureAndUpdateHigh(state: SystemState, candle: Candle, market: Market): SystemState = {
+        val newHigh = state.daytimeExtremes.find(e => e.extremeType == High && e.market == market).map { existingHigh =>
+            if (candle.high > existingHigh.level) {
+                DaytimeExtreme(candle.high, High, existingHigh.timestamp, None, market)
+            } else existingHigh
+        }.getOrElse(DaytimeExtreme(candle.high, High, candle.timestamp, None, market))
+
+        val newExtremes = state.daytimeExtremes.filterNot(e => e.extremeType == High && e.market == market) :+ newHigh
+        state.copy(daytimeExtremes = newExtremes)
+    }
+
+    private def ensureAndUpdateLow(state: SystemState, candle: Candle, market: Market): SystemState = {
+        val newLow = state.daytimeExtremes.find(e => e.extremeType == Low && e.market == market).map { existingLow =>
+            if (candle.low < existingLow.level) {
+                DaytimeExtreme(candle.low, Low, existingLow.timestamp, None, market)
+            } else existingLow
+        }.getOrElse(DaytimeExtreme(candle.low, Low, candle.timestamp, None, market))
+
+        val newExtremes = state.daytimeExtremes.filterNot(e => e.extremeType == Low && e.market == market) :+ newLow
+        state.copy(daytimeExtremes = newExtremes)
     }
 }

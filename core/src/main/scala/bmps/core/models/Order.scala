@@ -39,8 +39,8 @@ object CancelReason {
     final val EndOfDay: String = "Ten minutes until closing. All orders cancelled."
 }
 
-case class Order(low: Level, 
-                    high: Level, 
+case class Order(low: Float, 
+                    high: Float, 
                     timestamp: Long, 
                     orderType: OrderType,
                     entryType: EntryType, 
@@ -62,32 +62,32 @@ case class Order(low: Level,
     final val TenMinutes = 10 * 60 * 1000
 
     lazy val entryPoint = orderType match {
-        case Long => high.value
-        case Short => low.value
+        case Long => high
+        case Short => low
     }
 
     lazy val stopLoss = orderType match {
-        case Long => low.value
-        case Short => high.value
+        case Long => low
+        case Short => high
     }
 
-    lazy val atRiskPoints = (high.value - low.value)
+    lazy val atRiskPoints = (high - low)
     lazy val profitPoints = atRiskPoints * profitMultiplier
 
     lazy val atRiskPerContract = atRiskPoints * DollarsPerMicro 
     lazy val potentialPerContract = profitPoints * DollarsPerMicro
 
     lazy val takeProfit = orderType match {
-        case Long => high.value + profitPoints
-        case Short => low.value - profitPoints
+        case Long => high + profitPoints
+        case Short => low - profitPoints
     }
 
     lazy val isActive = (status == OrderStatus.Placed || status == OrderStatus.Filled)
     lazy val direction: Direction = if (orderType == OrderType.Long) Direction.Up else Direction.Down
 }
 
-case class SerializableOrder(low: Level, 
-                             high: Level, 
+case class SerializableOrder(low: Float, 
+                             high: Float, 
                              timestamp: Long, 
                              orderType: OrderType,
                              entryType: EntryType, 

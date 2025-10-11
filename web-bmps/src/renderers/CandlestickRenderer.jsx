@@ -60,7 +60,7 @@ class CandlestickRenderer extends BaseRenderer {
     return this.series
   }
 
-  update(allEvents) {
+  update(allEvents, currentTimestamp, newYorkOffset = 0) {
     if (!this.series) return
     
     // Filter events by type
@@ -80,34 +80,36 @@ class CandlestickRenderer extends BaseRenderer {
     
     // Update candlestick data
     if (candleEvents.length > 0) {
-      const chartData = this.processCandleEvents(candleEvents)
+      const chartData = this.processCandleEvents(candleEvents, newYorkOffset)
       this.series.setData(chartData)
     }
     
     // Update swing point markers
-    this.updateSwingPointMarkers(swingPointEvents)
+    this.updateSwingPointMarkers(swingPointEvents, newYorkOffset)
   }
 
   /**
    * Update swing point markers on the candlestick series
    * @param {Array} swingPointEvents - Array of swing point events
+   * @param {number} newYorkOffset - New York offset in milliseconds
    */
-  updateSwingPointMarkers(swingPointEvents) {
+  updateSwingPointMarkers(swingPointEvents, newYorkOffset = 0) {
     if (!this.markersPlugin || !this.options.showSwingPoints) {
       return
     }
 
     this.currentSwingPoints = swingPointEvents
-    const markers = this.processSwingPointEvents(swingPointEvents)
+    const markers = this.processSwingPointEvents(swingPointEvents, newYorkOffset)
     this.markersPlugin.setMarkers(markers)
   }
 
   /**
    * Process swing point events into TradingView markers
    * @param {Array} swingPointEvents - Swing point events
+   * @param {number} newYorkOffset - New York offset in milliseconds
    * @returns {Array} Array of marker objects for TradingView
    */
-  processSwingPointEvents(swingPointEvents) {
+  processSwingPointEvents(swingPointEvents, newYorkOffset = 0) {
     const markers = []
     
     swingPointEvents.forEach(eventWrapper => {
@@ -118,7 +120,7 @@ class CandlestickRenderer extends BaseRenderer {
       
       // Extract direction from SwingPoint structure
       const direction = this.extractDirection(swingPoint.direction)
-      const level = swingPoint.level?.value
+      const level = swingPoint.level
       const timestamp = actualEvent.timestamp
       
       if (!direction || level == null || !timestamp) return
@@ -126,7 +128,7 @@ class CandlestickRenderer extends BaseRenderer {
       const isUpSwing = direction.toLowerCase() === 'up'
       
       markers.push({
-        time: Math.floor(timestamp / 1000), // Convert to seconds
+        time: Math.floor((timestamp + newYorkOffset) / 1000), // Apply New York offset and convert to seconds
         position: isUpSwing ? 'belowBar' : 'aboveBar',
         color: isUpSwing ? this.options.swingPointColors.up : this.options.swingPointColors.down,
         shape: isUpSwing ? 'arrowUp' : 'arrowDown',
@@ -159,7 +161,7 @@ class CandlestickRenderer extends BaseRenderer {
     return null
   }
 
-  processCandleEvents(candleEvents) {
+  processCandleEvents(candleEvents, newYorkOffset = 0) {
     // Handle duplicate timestamps - take the latest one found
     const uniqueCandles = new Map()
     candleEvents.forEach(eventWrapper => {
@@ -176,13 +178,13 @@ class CandlestickRenderer extends BaseRenderer {
         const actualEvent = eventWrapper.event || eventWrapper
         const candle = actualEvent.candle
         if (!candle) return null
-        const open = candle.open?.value
-        const high = candle.high?.value
-        const low = candle.low?.value
-        const close = candle.close?.value
+        const open = candle.open
+        const high = candle.high
+        const low = candle.low
+        const close = candle.close
         if ([open, high, low, close].some(v => v == null || isNaN(v))) return null
         return {
-          time: Math.floor(actualEvent.timestamp / 1000),
+          time: Math.floor((actualEvent.timestamp + newYorkOffset) / 1000), // Apply New York offset and convert to seconds
           open: Number(open),
           high: Number(high),
           low: Number(low),

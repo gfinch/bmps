@@ -11,6 +11,9 @@ import java.io.{BufferedReader, InputStreamReader, PrintWriter}
 import scala.util.{Try, Success, Failure}
 import scala.concurrent.duration._
 import java.security.MessageDigest
+import bmps.core.utils.TimestampUtils
+import java.sql.Time
+import java.sql.Timestamp
 
 /**
  * Data source for Databento API that provides both historical and live streaming candle data.
@@ -74,26 +77,25 @@ class DatabentoSource(duration: CandleDuration) extends DataSource {
    * - For live data (today): Uses TCP socket with intraday replay
    * - For mixed ranges: Combines both seamlessly
    */
-  def candlesInRangeStream(startMs: Long, endMs: Long, zone: ZoneId): Stream[IO, Candle] = {
-    println(s"[DatabentoSource] Got request for : $startMs to $endMs in $zone.")
-    // Convert to LocalDate in Eastern time for day boundary detection
-    val easternZone = ZoneId.of("America/New_York")
-    val startDate = Instant.ofEpochMilli(startMs).atZone(easternZone).toLocalDate
-    val endDate = Instant.ofEpochMilli(endMs).atZone(easternZone).toLocalDate
-    val today = LocalDate.now(easternZone)
+  def candlesInRangeStream(startMs: Long, endMs: Long): Stream[IO, Candle] = {
+    println(s"[DatabentoSource] Got request for : $startMs to $endMs.")
+    
+    val startDate = TimestampUtils.toNewYorkLocalDate(startMs)
+    val endDate = TimestampUtils.toNewYorkLocalDate(endMs)
+    val today = TimestampUtils.today()
     
     // Determine the split point between historical and live data
     if (endDate.isBefore(today)) {
       // All historical - use HTTP API only
-      fetchHistoricalCandlesStream(startMs, endMs, zone)
+      fetchHistoricalCandlesStream(startMs, endMs)
     } else if (startDate.isAfter(today) || startDate.isEqual(today)) {
       // All live/future - use TCP socket only
-      streamLiveCandles(startMs, endMs, zone)
+      streamLiveCandles(startMs, endMs)
     } else {
       // Mixed - fetch historical then stream live
-      val todayStartMs = today.atStartOfDay(easternZone).toInstant.toEpochMilli
-      val historicalStream = fetchHistoricalCandlesStream(startMs, todayStartMs, zone)
-      val liveStream = streamLiveCandles(todayStartMs, endMs, zone)
+      val todayStartMs = TimestampUtils.midnight(today)
+      val historicalStream = fetchHistoricalCandlesStream(startMs, todayStartMs)
+      val liveStream = streamLiveCandles(todayStartMs, endMs)
       
       historicalStream ++ liveStream
     }
@@ -102,7 +104,7 @@ class DatabentoSource(duration: CandleDuration) extends DataSource {
   /**
    * Fetch historical candles using the HTTP REST API for dates before today.
    */
-  private def fetchHistoricalCandlesStream(startMs: Long, endMs: Long, zone: ZoneId): Stream[IO, Candle] = {
+  private def fetchHistoricalCandlesStream(startMs: Long, endMs: Long): Stream[IO, Candle] = {
     Stream.eval(fetchHistoricalCandles(startMs, endMs)).flatMap(Stream.emits)
   }
   
@@ -215,24 +217,19 @@ class DatabentoSource(duration: CandleDuration) extends DataSource {
                         .orElse(tsEventRootPattern.findFirstMatchIn(jsonLine).map(_.group(1).toLong))
       } yield {
         // Databento live stream uses fixed-point integers (divide by 1e9 to get actual price)
-        // Historical API uses regular decimals
-        // We can detect by checking if values are > 1000 (no stock/future trades that high without decimals)
-        val isFixedPoint = openRaw > 100000.0
+        val open = openRaw / 1e9
+        val high = highRaw / 1e9
+        val low = lowRaw / 1e9
+        val close = closeRaw / 1e9
         
-        val open = if (isFixedPoint) openRaw / 1e9 else openRaw
-        val high = if (isFixedPoint) highRaw / 1e9 else highRaw
-        val low = if (isFixedPoint) lowRaw / 1e9 else lowRaw
-        val close = if (isFixedPoint) closeRaw / 1e9 else closeRaw
-        
-        // Convert UTC nanoseconds to Eastern time milliseconds
-        val easternTimestampMs = convertUtcNanosToEasternMillis(tsEventNanos)
+        val timestampMs = TimestampUtils.nanosToMillis(tsEventNanos)
         
         Candle(
-          open = Level(open.toFloat),
-          high = Level(high.toFloat),
-          low = Level(low.toFloat),
-          close = Level(close.toFloat),
-          timestamp = easternTimestampMs,
+          open = open.toFloat,
+          high = high.toFloat,
+          low = low.toFloat,
+          close = close.toFloat,
+          timestamp = timestampMs,
           duration = duration
         )
       }
@@ -246,17 +243,11 @@ class DatabentoSource(duration: CandleDuration) extends DataSource {
   /**
    * Stream live candles using TCP socket connection with intraday replay.
    */
-  private def streamLiveCandles(startMs: Long, endMs: Long, zone: ZoneId): Stream[IO, Candle] = {
+  private def streamLiveCandles(startMs: Long, endMs: Long): Stream[IO, Candle] = {
     Stream.eval(IO.println(s"[DatabentoSource] Starting live stream: $startMs to $endMs")) >>
     Stream.resource(createLiveConnection(startMs)).flatMap { case (reader, writer) =>
-      // Subscribe to the data
       Stream.eval(subscribeLive(writer, startMs)) >>
-      // Read and parse candles until we reach endMs
       readLiveCandlesUntil(reader, endMs)
-    }.handleErrorWith { error =>
-      Stream.eval(IO.println(s"[DatabentoSource] Live connection error: ${error.getMessage}, retrying in 5 seconds...")) >>
-      Stream.sleep[IO](5.seconds) >>
-      streamLiveCandles(startMs, endMs, zone)
     }
   }
   
@@ -329,7 +320,7 @@ class DatabentoSource(duration: CandleDuration) extends DataSource {
   private def subscribeLive(writer: PrintWriter, startMs: Long): IO[Unit] = {
     IO.blocking {
       // Convert startMs to UTC nanoseconds
-      val startNanos = startMs * 1_000_000L
+      val startNanos = TimestampUtils.millisToNanos(startMs)
       
       // Subscribe to front month continuous contract (ES.c.0)
       // stype_in=continuous tells Databento we're using continuous contract notation
@@ -348,12 +339,6 @@ class DatabentoSource(duration: CandleDuration) extends DataSource {
    * Read and parse candles from live stream until we reach endMs.
    */
   private def readLiveCandlesUntil(reader: BufferedReader, endMs: Long): Stream[IO, Candle] = {
-    // Convert endMs (UTC millis) to Eastern millis to match candle timestamps
-    val easternZone = ZoneId.of("America/New_York")
-    val endInstant = Instant.ofEpochMilli(endMs)
-    val offsetSeconds = easternZone.getRules.getOffset(endInstant).getTotalSeconds
-    val endMsEastern = endMs + (offsetSeconds * 1000L)
-    
     Stream.repeatEval {
       IO.blocking {
         Option(reader.readLine())
@@ -363,55 +348,42 @@ class DatabentoSource(duration: CandleDuration) extends DataSource {
         IO {
           // Log EVERY message received from the stream
           println(s"[DatabentoSource] <<< Received: $line")
-          
-          // Only parse rtype:34 (OHLCV data records)
-          // rtype:22 = instrument definitions, rtype:23 = system messages
-            if (line.contains("\"rtype\":34") || line.contains("\"rtype\":33")) {
-            // rtype:34 = hourly OHLCV data record
-            // rtype:33 = minute OHLCV data record
-            val recordType = if (line.contains("\"rtype\":34")) "hourly" else "minute"
-            println(s"[DatabentoSource]     -> Type: OHLCV data record ($recordType)")
-            val result = parseJsonLineToCandle(line)
-            if (result.isDefined) {
-              println(s"[DatabentoSource]     -> SUCCESS: Parsed candle: ${result.get}")
-            } else {
-              println(s"[DatabentoSource]     -> FAILED: Could not parse as candle")
+
+          if (line.contains("\"rtype\":23") && line.contains("Heartbeat")) {
+            // Extract ts_event from heartbeat to check if we're past endMs
+            val tsEventPattern = """"ts_event":"?(\d+)"?""".r
+            tsEventPattern.findFirstMatchIn(line).map(_.group(1).toLong) match {
+              case Some(tsEventNanos) =>
+                val heartbeatMs = TimestampUtils.nanosToMillis(tsEventNanos)
+                
+                if (heartbeatMs >= endMs) {
+                  println(s"[DatabentoSource]     -> Heartbeat passed end time, terminating stream")
+                  None //Terminate the stream
+                } else {
+                  Some(None) //Continue but don't emit
+                }
+              case None =>
+                println(s"[DatabentoSource]     -> Unable to parse heartbeat message.")
+                Some(None) //Ignore bad messages
             }
-            result
-          } else if (line.contains("\"rtype\":22")) {
-            // Instrument definition / symbology mapping - skip
-            println(s"[DatabentoSource]     -> Type: Instrument definition (rtype:22) - skipping")
-            None
-          } else if (line.contains("\"rtype\":23")) {
-            // System message - skip
-            println(s"[DatabentoSource]     -> Type: System message (rtype:23) - skipping")
-            None
+          } else if (line.contains("\"rtype\":34") || line.contains("\"rtype\":33")) {
+            parseJsonLineToCandle(line) match {
+              case None => 
+                println(s"[DatabentoSource]     -> FAILED: Could not parse as candle")
+                Some(None) //Ignore and continue
+              case Some(candle) if candle.timestamp >= endMs =>
+                println(s"[DatabentoSource]     -> Got a candle with ts ${candle.timestamp} > $endMs.")
+                None // End the stream
+              case c @ Some(candle) => 
+                println(s"[DatabentoSource]     -> SUCCESS: Parsed candle: ${candle}")
+                Some(c) //Emit and continue
+            }
           } else {
-            // Unknown message type
-            println(s"[DatabentoSource]     -> Type: Unknown - skipping")
-            None
+            Some(None) //Ignore other messages and continue
           }
         }
       }
-      .unNone
-      .takeWhile(candle => candle.timestamp <= endMsEastern)
-  }
-  
-  /**
-   * Convert UTC nanoseconds to UTC milliseconds minus the Eastern timezone offset.
-   * Databento returns timestamps in UTC nanoseconds, but we need UTC millis adjusted by NY offset.
-   * For example, during EST (UTC-5), we subtract 5 hours. During EDT (UTC-4), we subtract 4 hours.
-   */
-  private def convertUtcNanosToEasternMillis(utcNanos: Long): Long = {
-    val utcInstant = Instant.ofEpochSecond(utcNanos / 1_000_000_000L, utcNanos % 1_000_000_000L)
-    val utcMillis = utcInstant.toEpochMilli
-    val easternZone = ZoneId.of("America/New_York")
-    
-    // Get the offset from UTC for New York at this instant (handles DST automatically)
-    val offsetSeconds = easternZone.getRules.getOffset(utcInstant).getTotalSeconds
-    val offsetMillis = offsetSeconds * 1000L
-    
-    // Return UTC millis plus the NY offset
-    utcMillis + offsetMillis
+      .unNoneTerminate  // Terminates when we return None (heartbeat past end time)
+      .unNone           // Remove all the None values (skipped messages)
   }
 }

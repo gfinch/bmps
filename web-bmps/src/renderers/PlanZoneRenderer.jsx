@@ -35,7 +35,7 @@ class PlanZoneRenderer extends BaseRenderer {
     }
   }
 
-  update(events, currentTimestamp = null) {
+  update(events, currentTimestamp = null, newYorkOffset = 0) {
     if (!this.primitive) {
       console.debug('PlanZoneRenderer: Primitive not initialized, skipping update')
       return
@@ -60,8 +60,8 @@ class PlanZoneRenderer extends BaseRenderer {
     
     console.debug(`PlanZoneRenderer: After deduplication: ${deduplicatedEvents.length} events`)
 
-    // Transform events into zone data
-    this.planZones = deduplicatedEvents.map(event => this.transformEventToZoneData(event))
+    // Transform events into zone data, passing the offset
+    this.planZones = deduplicatedEvents.map(event => this.transformEventToZoneData(event, newYorkOffset))
 
     console.debug(`PlanZoneRenderer: Transformed to ${this.planZones.length} zones:`, this.planZones)
 
@@ -110,8 +110,8 @@ class PlanZoneRenderer extends BaseRenderer {
       return false
     }
 
-    const isValid = typeof planZone.high?.value === 'number' &&
-           typeof planZone.low?.value === 'number' &&
+    const isValid = typeof planZone.high === 'number' &&
+           typeof planZone.low === 'number' &&
            typeof actualEvent.timestamp === 'number' &&
            planZone.planZoneType // Should have a planZoneType object
 
@@ -122,7 +122,7 @@ class PlanZoneRenderer extends BaseRenderer {
     return isValid
   }
 
-  transformEventToZoneData(event) {
+  transformEventToZoneData(event, newYorkOffset = 0) {
     const actualEvent = event.event || event
     const planZone = actualEvent.planZone
     
@@ -143,12 +143,15 @@ class PlanZoneRenderer extends BaseRenderer {
                    actualEvent.endTime ||
                    null
     
+    // Calculate start time with offset
+    const startTime = (planZone.startTime || actualEvent.timestamp) + newYorkOffset
+    
     const zoneData = {
       id: `planzone-${actualEvent.timestamp}`,
-      minLevel: planZone.low.value,   // low is the min level
-      maxLevel: planZone.high.value,  // high is the max level
-      startTime: planZone.startTime || actualEvent.timestamp,
-      endTime: endTime, // null means infinite
+      minLevel: planZone.low,   // low is the min level
+      maxLevel: planZone.high,  // high is the max level
+      startTime: startTime,
+      endTime: endTime ? endTime + newYorkOffset : null, // null means infinite, otherwise apply offset
       type: zoneType,
       zoneType: zoneType, // Backup property name
       label: this.generateLabel(planZone, zoneType)

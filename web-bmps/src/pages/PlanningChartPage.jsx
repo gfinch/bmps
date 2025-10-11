@@ -192,8 +192,28 @@ export default function PlanningChartPage() {
   useEffect(() => {
     if (chartServiceRef.current) {
       chartServiceRef.current.updateVisibleEvents(playback.visibleEvents)
+      
+      // Auto-pan chart to show the latest candle
+      if (chartRef.current && playback.visibleEvents.length > 0) {
+        const candleEvents = playback.visibleEvents.filter(e => {
+          const event = e.event || e
+          return event.candle !== undefined
+        })
+        
+        if (candleEvents.length > 0) {
+          // Fit all candles in view
+          chartRef.current.timeScale().fitContent()
+        }
+      }
     }
-  }, [playback.visibleEvents])
+  }, [playback.visibleEvents, playback.newYorkOffset])
+
+  // Update New York offset when it changes
+  useEffect(() => {
+    if (chartServiceRef.current && playback.newYorkOffset !== null) {
+      chartServiceRef.current.setNewYorkOffset(playback.newYorkOffset)
+    }
+  }, [playback.newYorkOffset])
 
   // Update renderer visibility when layer visibility state changes
   useEffect(() => {
@@ -282,10 +302,12 @@ export default function PlanningChartPage() {
       if (logicalIndex !== null && logicalIndex !== undefined) {
         const timestamp = chart.timeScale().coordinateToTime(x)
         if (timestamp !== null && timestamp !== undefined) {
-          // Convert seconds to milliseconds for our playback system
+          // Convert seconds to milliseconds - this is in NY time (offset-adjusted)
           const timestampMs = timestamp * 1000
-          playback.jumpToTimestamp(timestampMs)
-          console.log(`Clipped to timestamp: ${timestampMs}`)
+          // Convert back to UTC by subtracting the offset
+          const utcTimestampMs = timestampMs - (playback.newYorkOffset || 0)
+          playback.jumpToTimestamp(utcTimestampMs)
+          console.log(`Clipped to timestamp: ${utcTimestampMs} (chart time: ${timestampMs})`)
           
           // Center the chart view on the clicked timestamp
           // Calculate a logical range centered on the clicked point

@@ -30,10 +30,6 @@ class PhaseService {
    * @param {PlanningConfig} config - Planning configuration
    */
   async initializePlanning(config) {
-    if (this.isInitializing) {
-      throw new Error('Planning initialization already in progress')
-    }
-
     console.debug('Initializing planning phase with config:', config)
 
     try {
@@ -90,12 +86,17 @@ class PhaseService {
       restApiService.startPolling(
         phase,
         tradingDate,
-        (events, isComplete) => {
+        (events, isComplete, newYorkOffset) => {
           // Update event buffer with new events
           const buffer = eventBufferManager.getBuffer(targetBuffer)
           
           // Replace events from this specific phase (preserves events from other phases in shared buffers)
           buffer.replaceEventsForPhase(events, phase)
+          
+          // Store the New York offset in the buffer
+          if (newYorkOffset !== undefined && newYorkOffset !== null) {
+            buffer.setNewYorkOffset(newYorkOffset)
+          }
           
           console.debug(`${phase} polling update: ${events.length} events, complete: ${isComplete}`)
         },

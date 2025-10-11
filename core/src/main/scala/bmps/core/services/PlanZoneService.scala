@@ -7,7 +7,6 @@ import bmps.core.models.PlanZoneType
 import bmps.core.models.PlanZone
 import scala.collection.mutable
 import bmps.core.models.Event
-import bmps.core.models.Level
 
 object PlanZoneService {
 

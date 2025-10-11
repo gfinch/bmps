@@ -95,7 +95,7 @@ object MarketTrendService {
       return TrendAnalysis(Direction.Up, 0.0, 0.0, 0.0, 0.0)
     }
 
-    val closes = windowCandles.map(_.close.value.toDouble)
+    val closes = windowCandles.map(_.close.toDouble)
     
     // Linear regression for trend slope
     val momentum = calculateLinearRegressionSlope(closes)
@@ -164,8 +164,8 @@ object MarketTrendService {
         val prevLow = lows(i)
         val currLow = lows(i + 2)
         
-        if (currHigh.value > prevHigh.value) higherHighs += 1
-        if (currLow.value < prevLow.value) lowerLows += 1
+        if (currHigh > prevHigh) higherHighs += 1
+        if (currLow < prevLow) lowerLows += 1
         totalComparisons += 1
       }
     }

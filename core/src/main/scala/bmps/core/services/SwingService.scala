@@ -13,13 +13,13 @@ class SwingService(minConfirmations: Int = 1) {
             val swingPointsBuilder = List.newBuilder[SwingPoint]
             for (i <- minConfirmations until candles.length - minConfirmations) {
                 val curr = candles(i)
-                val windowHighs = (i - minConfirmations to i + minConfirmations).filter(_ != i).map(j => candles(j).high.value)
-                val windowLows = (i - minConfirmations to i + minConfirmations).filter(_ != i).map(j => candles(j).low.value)
+                val windowHighs = (i - minConfirmations to i + minConfirmations).filter(_ != i).map(j => candles(j).high)
+                val windowLows = (i - minConfirmations to i + minConfirmations).filter(_ != i).map(j => candles(j).low)
                 val maxWindowHigh = windowHighs.max
                 val minWindowLow = windowLows.min
-                if (curr.high.value > maxWindowHigh) {
+                if (curr.high > maxWindowHigh) {
                     swingPointsBuilder += SwingPoint(curr.high, Direction.Down, curr.timestamp)
-                } else if (curr.low.value < minWindowLow) {
+                } else if (curr.low < minWindowLow) {
                     swingPointsBuilder += SwingPoint(curr.low, Direction.Up, curr.timestamp)
                 }
             }

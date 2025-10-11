@@ -4,7 +4,6 @@ import bmps.core.models.EntryType
 import bmps.core.models.Direction
 import bmps.core.models.SystemState
 import bmps.core.models.Candle
-import bmps.core.models.Level
 import bmps.core.models.Order
 import bmps.core.models.OrderType
 
@@ -20,14 +19,14 @@ object FairValueGapOrderBlockService {
             state.tradingDirection.get match {
                 case Direction.Down => //Look for a bullish fair value gap
                     val (firstCandle, middleCandle, lastCandle) = findThreeCandles(state)
-                    if ((lastCandle.low - firstCandle.high).value >= tickSize * 2) { //two ticks minimum gap
+                    if ((lastCandle.low - firstCandle.high) >= tickSize * 2) { //two ticks minimum gap
                         val newOrder = Order.fromGapCandles(firstCandle, middleCandle, OrderType.Short, EntryType.FairValueGapOrderBlock, lastCandle.timestamp)
                         val allOrders = state.orders :+ newOrder
                         state.copy(orders = allOrders)
                     } else state
                 case Direction.Up => //Look for bearish fair value gap
                     val (firstCandle, middleCandle, lastCandle) = findThreeCandles(state)
-                    if ((firstCandle.low - lastCandle.high).value >= tickSize * 2) { //two ticks minimum gap
+                    if ((firstCandle.low - lastCandle.high) >= tickSize * 2) { //two ticks minimum gap
                         val newOrder = Order.fromGapCandles(firstCandle, middleCandle, OrderType.Long, EntryType.FairValueGapOrderBlock, lastCandle.timestamp)
                         val allOrders = state.orders :+ newOrder
                         state.copy(orders = allOrders)
@@ -40,8 +39,8 @@ object FairValueGapOrderBlockService {
     def shouldPlaceOrder(order: Order, candle: Candle): Boolean = {
         require(order.entryType == EntryType.FairValueGapOrderBlock, s"Using FiarValueGapOrderBlockService with ${order.entryType}.")
         order.orderType match {
-            case OrderType.Short => candle.close.value < order.entryPoint
-            case OrderType.Long => candle.close.value > order.entryPoint
+            case OrderType.Short => candle.close < order.entryPoint
+            case OrderType.Long => candle.close > order.entryPoint
         }
     }
 

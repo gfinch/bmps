@@ -24,8 +24,10 @@ class BaseRenderer {
    * Update the renderer with new event data
    * @abstract
    * @param {Array} events - Events of this renderer's type
+   * @param {number|null} currentTimestamp - Current playback timestamp
+   * @param {number} newYorkOffset - New York offset in milliseconds
    */
-  update(events) {
+  update(events, currentTimestamp, newYorkOffset) {
     throw new Error('update() must be implemented by subclass')
   }
 
@@ -66,9 +68,26 @@ class ChartRenderingService {
   constructor(chart, phase) {
     this.chart = chart
     this.phase = phase
+    this.newYorkOffset = null
     this.renderers = new Map() // Map of eventType -> renderer
     this.currentVisibleEvents = []
   this.debugCount = 0 // Initialize debug counter
+  }
+
+  /**
+   * Set the New York offset
+   * @param {number|null} offset - New York offset in milliseconds
+   */
+  setNewYorkOffset(offset) {
+    this.newYorkOffset = offset
+  }
+
+  /**
+   * Get the New York offset
+   * @returns {number|null} New York offset in milliseconds, or null if not available
+   */
+  getNewYorkOffset() {
+    return this.newYorkOffset
   }
 
   /**
@@ -133,19 +152,21 @@ class ChartRenderingService {
     this.currentVisibleEvents = visibleEvents
     this.currentTimestamp = currentTimestamp
     
-
     // Group events by type
     const eventsByType = this.groupEventsByType(visibleEvents)
+    
+    // Get the New York offset to pass to renderers
+    const newYorkOffset = this.getNewYorkOffset() || 0
     
     // Update each renderer with its relevant events
     this.renderers.forEach((renderer, eventType) => {
       if (eventType === 'Candle') {
         // CandlestickRenderer gets ALL events to handle both candles and swing points
-        renderer.update(visibleEvents, currentTimestamp)
+        renderer.update(visibleEvents, currentTimestamp, newYorkOffset)
       } else {
         // Other renderers get only their specific event type
         const events = eventsByType.get(eventType) || []
-        renderer.update(events, currentTimestamp)
+        renderer.update(events, currentTimestamp, newYorkOffset)
       }
     })
   }
