@@ -43,9 +43,10 @@ case class Order(low: Float,
                     high: Float, 
                     timestamp: Long, 
                     orderType: OrderType,
-                    entryType: EntryType, 
+                    entryType: EntryType,
+                    contract: String, 
                     status: OrderStatus = OrderStatus.Planned,
-                    profitMultiplier: Double = 2.0,
+                    profitMultiplier: Float = 2.0f,
                     placedTimestamp: Option[Long] = None,
                     filledTimestamp: Option[Long] = None,
                     closeTimestamp: Option[Long] = None,
@@ -107,16 +108,15 @@ case class SerializableOrder(low: Float,
                      )
 
 object Order {
-    def fromCandle(candle: Candle, orderType: OrderType, entryType: EntryType, timestamp: Long) = {
-        Order(candle.low, candle.high, timestamp, orderType, entryType)
+    def fromCandle(candle: Candle, orderType: OrderType, entryType: EntryType, timestamp: Long, contract: String) = {
+        Order(candle.low, candle.high, timestamp, orderType, entryType, contract)
     }
 
-    def fromGapCandles(firstCandle: Candle, secondCandle: Candle, orderType: OrderType, entryType: EntryType, timestamp: Long) = {
+    def fromGapCandles(firstCandle: Candle, secondCandle: Candle, orderType: OrderType, entryType: EntryType, timestamp: Long, contract: String) = {
         orderType match {
-            case OrderType.Short => Order(firstCandle.high, secondCandle.high, timestamp, orderType, entryType)
-            case OrderType.Long => Order(secondCandle.low, firstCandle.low, timestamp, orderType, entryType)
-        }
-        
+            case OrderType.Short => Order(firstCandle.high, secondCandle.high, timestamp, orderType, entryType, contract)
+            case OrderType.Long => Order(secondCandle.low, firstCandle.low, timestamp, orderType, entryType, contract)
+        }        
     }
 }
 

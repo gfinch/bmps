@@ -15,14 +15,15 @@ import bmps.core.io.DatabentoSource
 import bmps.core.utils.TimestampUtils
 import bmps.core.io.DataSource
 
-class PlanningEventGenerator(swingService: SwingService = new SwingService(1)) extends EventGenerator {
+class PlanningEventGenerator(dataSource: DataSource, swingService: SwingService = new SwingService(1)) extends EventGenerator {
     def initialize(state: SystemState, options: Map[String, String] = Map.empty): SystemState = {
+        val contractSymbol = dataSource.currentContractSymbol
         options.get("tradingDate") match {
             case Some(tradeDate) =>
                 val localDate = TimestampUtils.toNewYorkLocalDate(tradeDate)
-                state.copy(systemStatePhase = SystemStatePhase.Planning, tradingDay = localDate)
+                state.copy(systemStatePhase = SystemStatePhase.Planning, tradingDay = localDate, contractSymbol = Some(contractSymbol))
             case None =>
-                state.copy(systemStatePhase = SystemStatePhase.Planning)
+                state.copy(systemStatePhase = SystemStatePhase.Planning, contractSymbol = Some(contractSymbol))
         }
     }
 
@@ -35,7 +36,6 @@ class PlanningEventGenerator(swingService: SwingService = new SwingService(1)) e
         val (updatedState, liquidEvents) = LiquidityZoneService.processLiquidityZones(withZones, candle)
         
         val newSwingPoints = updatedState.planningSwingPoints.drop(state.planningSwingPoints.length)
-
         val allEvents = newSwingPoints.map(Event.fromSwingPoint) ++ zoneEvents ++ liquidEvents 
 
         (updatedState, allEvents)
@@ -65,5 +65,5 @@ class PlanningSource(dataSource: DataSource) extends CandleSource {
 }
 
 object PlanningPhaseBuilder {
-    def build(dataSource: DataSource) = new PhaseRunner(new PlanningSource(dataSource), new PlanningEventGenerator())
+    def build(dataSource: DataSource) = new PhaseRunner(new PlanningSource(dataSource), new PlanningEventGenerator(dataSource))
 }

@@ -13,4 +13,6 @@ trait DataSource {
    * @return Stream of candles in the specified range
    */
   def candlesInRangeStream(startMs: Long, endMs: Long): Stream[IO, Candle]
+  def currentContractSymbol: String
+
 }

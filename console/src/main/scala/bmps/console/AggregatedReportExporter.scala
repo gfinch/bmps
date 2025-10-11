@@ -159,7 +159,7 @@ object AggregatedReportExporter extends IOApp {
         val body = response.body().string()
         val json = parse(body).getOrElse(throw new RuntimeException(s"Failed to parse response: $body"))
         json.as[OrderReport].getOrElse(
-          throw new RuntimeException(s"Failed to decode response: $json")
+          throw new RuntimeException(s"Failed to decode response.")
         )
       } finally {
         response.close()

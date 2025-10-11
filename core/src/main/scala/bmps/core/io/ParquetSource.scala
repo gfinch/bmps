@@ -6,6 +6,7 @@ import java.sql.DriverManager
 import bmps.core.models._
 import bmps.core.models.CandleDuration.OneHour
 import bmps.core.models.CandleDuration.OneMinute
+import java.time.Instant
 
 class ParquetSource(duration: CandleDuration) extends DataSource {
 
@@ -20,6 +21,8 @@ class ParquetSource(duration: CandleDuration) extends DataSource {
     case "1h" | "60m"   => CandleDuration.OneHour
     case _              => throw new IllegalArgumentException(s"$tf not supported.")
   }
+
+  val currentContractSymbol = "ES" //ParquetSource will never be live
 
   /**
    * Read candles within an inclusive start (ms) and exclusive end (ms) range.
@@ -46,8 +49,9 @@ class ParquetSource(duration: CandleDuration) extends DataSource {
       val low = rs.getDouble("low").toFloat
       val close = rs.getDouble("close").toFloat
       val duration = timeframeToDuration(timeframe)
+      val createdAt = Instant.now().toEpochMilli
       
-      Candle(open, high, low, close, epochMillis, duration)
+      Candle(open, high, low, close, epochMillis, duration, createdAt)
     }
 
     val qIO = buildQuery(startMs, endMs)

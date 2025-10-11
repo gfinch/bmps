@@ -38,15 +38,6 @@ object OrderService {
         }
     }
 
-    def determineContracts(order: Order, riskPerTrade: Double): (ContractType, Int) = {
-        require(order.atRiskPerContract > 0, "atRiskPerContract must be positive")
-        require(riskPerTrade > 0, "riskPerTrade must be positive")
-        val mesContracts: Int = Math.floor(riskPerTrade / order.atRiskPerContract).toInt
-        if (mesContracts >= 50) {
-            (ContractType.ES, Math.round(mesContracts.toDouble / 50.0).toInt)
-        } else (ContractType.MES, mesContracts)
-    }
-
     private def shouldPlaceOrder(order: Order, state: SystemState): Boolean = {
         val activeOrders = state.orders.count(_.isActive)
         val isOrderReady = if (order.entryType == EntryType.FairValueGapOrderBlock) {
