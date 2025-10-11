@@ -27,10 +27,10 @@ trait SimulationAccountBroker extends AccountBroker {
         require(order.status == Filled, s"Can't exit an order in state ${order.status}")
         order.orderType match {
             case OrderType.Long =>
-                if (candle.close.value >= order.entryPoint) takeProfit(order, candle)
+                if (candle.close >= order.entryPoint) takeProfit(order, candle)
                 else takeLoss(order, candle)
             case OrderType.Short =>
-                if (candle.close.value <= order.entryPoint) takeProfit(order, candle)
+                if (candle.close <= order.entryPoint) takeProfit(order, candle)
                 else takeLoss(order, candle)
         }
     }

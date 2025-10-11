@@ -55,7 +55,7 @@ class RestApiService {
    * Poll for phase events
    * @param {string} phase - Phase name ('planning', 'preparing', 'trading')
    * @param {string} tradingDate - Trading date in YYYY-MM-DD format
-   * @returns {Promise<{events: Array, isComplete: boolean}>}
+   * @returns {Promise<{events: Array, isComplete: boolean, newYorkOffset: number}>}
    */
   async pollPhaseEvents(phase, tradingDate) {
     console.debug(`REST API: Polling events for ${phase} on ${tradingDate}`)
@@ -77,11 +77,12 @@ class RestApiService {
       }
 
       const result = await response.json()
-      console.debug(`REST API: Received ${result.events.length} events for ${phase}, complete: ${result.isComplete}`)
+      console.debug(`REST API: Received ${result.events.length} events for ${phase}, complete: ${result.isComplete}, offset: ${result.newYorkOffset}`)
       
       return {
         events: result.events || [],
-        isComplete: result.isComplete || false
+        isComplete: result.isComplete || false,
+        newYorkOffset: result.newYorkOffset
       }
     } catch (error) {
       console.error(`REST API: Failed to poll phase ${phase}:`, error)
@@ -93,7 +94,7 @@ class RestApiService {
    * Start polling for a phase (with automatic retry and completion detection)
    * @param {string} phase - Phase name
    * @param {string} tradingDate - Trading date
-   * @param {Function} onEvents - Callback for new events: (events, isComplete) => void
+   * @param {Function} onEvents - Callback for new events: (events, isComplete, newYorkOffset) => void
    * @param {Function} [onComplete] - Callback when phase completes
    * @param {Function} [onError] - Callback for errors: (error) => void
    * @param {number} [interval] - Polling interval in ms (default: 1000)
@@ -112,13 +113,13 @@ class RestApiService {
       if (!isRunning) return
       
       try {
-        const { events, isComplete } = await this.pollPhaseEvents(phase, tradingDate)
+        const { events, isComplete, newYorkOffset } = await this.pollPhaseEvents(phase, tradingDate)
         
         if (!isRunning) return
         
-        // Call the events callback
+        // Call the events callback with the offset
         if (onEvents) {
-          onEvents(events, isComplete)
+          onEvents(events, isComplete, newYorkOffset)
         }
         
         // If complete, call completion callback and stop polling

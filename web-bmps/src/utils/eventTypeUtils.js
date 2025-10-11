@@ -34,11 +34,6 @@ export function extractEventType(event) {
     return 'SwingPoint'
   }
 
-  // Check if event has tradingDirection property
-  if (event.tradingDirection) {
-    return 'TradingDirection'
-  }
-
   return null
 }
 

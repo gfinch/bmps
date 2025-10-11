@@ -33,7 +33,7 @@ class DaytimeExtremeRenderer extends BaseRenderer {
     }
   }
 
-  update(events, currentTimestamp = null) {
+  update(events, currentTimestamp = null, newYorkOffset = 0) {
     if (!this.primitive) {
       console.debug('DaytimeExtremeRenderer: Primitive not initialized, skipping update')
       return
@@ -58,8 +58,8 @@ class DaytimeExtremeRenderer extends BaseRenderer {
     
     console.debug(`DaytimeExtremeRenderer: After deduplication: ${deduplicatedEvents.length} events`)
 
-    // Transform events into line data
-    this.extremeLines = deduplicatedEvents.map(event => this.transformEventToLineData(event))
+    // Transform events into line data, passing the offset
+    this.extremeLines = deduplicatedEvents.map(event => this.transformEventToLineData(event, newYorkOffset))
 
     console.debug(`DaytimeExtremeRenderer: Transformed to ${this.extremeLines.length} lines:`, this.extremeLines)
 
@@ -68,25 +68,50 @@ class DaytimeExtremeRenderer extends BaseRenderer {
   }
 
   /**
-   * Deduplicate events by description, keeping only the latest timestamp for each description
+   * Deduplicate events by market and extreme type combination, keeping only the latest for each.
+   * If timestamps are equal, the last one in the array is kept (maintaining arrival order).
    * @param {Array} events - Array of valid events
    * @returns {Array} Deduplicated events
    */
   deduplicateByDescription(events) {
     const eventMap = new Map()
     
-    events.forEach(event => {
+    events.forEach((event, index) => {
       const actualEvent = event.event || event
       const extreme = actualEvent.daytimeExtreme
-      const description = extreme.description || ''
+      
+      // Extract market from nested object structure
+      let market = 'NewYork' // default
+      if (extreme.market) {
+        const marketKeys = Object.keys(extreme.market)
+        if (marketKeys.length > 0) {
+          market = marketKeys[0]
+        }
+      }
+      
+      // Extract extreme type from nested object structure
+      let extremeType = 'High' // default
+      if (extreme.extremeType) {
+        const extremeTypeKeys = Object.keys(extreme.extremeType)
+        if (extremeTypeKeys.length > 0) {
+          extremeType = extremeTypeKeys[0]
+        }
+      }
+      
+      // Create a composite key from market and extreme type
+      const key = `${market}-${extremeType}`
       const timestamp = actualEvent.timestamp
       
-      // If we haven't seen this description before, or this event is newer, store it
-      if (!eventMap.has(description) || timestamp > eventMap.get(description).timestamp) {
-        eventMap.set(description, { 
+      // If we haven't seen this combination before, or this event is newer, or same timestamp but later in array, store it
+      if (!eventMap.has(key) || 
+          timestamp > eventMap.get(key).timestamp ||
+          (timestamp === eventMap.get(key).timestamp && index > eventMap.get(key).index)) {
+        eventMap.set(key, { 
           event: event, 
           timestamp: timestamp,
-          description: description 
+          index: index,
+          market: market,
+          extremeType: extremeType
         })
       }
     })
@@ -99,9 +124,12 @@ class DaytimeExtremeRenderer extends BaseRenderer {
 
   isValidEvent(event) {
     const actualEvent = event.event || event
-    const isValid = actualEvent.daytimeExtreme && 
-           typeof actualEvent.daytimeExtreme.level?.value === 'number' &&
-           typeof actualEvent.timestamp === 'number'
+    const extreme = actualEvent.daytimeExtreme
+    if (!extreme || typeof actualEvent.timestamp !== 'number') {
+      return false
+    }
+    
+    const isValid = typeof extreme.level === 'number'
 
     if (!isValid) {
       console.debug('DaytimeExtremeRenderer: Invalid event filtered out:', actualEvent)
@@ -110,7 +138,7 @@ class DaytimeExtremeRenderer extends BaseRenderer {
     return isValid
   }
 
-  transformEventToLineData(event) {
+  transformEventToLineData(event, newYorkOffset = 0) {
     const actualEvent = event.event || event
     const extreme = actualEvent.daytimeExtreme
     
@@ -123,17 +151,27 @@ class DaytimeExtremeRenderer extends BaseRenderer {
       }
     }
 
+    // Extract market from nested object structure like {NewYork: {}}, {Asia: {}}, {London: {}}
+    let market = 'NewYork' // default
+    if (extreme.market) {
+      const marketKeys = Object.keys(extreme.market)
+      if (marketKeys.length > 0) {
+        market = marketKeys[0] // Take the first key (NewYork, Asia, or London)
+      }
+    }
+
     // Determine colors based on extreme type
     const isHighExtreme = extremeType === 'High'
     const lineColor = isHighExtreme ? this.options.highExtremeColor : this.options.lowExtremeColor
     
     const lineData = {
       id: `extreme-${actualEvent.timestamp}`,
-      level: extreme.level.value,
-      startTime: actualEvent.timestamp,
-      endTime: extreme.endTime || null, // null means infinite
-      label: this.generateLabel(extreme),
+      level: extreme.level,
+      startTime: actualEvent.timestamp + newYorkOffset,
+      endTime: extreme.endTime ? extreme.endTime + newYorkOffset : null, // null means infinite, otherwise apply offset
+      label: this.generateLabel(market),
       extremeType: extremeType,
+      market: market,
       style: {
         lineColor: lineColor,
         lineWidth: this.options.lineWidth,
@@ -146,16 +184,18 @@ class DaytimeExtremeRenderer extends BaseRenderer {
     return lineData
   }
 
-  generateLabel(extreme) {
-    const description = extreme.description || ''
-    
-    // Generate session abbreviation (NY, L, A)
-    if (description.toLowerCase().includes('new york')) return 'NY'
-    if (description.toLowerCase().includes('london')) return 'L'  
-    if (description.toLowerCase().includes('asia')) return 'A'
-    
-    // Fallback to first character
-    return description.charAt(0).toUpperCase() || 'E'
+  generateLabel(market) {
+    // Generate session abbreviation based on Market enum value
+    switch (market) {
+      case 'NewYork':
+        return 'NY'
+      case 'London':
+        return 'L'
+      case 'Asia':
+        return 'A'
+      default:
+        return 'E' // Fallback for unknown market
+    }
   }
 
   destroy() {

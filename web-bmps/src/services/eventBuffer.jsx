@@ -22,6 +22,7 @@ class EventBuffer {
     this.phase = phase
     this.events = []
     this.listeners = new Set()
+    this.newYorkOffset = null // New York offset in milliseconds
   }
 
   /**
@@ -110,6 +111,23 @@ class EventBuffer {
     console.log(`Clearing ${this.phase} event buffer (${this.events.length} events)`)
     this.events = []
     this.notifyListeners()
+  }
+
+  /**
+   * Set the New York offset for this event dataset
+   * @param {number} offset - New York offset in milliseconds
+   */
+  setNewYorkOffset(offset) {
+    this.newYorkOffset = offset
+    console.debug(`${this.phase} buffer: Set New York offset to ${offset}ms`)
+  }
+
+  /**
+   * Get the New York offset
+   * @returns {number|null} New York offset in milliseconds, or null if not set
+   */
+  getNewYorkOffset() {
+    return this.newYorkOffset
   }
 
   /**

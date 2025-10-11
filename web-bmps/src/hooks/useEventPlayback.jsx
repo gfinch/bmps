@@ -18,6 +18,7 @@ export function useEventPlayback(phase) {
   const [isPlaying, setIsPlaying] = useState(false)
   const [playRate, setPlayRate] = useState(1000)
   const [timeRange, setTimeRange] = useState({ earliest: null, latest: null })
+  const [newYorkOffset, setNewYorkOffset] = useState(null)
 
   // Update state from playback service
   const updateState = useCallback(() => {
@@ -27,6 +28,7 @@ export function useEventPlayback(phase) {
     setIsPlaying(eventPlaybackService.isPhasePlaying(phase))
     setPlayRate(eventPlaybackService.getPlayRate())
     setTimeRange(eventPlaybackService.getTimeRange(phase))
+    setNewYorkOffset(eventPlaybackService.getNewYorkOffset(phase))
   }, [phase])
 
   // Set up listener for playback changes
@@ -168,6 +170,7 @@ export function useEventPlayback(phase) {
     isPlaying,
     playRate,
     timeRange,
+    newYorkOffset,
     
     // Controls
     ...controls,

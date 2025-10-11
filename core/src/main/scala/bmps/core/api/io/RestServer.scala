@@ -21,6 +21,7 @@ import bmps.core.api.storage.EventStore
 import bmps.core.models.{SystemStatePhase, Event, EventType, Order}
 import bmps.core.brokers.{LeadAccountBroker, OrderReport}
 import bmps.core.services.ReportService
+import bmps.core.utils.TimestampUtils
 
 object RestServer {
 
@@ -35,7 +36,8 @@ object RestServer {
 
   case class PhaseEventsResponse(
     events: List[Event],
-    isComplete: Boolean
+    isComplete: Boolean,
+    newYorkOffset: Long
   )
 
   case class ErrorResponse(
@@ -108,7 +110,7 @@ object RestServer {
         
         // Parse trading date
         val tradingDateResult = scala.util.Try {
-          LocalDate.parse(tradingDateStr, DateTimeFormatter.ISO_LOCAL_DATE)
+          TimestampUtils.toNewYorkLocalDate(tradingDateStr)
         }.toEither.left.map(err => s"Invalid trading date format: ${err.getMessage}")
 
         // Parse phase
@@ -122,8 +124,9 @@ object RestServer {
         (tradingDateResult, phaseResult) match {
           case (Right(tradingDate), Right(phase)) =>
             eventStore.getEvents(tradingDate, phase).flatMap { case (events, isComplete) =>
-              println(s"$phase isComplete: $isComplete")
-              Ok(PhaseEventsResponse(events, isComplete).asJson)
+              val newYorkOffset = TimestampUtils.newYorkOffset(tradingDate)
+              println(s"$phase isComplete: $isComplete offset: $newYorkOffset")
+              Ok(PhaseEventsResponse(events, isComplete, newYorkOffset).asJson)
             }.handleErrorWith { err =>
               logger.error(s"Failed to retrieve events for $tradingDate/$phase", err)
               InternalServerError(ErrorResponse(err.getMessage).asJson)
@@ -142,7 +145,7 @@ object RestServer {
         
         // Parse trading date
         val tradingDateResult = scala.util.Try {
-          LocalDate.parse(tradingDateStr, DateTimeFormatter.ISO_LOCAL_DATE)
+          TimestampUtils.toNewYorkLocalDate(tradingDateStr)
         }.toEither.left.map(err => s"Invalid trading date format: ${err.getMessage}")
 
         tradingDateResult match {

@@ -13,12 +13,13 @@ import bmps.core.models.Order
 import bmps.core.services.OrderService
 import cats.instances.order
 import bmps.core.models.SystemStatePhase
-import bmps.core.io.PolygonAPISource
 import bmps.core.models.CandleDuration
 import bmps.core.brokers.LeadAccountBroker
 import bmps.core.io.DatabentoSource
+import bmps.core.io.DataSource
+import bmps.core.utils.TimestampUtils
 
-class TradingEventGenerator(leadAccount: LeadAccountBroker, swingService: SwingService = new SwingService(1)) extends EventGenerator with TradingDate {
+class TradingEventGenerator(leadAccount: LeadAccountBroker, swingService: SwingService = new SwingService(1)) extends EventGenerator {
     require(leadAccount.brokerCount >= 1, "Must have at least one account broker defined.")
 
     def initialize(state: SystemState, options: Map[String, String] = Map.empty): SystemState = {
@@ -64,28 +65,23 @@ class TradingEventGenerator(leadAccount: LeadAccountBroker, swingService: SwingS
     }
 }
 
-class TradingSource extends CandleSource {
-    // lazy val source = new PolygonAPISource(CandleDuration.OneMinute)
-    // lazy val source = new ParquetSource(CandleDuration.OneMinute)
-    lazy val source = new DatabentoSource(CandleDuration.OneMinute)
-
+class TradingSource(dataSource: DataSource) extends CandleSource {
+    
     def candles(state: SystemState): Stream[IO, Candle] = {
-        val (startMs, endMs, zoneId) = computeTradingWindow(state)
-        source.candlesInRangeStream(startMs, endMs, zoneId)
+        val (plannedStart, endMs) = computeTradingWindow(state)
+        val startMs = state.tradingCandles.lastOption.map(_.timestamp + 1).getOrElse(plannedStart)
+
+        dataSource.candlesInRangeStream(startMs, endMs)
     }
 
-    private def computeTradingWindow(state: SystemState): (Long, Long, java.time.ZoneId) = {
-        import java.time.{ZoneId, ZonedDateTime, LocalTime}
-        val zoneId = ZoneId.of("America/New_York")
-        val tradingDay = state.tradingDay
-        val startTime = ZonedDateTime.of(tradingDay, LocalTime.of(9, 30), zoneId)
-        val endTime = ZonedDateTime.of(tradingDay, LocalTime.of(16, 0), zoneId)
-        val startMs = startTime.toInstant().toEpochMilli
-        val endMs = endTime.toInstant.toEpochMilli
-        (startMs, endMs, zoneId)
+    private def computeTradingWindow(state: SystemState): (Long, Long) = {
+        val startMs = TimestampUtils.newYorkOpen(state.tradingDay)
+        val endMs = TimestampUtils.newYorkClose(state.tradingDay)
+        
+        (startMs, endMs)
     }
 }
 
 object TradingPhaseBuilder {
-    def build(leadAccount: LeadAccountBroker) = new PhaseRunner(new TradingSource(), new TradingEventGenerator(leadAccount))
+    def build(leadAccount: LeadAccountBroker, dataSource: DataSource) = new PhaseRunner(new TradingSource(dataSource), new TradingEventGenerator(leadAccount))
 }

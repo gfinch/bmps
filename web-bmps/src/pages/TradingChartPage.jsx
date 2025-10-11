@@ -3,7 +3,7 @@ import { createChart, CandlestickSeries } from 'lightweight-charts'
 import { Play, Pause, SkipBack, SkipForward, Rewind, FastForward, Scissors, Calendar } from 'lucide-react'
 import { useEventPlayback } from '../hooks/useEventPlayback.jsx'
 import { ChartRenderingService } from '../services/chartRenderingService.jsx'
-import { CandlestickRenderer, DaytimeExtremeRenderer, PlanZoneRenderer, OrderRenderer, TradingDirectionRenderer } from '../renderers/index.js'
+import { CandlestickRenderer, DaytimeExtremeRenderer, PlanZoneRenderer, OrderRenderer } from '../renderers/index.js'
 import phaseService from '../services/phaseService.jsx'
 
 export default function TradingChartPage() {
@@ -23,7 +23,6 @@ export default function TradingChartPage() {
     planZones: true,
     daytimeExtremes: true,
     orders: true,
-    tradingDirection: true,
   })
 
   // Clip tool state
@@ -131,17 +130,6 @@ export default function TradingChartPage() {
         })
         chartServiceRef.current.addRenderer('Order', orderRenderer)
 
-        // Create trading direction renderer for direction change markers
-        const tradingDirectionRenderer = new TradingDirectionRenderer(chart, {
-          showTradingDirection: true,
-          colors: {
-            up: '#26a69a',   // Green for up direction
-            down: '#ef5350'  // Red for down direction
-          },
-          size: 2 // Larger size for visibility
-        })
-        chartServiceRef.current.addRenderer('TradingDirection', tradingDirectionRenderer)
-
         // Store chart reference
         chartRef.current = chart
 
@@ -184,6 +172,13 @@ export default function TradingChartPage() {
     }
   }, [playback.visibleEvents, playback.currentTimestamp])
 
+  // Update New York offset when it changes
+  useEffect(() => {
+    if (chartServiceRef.current && playback.newYorkOffset !== null) {
+      chartServiceRef.current.setNewYorkOffset(playback.newYorkOffset)
+    }
+  }, [playback.newYorkOffset])
+
   // Update renderer visibility when layer visibility state changes
   useEffect(() => {
     if (chartServiceRef.current) {
@@ -195,9 +190,6 @@ export default function TradingChartPage() {
       
       // Update orders visibility
       chartServiceRef.current.setRendererVisibility('Order', layerVisibility.orders)
-      
-      // Update trading direction visibility
-      chartServiceRef.current.setRendererVisibility('TradingDirection', layerVisibility.tradingDirection)
       
       console.log('Trading chart layer visibility updated:', layerVisibility)
     }
@@ -264,10 +256,12 @@ export default function TradingChartPage() {
       if (logicalIndex !== null && logicalIndex !== undefined) {
         const timestamp = chart.timeScale().coordinateToTime(x)
         if (timestamp !== null && timestamp !== undefined) {
-          // Convert seconds to milliseconds for our playback system
+          // Convert seconds to milliseconds - this is in NY time (offset-adjusted)
           const timestampMs = timestamp * 1000
-          playback.jumpToTimestamp(timestampMs)
-          console.log(`Trading clipped to timestamp: ${timestampMs}`)
+          // Convert back to UTC by subtracting the offset
+          const utcTimestampMs = timestampMs - (playback.newYorkOffset || 0)
+          playback.jumpToTimestamp(utcTimestampMs)
+          console.log(`Trading clipped to timestamp: ${utcTimestampMs} (chart time: ${timestampMs})`)
           
           // Center the chart view on the clicked timestamp
           // Calculate a logical range centered on the clicked point
@@ -350,21 +344,6 @@ export default function TradingChartPage() {
               className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
             />
             <span className="text-sm font-medium text-gray-700">Orders</span>
-          </label>
-          <label className="flex items-center space-x-2">
-            <input
-              type="checkbox"
-              checked={layerVisibility.tradingDirection}
-              onChange={(e) => {
-                const newVisibility = {
-                  ...layerVisibility,
-                  tradingDirection: e.target.checked
-                }
-                setLayerVisibility(newVisibility)
-              }}
-              className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
-            />
-            <span className="text-sm font-medium text-gray-700">Trading Direction</span>
           </label>
         </div>
       </div>

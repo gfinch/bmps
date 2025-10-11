@@ -6,6 +6,8 @@ import fs2.Stream
 import bmps.core.api.intf.{CandleSource, EventGenerator}
 import bmps.core.api.storage.EventStore
 import bmps.core.models.{SystemState, Candle, Event}
+import java.time.LocalDate
+import bmps.core.models.SystemStatePhase
 
 /**
  * Generic runner for a phase: it reads candles from a CandleSource, applies
@@ -31,7 +33,28 @@ class PhaseRunner(source: CandleSource, processor: EventGenerator) {
       phase = state.systemStatePhase
       
       // Process all candles, storing events as we go
-      _ <- source.candles(state).evalMap { candle =>
+      _ <- processCandles(stateRef, eventStore, tradingDate, phase)
+      
+      // After all candles processed, run finalize and store those events too
+      finalEvents <- finalize(stateRef)
+      _ <- eventStore.addEvents(tradingDate, phase, finalEvents)
+      
+      // Mark phase as complete
+      _ <- eventStore.markComplete(tradingDate, phase)
+    } yield ())
+  }
+
+  /**
+   * Process candles with automatic retry on stream errors.
+   */
+  private def processCandles(
+    stateRef: Ref[IO, SystemState], 
+    eventStore: EventStore, 
+    tradingDate: LocalDate, 
+    phase: SystemStatePhase
+  ): IO[Unit] = {
+    stateRef.get.flatMap { state =>
+      source.candles(state).evalMap { candle =>
         stateRef.modify { state =>
           val (newState, events) = processor.process(state, candle)
           (newState, (candle, events))
@@ -41,14 +64,12 @@ class PhaseRunner(source: CandleSource, processor: EventGenerator) {
           eventStore.addEvents(tradingDate, phase, allEvents)
         }
       }.compile.drain
-      
-      // After all candles processed, run finalize and store those events too
-      finalEvents <- finalize(stateRef)
-      _ <- eventStore.addEvents(tradingDate, phase, finalEvents)
-      
-      // Mark phase as complete
-      _ <- eventStore.markComplete(tradingDate, phase)
-    } yield ())
+        .handleErrorWith { error =>
+          IO.println(s"[PhaseRunner] Stream error for phase $phase: ${error.getMessage}, restarting stream...") >>
+          IO.sleep(scala.concurrent.duration.DurationInt(2).seconds) >>
+          processCandles(stateRef, eventStore, tradingDate, phase) // Recursive retry
+        }
+    }
   }
 
   def finalize(stateRef: Ref[IO, SystemState]): IO[List[Event]] = {

@@ -42,7 +42,7 @@ class OrderRenderer extends BaseRenderer {
     }
   }
 
-  update(events, currentTimestamp = null) {
+  update(events, currentTimestamp = null, newYorkOffset = 0) {
     if (!this.primitive) {
       console.debug('OrderRenderer: Primitive not initialized, skipping update')
       return
@@ -74,8 +74,8 @@ class OrderRenderer extends BaseRenderer {
     
     console.debug(`OrderRenderer: After deduplication: ${deduplicatedEvents.length} events`)
 
-    // Transform events into order data
-    this.orders = deduplicatedEvents.map(event => this.transformEventToOrderData(event))
+    // Transform events into order data, passing the offset
+    this.orders = deduplicatedEvents.map(event => this.transformEventToOrderData(event, newYorkOffset))
 
     console.debug(`OrderRenderer: Transformed to ${this.orders.length} orders:`, this.orders)
 
@@ -176,7 +176,7 @@ class OrderRenderer extends BaseRenderer {
     return isValid
   }
 
-  transformEventToOrderData(event) {
+  transformEventToOrderData(event, newYorkOffset = 0) {
     const actualEvent = event.event || event
     const order = actualEvent.order
     
@@ -213,10 +213,10 @@ class OrderRenderer extends BaseRenderer {
       entryPoint: order.entryPoint,      // Direct numeric value
       takeProfit: order.takeProfit,      // Direct numeric value
       stopLoss: order.stopLoss,          // Direct numeric value
-      timestamp: actualEvent.timestamp,
-      placedTimestamp: order.placedTimestamp || null,
-      filledTimestamp: order.filledTimestamp || null,
-      closeTimestamp: order.closeTimestamp || null,
+      timestamp: actualEvent.timestamp + newYorkOffset,
+      placedTimestamp: order.placedTimestamp ? order.placedTimestamp + newYorkOffset : null,
+      filledTimestamp: order.filledTimestamp ? order.filledTimestamp + newYorkOffset : null,
+      closeTimestamp: order.closeTimestamp ? order.closeTimestamp + newYorkOffset : null,
       status: status,
       orderType: orderType,
       entryType: entryType,

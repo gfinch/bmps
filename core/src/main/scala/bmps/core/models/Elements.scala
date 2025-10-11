@@ -6,24 +6,13 @@ import java.time.ZoneId
 import java.time.Instant
 import java.time.Duration
 import java.time.LocalTime
+import bmps.core.utils.TimestampUtils
 
-case class Level(value: Float) {
-    def <(other: Level): Boolean = this.value < other.value
-    def <=(other: Level): Boolean = this.value <= other.value
-    def >(other: Level): Boolean = this.value > other.value
-    def >=(other: Level): Boolean = this.value >= other.value
-    def ==(other: Level): Boolean = this.value == other.value
-    def !=(other: Level): Boolean = this.value != other.value
+case class Line(Float: Float, startTime: Long, endTime: Option[Long])
 
-    def +(other: Level): Level = Level(this.value + other.value)
-    def -(other: Level): Level = Level(this.value - other.value)
-}
+case class Range(low: Float, high: Float)
 
-case class Line(level: Float, startTime: Long, endTime: Option[Long])
-
-case class Range(low: Level, high: Level)
-
-case class Zone(low: Level, high: Level, startTime: Long, endTime: Option[Long])
+case class Zone(low: Float, high: Float, startTime: Long, endTime: Option[Long])
 
 sealed trait CandleDuration
 object CandleDuration {
@@ -44,16 +33,16 @@ object Direction {
 }
 
 case class Candle(
-    open: Level,
-    high: Level,
-    low: Level,
-    close: Level,
+    open: Float,
+    high: Float,
+    low: Float,
+    close: Float,
     timestamp: Long,
     duration: CandleDuration
 ) {
     final val DojiThreshold = 0.25
-    lazy val isBullish: Boolean = (close.value - DojiThreshold) > open.value
-    lazy val isBearish: Boolean = (close.value + DojiThreshold) < open.value
+    lazy val isBullish: Boolean = (close - DojiThreshold) > open
+    lazy val isBearish: Boolean = (close + DojiThreshold) < open
     lazy val isDoji: Boolean = !isBearish && !isBearish
     lazy val direction: Direction = {
         if (isBullish) Direction.Up
@@ -69,27 +58,17 @@ case class Candle(
         require(duration == CandleDuration.OneMinute, "Can only merge one minute candles")
         Candle(
             previous.open,
-            Level(Seq(previous.high.value, high.value).max),
-            Level(Seq(previous.low.value, low.value).min),
+            Seq(previous.high, high).max,
+            Seq(previous.low, low).min,
             close,
             previous.timestamp,
             CandleDuration.TwoMinute
         )
     }
-
-    lazy val isEndOfDay: Boolean = {
-        val zone = ZoneId.of("UTC") //Because the candles are offset to NY Time already.
-        val localDate = Instant.ofEpochMilli(timestamp).atZone(zone).toLocalDate
-        val closingZdt = localDate.atTime(LocalTime.of(16, 0)).atZone(zone)
-        val closingMillis = closingZdt.toInstant.toEpochMilli
-        val tenMinutesMillis = Duration.ofMinutes(10).toMillis
-
-        closingMillis - timestamp <= tenMinutesMillis
-    }
 }
 
 case class SwingPoint(
-    level: Level,
+    level: Float,
     direction: Direction,
     timestamp: Long
 )
@@ -100,7 +79,7 @@ object PlanZoneType {
     case object Demand extends PlanZoneType
 }
 
-case class PlanZone(planZoneType: PlanZoneType, low: Level, high: Level, startTime: Long, endTime: Option[Long] = None) {
+case class PlanZone(planZoneType: PlanZoneType, low: Float, high: Float, startTime: Long, endTime: Option[Long] = None) {
     def closedOut(candle: Candle): PlanZone = {
         if (endTime.isDefined) this else {
             planZoneType match {
@@ -114,11 +93,11 @@ case class PlanZone(planZoneType: PlanZoneType, low: Level, high: Level, startTi
     }
 
     def mergeWith(other: PlanZone): (PlanZone, PlanZone) = {
-        val newLow = Seq(this.low.value, other.low.value).min
-        val newHigh = Seq(this.high.value, other.high.value).max
+        val newLow = Seq(this.low, other.low).min
+        val newHigh = Seq(this.high, other.high).max
 
         val laterStart = Seq(this.startTime, other.startTime).max
-        val merged = PlanZone(planZoneType, Level(newLow), Level(newHigh), laterStart)
+        val merged = PlanZone(planZoneType, newLow, newHigh, laterStart)
 
         val closedOlder = if (this.startTime < other.startTime) this.copy(endTime = Some(laterStart))
                                                 else other.copy(endTime = Some(laterStart))
@@ -134,10 +113,10 @@ case class PlanZone(planZoneType: PlanZoneType, low: Level, high: Level, startTi
 
     def overlaps(other: PlanZone): Boolean = {
         if (planZoneType == other.planZoneType && endTime.isEmpty && other.endTime.isEmpty) {
-            val thisLow = this.low.value
-            val thisHigh = this.high.value
-            val otherLow = other.low.value
-            val otherHigh = other.high.value
+            val thisLow = this.low
+            val thisHigh = this.high
+            val otherLow = other.low
+            val otherHigh = other.high
             if ((otherLow < thisHigh && otherHigh > thisLow)) true else false
         } else false
     }
@@ -158,4 +137,11 @@ object ExtremeType {
     case object Low extends ExtremeType
 }
 
-case class DaytimeExtreme(level: Level, extremeType: ExtremeType, timestamp: Long, endTime: Option[Long], description: String)
+sealed trait Market
+object Market {
+    case object NewYork extends Market
+    case object Asia extends Market
+    case object London extends Market
+}
+
+case class DaytimeExtreme(level: Float, extremeType: ExtremeType, timestamp: Long, endTime: Option[Long], market: Market)
