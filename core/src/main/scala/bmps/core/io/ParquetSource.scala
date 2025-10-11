@@ -16,8 +16,8 @@ class ParquetSource(duration: CandleDuration) extends DataSource {
   }
 
   private def timeframeToDuration(tf: String): CandleDuration = tf match {
+    case "1m"           => CandleDuration.OneMinute
     case "1h" | "60m"   => CandleDuration.OneHour
-    case "1d" | "1day"  => CandleDuration.OneDay
     case _              => throw new IllegalArgumentException(s"$tf not supported.")
   }
 
@@ -74,13 +74,19 @@ class ParquetSource(duration: CandleDuration) extends DataSource {
               val candle = candleFromRow(rs)
               Some(candle)
             } catch { 
-              case _: Throwable => None 
+              case e: Throwable => 
+                println(s"[ParquetSource] ERROR parsing row: ${e.getMessage}")
+                e.printStackTrace()
+                None 
             }
           } else {
             None
           }
         } catch { 
-          case _: Throwable => None 
+          case e: Throwable => 
+            println(s"[ParquetSource] ERROR reading next row: ${e.getMessage}")
+            e.printStackTrace()
+            None 
         }
       }
 
