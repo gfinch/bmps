@@ -1,6 +1,7 @@
 package bmps.core.io
 
 import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import fs2.Stream
 import bmps.core.models._
 import java.time.{Instant, LocalDate, ZoneId, ZonedDateTime}
@@ -11,7 +12,7 @@ import java.io.{BufferedReader, InputStreamReader, PrintWriter}
 import scala.util.{Try, Success, Failure}
 import scala.concurrent.duration._
 import java.security.MessageDigest
-import bmps.core.utils.TimestampUtils
+import bmps.core.utils.{TimestampUtils, MarketCalendar}
 import java.sql.Time
 import java.sql.Timestamp
 
@@ -57,6 +58,8 @@ class DatabentoSource(duration: CandleDuration) extends DataSource {
   
   // Historical API endpoint
   private val historicalBaseUrl = "https://hist.databento.com/v0"
+
+  private val mostLiquidSymbol = "ES.n.0"
   
   // Validate that only supported durations are used
   require(duration == CandleDuration.OneMinute || duration == CandleDuration.OneHour, 
@@ -67,6 +70,24 @@ class DatabentoSource(duration: CandleDuration) extends DataSource {
     case CandleDuration.OneMinute => "ohlcv-1m"
     case CandleDuration.OneHour => "ohlcv-1h"
     case _ => throw new IllegalArgumentException(s"Unsupported duration: $duration")
+  }
+
+  /**
+   * Resolve the current contract symbol from the continuous contract symbol.
+   * Uses the symbology.resolve endpoint to map ES.n.0 to the actual front month contract (e.g., ESZ4).
+   * Uses the last trading day before today since historical data may not be available for today yet.
+   */
+  override lazy val currentContractSymbol: String = {
+    val lastTradingDay = MarketCalendar.getTradingDaysBack(LocalDate.now(), 1)
+    println(s"[DatabentoSource] Using last trading day: $lastTradingDay")
+    
+    resolveSymbol(mostLiquidSymbol, lastTradingDay) match {
+      case Some(symbol) => 
+        println(s"[DatabentoSource] Resolved $mostLiquidSymbol to $symbol")
+        symbol
+      case None =>
+        throw new RuntimeException(s"Failed to resolve symbol $mostLiquidSymbol to raw symbol")
+    }
   }
 
   /**
@@ -116,11 +137,11 @@ class DatabentoSource(duration: CandleDuration) extends DataSource {
     val startTime = Instant.ofEpochMilli(startMs).toString
     val endTime = Instant.ofEpochMilli(endMs).toString
     
-    // Build request URL - uses continuous contract ES.c.0 (front month) same as live API
+    // Build request URL - uses continuous contract ES.n.0 (front month) same as live API
     val url = s"$historicalBaseUrl/timeseries.get_range?" +
               s"dataset=$dataset" +
               s"&schema=$schema" +
-              s"&symbols=ES.c.0" +
+              s"&symbols=$mostLiquidSymbol" +
               s"&stype_in=continuous" +
               s"&start=$startTime" +
               s"&end=$endTime" +
@@ -193,6 +214,7 @@ class DatabentoSource(duration: CandleDuration) extends DataSource {
    * Note: Live stream prices are in fixed-point format (multiply by 1e-9 to get actual price)
    */
   private def parseJsonLineToCandle(jsonLine: String): Option[Candle] = {
+    println(jsonLine)
     if (jsonLine.isEmpty || jsonLine == "{}") {
       return None
     }
@@ -208,6 +230,9 @@ class DatabentoSource(duration: CandleDuration) extends DataSource {
       val tsEventRootPattern = """"ts_event":"?(\d+)"?""".r
       val tsEventHdPattern = """"hd":\{[^}]*"ts_event":"?(\d+)"?""".r
       
+      // ts_out is the timestamp when the message was sent from the server
+      val tsOutPattern = """"ts_out":"?(\d+)"?""".r
+      
       for {
         openRaw <- openPattern.findFirstMatchIn(jsonLine).map(_.group(1).toDouble)
         highRaw <- highPattern.findFirstMatchIn(jsonLine).map(_.group(1).toDouble)
@@ -215,6 +240,8 @@ class DatabentoSource(duration: CandleDuration) extends DataSource {
         closeRaw <- closePattern.findFirstMatchIn(jsonLine).map(_.group(1).toDouble)
         tsEventNanos <- tsEventHdPattern.findFirstMatchIn(jsonLine).map(_.group(1).toLong)
                         .orElse(tsEventRootPattern.findFirstMatchIn(jsonLine).map(_.group(1).toLong))
+        tsOutNanos <- tsOutPattern.findFirstMatchIn(jsonLine).map(_.group(1).toLong)
+                      .orElse(Some(TimestampUtils.millisToNanos(Instant.now().toEpochMilli)))
       } yield {
         // Databento live stream uses fixed-point integers (divide by 1e9 to get actual price)
         val open = openRaw / 1e9
@@ -223,6 +250,7 @@ class DatabentoSource(duration: CandleDuration) extends DataSource {
         val close = closeRaw / 1e9
         
         val timestampMs = TimestampUtils.nanosToMillis(tsEventNanos)
+        val currentTimestampMs = TimestampUtils.nanosToMillis(tsOutNanos)
         
         Candle(
           open = open.toFloat,
@@ -230,7 +258,8 @@ class DatabentoSource(duration: CandleDuration) extends DataSource {
           low = low.toFloat,
           close = close.toFloat,
           timestamp = timestampMs,
-          duration = duration
+          duration = duration,
+          currentTimestampMs
         )
       }
     } catch {
@@ -313,7 +342,7 @@ class DatabentoSource(duration: CandleDuration) extends DataSource {
   /**
    * Send subscription message and start session.
    * 
-   * Uses continuous contract ES.c.0 which automatically maps to the front month
+   * Uses continuous contract ES.n.0 which automatically maps to the front month
    * (most active contract). When ES rolls from ESZ5 to ESH6, this will automatically
    * switch to the new front month without code changes.
    */
@@ -322,10 +351,7 @@ class DatabentoSource(duration: CandleDuration) extends DataSource {
       // Convert startMs to UTC nanoseconds
       val startNanos = TimestampUtils.millisToNanos(startMs)
       
-      // Subscribe to front month continuous contract (ES.c.0)
-      // stype_in=continuous tells Databento we're using continuous contract notation
-      // ES.c.0 = front month (most active), ES.c.1 = second month, etc.
-      val subscribeMessage = s"schema=$schema|stype_in=continuous|symbols=ES.c.0|start=$startNanos"
+      val subscribeMessage = s"schema=$schema|stype_in=continuous|symbols=$mostLiquidSymbol|start=$startNanos"
       writer.println(subscribeMessage)
       println(s"[DatabentoSource] Sent subscription: $subscribeMessage")
       
@@ -385,5 +411,108 @@ class DatabentoSource(duration: CandleDuration) extends DataSource {
       }
       .unNoneTerminate  // Terminates when we return None (heartbeat past end time)
       .unNone           // Remove all the None values (skipped messages)
+  }
+
+  /**
+   * Resolve a continuous contract symbol to its raw symbol for a given date.
+   * 
+   * This is a two-step process:
+   * 1. continuous -> instrument_id
+   * 2. instrument_id -> raw_symbol
+   * 
+   * @param symbol The continuous contract symbol (e.g., "ES.n.0")
+   * @param date The date to resolve for (typically today)
+   * @return The resolved raw symbol (e.g., "ESZ4") or None if resolution fails
+   */
+  private def resolveSymbol(symbol: String, date: LocalDate): Option[String] = {
+    val dateStr = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
+    
+    println(s"[DatabentoSource] Resolving symbol $symbol for date $dateStr")
+    
+    // Step 1: continuous -> instrument_id
+    val step1Url = s"$historicalBaseUrl/symbology.resolve?" +
+                   s"dataset=$dataset" +
+                   s"&symbols=$symbol" +
+                   s"&stype_in=continuous" +
+                   s"&stype_out=instrument_id" +
+                   s"&start_date=$dateStr"
+    
+    println(s"[DatabentoSource] Step 1: continuous -> instrument_id")
+    
+    val instrumentIdOpt = makeSymbologyRequest(step1Url, symbol)
+    
+    instrumentIdOpt.flatMap { instrumentId =>
+      println(s"[DatabentoSource] Step 1 result: $instrumentId")
+      
+      // Step 2: instrument_id -> raw_symbol
+      val step2Url = s"$historicalBaseUrl/symbology.resolve?" +
+                     s"dataset=$dataset" +
+                     s"&symbols=$instrumentId" +
+                     s"&stype_in=instrument_id" +
+                     s"&stype_out=raw_symbol" +
+                     s"&start_date=$dateStr"
+      
+      println(s"[DatabentoSource] Step 2: instrument_id -> raw_symbol")
+      
+      val rawSymbol = makeSymbologyRequest(step2Url, instrumentId)
+      println(s"[DatabentoSource] Step 2 result: $rawSymbol")
+      rawSymbol
+    }
+  }
+  
+  /**
+   * Make a symbology resolution HTTP request.
+   */
+  private def makeSymbologyRequest(url: String, inputSymbol: String): Option[String] = {
+    Try {
+      val basicAuth = java.util.Base64.getEncoder.encodeToString(s"$apiKey:".getBytes("UTF-8"))
+      
+      val request = HttpRequest.newBuilder()
+        .uri(URI.create(url))
+        .header("Authorization", s"Basic $basicAuth")
+        .header("User-Agent", "bmps-scala-client/1.0")
+        .GET()
+        .build()
+      
+      val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
+      
+      response.statusCode() match {
+        case 200 => parseSymbologyResponse(response.body(), inputSymbol)
+        case other => 
+          println(s"[DatabentoSource] Symbol resolution failed with HTTP $other: ${response.body()}")
+          None
+      }
+    } match {
+      case Success(result) => result
+      case Failure(e) => 
+        println(s"[DatabentoSource] Symbol resolution request failed: ${e.getMessage}")
+        None
+    }
+  }  /**
+   * Parse the JSON response from symbology.resolve endpoint.
+   * 
+   * Example response:
+   * {
+   *   "result": {
+   *     "ES.n.0": [{"d0": "2024-12-01", "d1": "2024-12-20", "s": "ESZ4"}]
+   *   },
+   *   "status": 0
+   * }
+   */
+  private def parseSymbologyResponse(jsonResponse: String, symbol: String): Option[String] = {
+    try {
+      // Extract the resolved symbol from the result object
+      val resultPattern = s""""result":\\s*\\{\\s*"${java.util.regex.Pattern.quote(symbol)}":\\s*\\[\\s*\\{[^}]*"s":\\s*"([^"]+)"""".r
+      
+      resultPattern.findFirstMatchIn(jsonResponse).map { m =>
+        val resolvedSymbol = m.group(1)
+        resolvedSymbol
+      }
+    } catch {
+      case e: Exception =>
+        println(s"[DatabentoSource] Failed to parse symbology response: ${e.getMessage}")
+        println(s"[DatabentoSource] Response was: $jsonResponse")
+        None
+    }
   }
 }

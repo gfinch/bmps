@@ -19,7 +19,7 @@ case class PlaceOsoResponse(orderId: Option[Long], oso1Id: Option[Long], oso2Id:
 case class CommandResult(commandId: Option[Long], failureReason: Option[String], failureText: Option[String])
 
 case class OrderState(orderId: Long, orderAction: OrderType, contracts: Int, contract: String,
-                       orderType: String, limit: Option[Double], stop: Option[Double], 
+                       contractId: Long, orderType: String, limit: Option[Double], stop: Option[Double], 
                        fill: Option[Double], status: OrderStatus, fillTimestamp: Option[Long])
 
 // API Response Models
@@ -51,7 +51,7 @@ class TradovateBroker(
     password: String,
     clientId: String,
     clientSecret: String,
-    deviceId: String, // Permanent device ID - must be set in TRADOVATE_DEVICE env var
+    deviceId: String,
     accountId: Long,
     accountSpec: String,
     baseUrl: String = "https://demo.tradovateapi.com/v1", // Use demo by default
@@ -119,6 +119,47 @@ class TradovateBroker(
     }
 
     /**
+      * Liquidate all positions for a specific contract
+      *
+      * @param contractId
+      * @return
+      */
+    def liquidatePosition(contractId: Long): CommandResult = {
+        val payload = Json.obj(
+            "accountSpec" -> Json.fromString(accountSpec),
+            "accountId" -> Json.fromLong(accountId),
+            "contractId" -> Json.fromLong(contractId),
+            "admin" -> Json.fromBoolean(false),
+            "isAutomated" -> Json.fromBoolean(true)
+        ).noSpaces
+
+        val request = buildRequest("POST", "/order/liquidateposition", Some(payload))
+        executeWithRetry(request, body => decode[CommandResult](body).toTry)
+    }
+
+    def cancelOrLiquidate(orderId: Long): Unit = {
+        val orderState = orderStatus(orderId)
+        
+        orderState.status match {
+            case OrderStatus.Filled =>
+                // Position is open, need to liquidate
+                println(s"[TradovateAccountBroker] Liquidating position for order $orderId")
+                liquidatePosition(orderState.contractId)
+                
+            case OrderStatus.Placed =>
+                // Order is still working, cancel it
+                println(s"[TradovateAccountBroker] Cancelling working order $orderId")
+                cancelOrder(orderId)
+                
+            case OrderStatus.Cancelled =>
+                println(s"[TradovateAccountBroker] Order $orderId already cancelled")
+                
+            case _ =>
+                println(s"[TradovateAccountBroker] Unknown order state: ${orderState.status}")
+        }
+    }
+
+    /**
       * Get order status with detailed price information
       * Makes 3 API calls: /order/item (status), /orderVersion/deps (prices), /fill/deps (fills)
       */
@@ -180,6 +221,7 @@ class TradovateBroker(
             orderAction = orderType,
             contracts = orderVersion.map(_.orderQty).getOrElse(1),
             contract = contract,
+            contractId = apiOrder.contractId,
             orderType = orderVersion.map(_.orderType).getOrElse("Unknown"),
             limit = orderVersion.flatMap(_.price),
             stop = orderVersion.flatMap(_.stopPrice),

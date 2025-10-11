@@ -14,20 +14,23 @@ object FairValueGapOrderBlockService {
         require(state.tradingDirection.isDefined, "The direction for trading has not been set")
         require(state.tradingDirection.get != Direction.Doji, "The trading direction cannot be Doji")
         require(state.tradingCandles.nonEmpty, "There must be at least one candle in state.")
+        require(state.contractSymbol.isDefined, "The contract symbol must be defined before creating orders.")
+        
+        val contract = state.contractSymbol.get
 
         if (state.tradingCandles.size < 3) state else {
             state.tradingDirection.get match {
                 case Direction.Down => //Look for a bullish fair value gap
                     val (firstCandle, middleCandle, lastCandle) = findThreeCandles(state)
                     if ((lastCandle.low - firstCandle.high) >= tickSize * 2) { //two ticks minimum gap
-                        val newOrder = Order.fromGapCandles(firstCandle, middleCandle, OrderType.Short, EntryType.FairValueGapOrderBlock, lastCandle.timestamp)
+                        val newOrder = Order.fromGapCandles(firstCandle, middleCandle, OrderType.Short, EntryType.FairValueGapOrderBlock, lastCandle.timestamp, contract)
                         val allOrders = state.orders :+ newOrder
                         state.copy(orders = allOrders)
                     } else state
                 case Direction.Up => //Look for bearish fair value gap
                     val (firstCandle, middleCandle, lastCandle) = findThreeCandles(state)
                     if ((firstCandle.low - lastCandle.high) >= tickSize * 2) { //two ticks minimum gap
-                        val newOrder = Order.fromGapCandles(firstCandle, middleCandle, OrderType.Long, EntryType.FairValueGapOrderBlock, lastCandle.timestamp)
+                        val newOrder = Order.fromGapCandles(firstCandle, middleCandle, OrderType.Long, EntryType.FairValueGapOrderBlock, lastCandle.timestamp, contract)
                         val allOrders = state.orders :+ newOrder
                         state.copy(orders = allOrders)
                     } else state

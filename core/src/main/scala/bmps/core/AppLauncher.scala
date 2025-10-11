@@ -23,6 +23,7 @@ import bmps.core.io.DatabentoSource
 import bmps.core.models.Candle
 import bmps.core.io.DataSource
 import bmps.core.io.ParquetSource
+import com.typesafe.config.Config
 
 object AppLauncher extends IOApp.Simple {
 
@@ -31,20 +32,20 @@ object AppLauncher extends IOApp.Simple {
   /** Load AccountBrokers from configuration */
   private def loadAccountBrokers(): LeadAccountBroker = {
     val riskPerTradeUI = config.getDouble("bmps.core.risk-per-trade-ui")
-    val brokerConfigs = config.getConfigList("bmps.core.account-brokers").asScala.toList
+    val brokerConfigs: List[Config] = config.getConfigList("bmps.core.account-brokers").asScala.toList
     
     val brokers = brokerConfigs.map { brokerConfig =>
-      val accountId = brokerConfig.getString("account-id")
-      val riskPerTrade = brokerConfig.getDouble("risk-per-trade")
       val brokerTypeString = brokerConfig.getString("broker-type")
       
       val brokerType = brokerTypeString match {
         case "SimulatedAccountBroker" => BrokerType.SimulatedAccountBroker
-        case "TradeovateBroker" => BrokerType.TradovateAccountBroker
+        case "TradovateBroker" => BrokerType.TradovateAccountBroker
         case _ => throw new IllegalArgumentException(s"Unknown broker type: $brokerTypeString")
       }
+
+      val brokerDetails = brokerConfig.getConfig("broker-config")
       
-      AccountBrokerFactory.buildAccountBroker(accountId, riskPerTrade, brokerType)
+      AccountBrokerFactory.buildAccountBroker(brokerType, brokerDetails)
     }
 
     new LeadAccountBroker(brokers, riskPerTradeUI)

@@ -164,7 +164,7 @@ export default function ResultsPage() {
         horzLines: { color: '#f0f0f0' },
       },
       crosshair: {
-        mode: 0,
+        mode: 1, // Magnet mode - snap to data points
       },
       rightPriceScale: {
         borderColor: '#cccccc',

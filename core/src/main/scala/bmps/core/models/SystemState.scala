@@ -25,5 +25,6 @@ case class SystemState(
     tradingCandles: List[Candle] = List.empty,
     tradingSwingPoints: List[SwingPoint] = List.empty,
     
-    orders: List[Order] = List.empty
+    orders: List[Order] = List.empty,
+    contractSymbol: Option[String] = None
 )

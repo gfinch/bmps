@@ -13,7 +13,9 @@ object EngulfingOrderBlockService {
 
     def processState(state: SystemState): SystemState = {
         require(state.tradingCandles.nonEmpty, "There must be at least one candle in state.")
+        require(state.contractSymbol.isDefined, "The contract symbol must be defined before creating orders.")
         
+        val contract = state.contractSymbol.get
         val lastThreeCandles = state.tradingCandles.takeRight(3)
         val (test, subjects) = buildTestAndSubjects(lastThreeCandles)
         // val test = state.tradingCandles.last
@@ -24,12 +26,12 @@ object EngulfingOrderBlockService {
                     precededByMeaningfulMove(test, subject, state) && 
                     isSubstantialEngulfing(test, subject, state) &&
                     !isInConsolidation(state, state.tradingCandles.last) => 
-                    Some(Order.fromCandle(subject, OrderType.Long, EntryType.EngulfingOrderBlock, test.timestamp))
+                    Some(Order.fromCandle(subject, OrderType.Long, EntryType.EngulfingOrderBlock, test.timestamp, contract))
                 case Direction.Down if test.close < subject.low && 
                     precededByMeaningfulMove(test, subject, state) && 
                     isSubstantialEngulfing(test, subject, state) &&
                     !isInConsolidation(state, state.tradingCandles.last) =>
-                    Some(Order.fromCandle(subject, OrderType.Short, EntryType.EngulfingOrderBlock, test.timestamp))
+                    Some(Order.fromCandle(subject, OrderType.Short, EntryType.EngulfingOrderBlock, test.timestamp, contract))
                 case _ => None
             }
         }
