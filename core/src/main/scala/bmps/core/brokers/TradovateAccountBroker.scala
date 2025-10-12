@@ -178,8 +178,8 @@ class TradovateAccountBroker(val accountId: String, val riskPerTrade: Double, tr
         require(riskPerTrade > 0, "riskPerTrade must be positive")
         val mesContracts: Int = Math.floor(riskPerTrade / order.atRiskPerContract).toInt
 
-        val (contractType, contracts) = if (mesContracts >= 50) {
-            (ContractType.ES, Math.round(mesContracts.toDouble / 50.0).toInt)
+        val (contractType, contracts) = if (mesContracts >= 10) {
+            (ContractType.ES, Math.round(mesContracts.toDouble / 10.0).toInt)
         } else (ContractType.MES, mesContracts)
 
         val contract = contractType match {
