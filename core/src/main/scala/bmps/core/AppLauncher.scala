@@ -13,6 +13,7 @@ import bmps.core.phases.PreparingPhaseBuilder
 import bmps.core.phases.TradingPhaseBuilder
 import cats.effect.{IO, IOApp}
 import java.time.LocalDate
+import scala.concurrent.duration._
 import bmps.core.brokers.{AccountBroker, AccountBrokerFactory, BrokerType}
 import com.typesafe.config.ConfigFactory
 import scala.jdk.CollectionConverters._
@@ -23,7 +24,9 @@ import bmps.core.io.DatabentoSource
 import bmps.core.models.Candle
 import bmps.core.io.DataSource
 import bmps.core.io.ParquetSource
+import bmps.core.utils.MarketCalendar
 import com.typesafe.config.Config
+import bmps.core.utils.MarketCalendar
 
 object AppLauncher extends IOApp.Simple {
 
@@ -66,7 +69,7 @@ object AppLauncher extends IOApp.Simple {
   /** Create the shared pieces and return resources that include a running
     * REST API server on port 8081 for phase control and event retrieval.
     */
-  def createResource(restPort: Int = 8081): Resource[IO, (Ref[IO, SystemState], PhaseController, org.http4s.server.Server)] = for {
+  def createResource(restPort: Int, readOnly: Boolean): Resource[IO, (Ref[IO, SystemState], PhaseController, EventStore, org.http4s.server.Server)] = for {
     stateRef <- Resource.eval(Ref.of[IO, SystemState](SystemState()))
     eventStore <- Resource.eval(EventStore.create())
     sem <- Resource.eval(Semaphore[IO](1))
@@ -85,12 +88,78 @@ object AppLauncher extends IOApp.Simple {
     // Create report service
     reportService = new ReportService(eventStore, leadAccount)
     // Start REST API server on port 8081
-    restServer <- RestServer.resource(controller, eventStore, leadAccount, reportService, restPort)
-  } yield (stateRef, controller, restServer)
+    restServer <- RestServer.resource(controller, eventStore, leadAccount, reportService, restPort, readOnly)
+  } yield (stateRef, controller, eventStore, restServer)
 
-  val run: IO[Unit] = createResource().use { case (stateRef, controller, restServer) =>
-    IO.println("REST API server started on port 8081") *>
-    IO.never
+  /** Poll until a phase completes for a given trading date */
+  private def pollUntilComplete(phase: SystemStatePhase, tradingDate: LocalDate, eventStore: EventStore): IO[Unit] = {
+    (IO.sleep(1.second) *> eventStore.isComplete(tradingDate, phase))
+      .iterateUntil(_ == true)
+      .void
+  }
+  
+  /** Process a single trading day through all three phases */
+  private def processTradingDay(tradingDate: LocalDate, controller: PhaseController, eventStore: EventStore): IO[Unit] = {
+    val dateStr = tradingDate.toString
+    val options = Some(Map("tradingDate" -> dateStr))
+    
+    for {
+      _ <- IO.println(s"Processing trading day: $dateStr")
+      _ <- IO.println("-" * 60)
+      
+      // Planning phase
+      _ <- IO.println("  Starting planning phase...")
+      _ <- controller.startPhase(SystemStatePhase.Planning, options)
+      _ <- pollUntilComplete(SystemStatePhase.Planning, tradingDate, eventStore)
+      _ <- IO.println("  ✓ Planning phase completed")
+      
+      // Preparing phase
+      _ <- IO.println("  Starting preparing phase...")
+      _ <- controller.startPhase(SystemStatePhase.Preparing, options)
+      _ <- pollUntilComplete(SystemStatePhase.Preparing, tradingDate, eventStore)
+      _ <- IO.println("  ✓ Preparing phase completed")
+      
+      // Trading phase
+      _ <- IO.println("  Starting trading phase...")
+      _ <- controller.startPhase(SystemStatePhase.Trading, options)
+      _ <- pollUntilComplete(SystemStatePhase.Trading, tradingDate, eventStore)
+      _ <- IO.println("  ✓ Trading phase completed")
+      
+      _ <- IO.println(s"✓ Completed trading day: $dateStr")
+    } yield ()
+  }
+  
+  /** Logic to run after server starts in read-only mode */
+  private def readOnlyModeLogic(stateRef: Ref[IO, SystemState], controller: PhaseController, eventStore: EventStore): IO[Unit] = {
+    for {
+      _ <- IO.println("Running in read-only mode...")
+      _ <- IO.println("")
+      
+      today <- IO.pure(LocalDate.now())
+      _ <- IO.println(s"Today's date: $today")
+      
+      _ <- if (MarketCalendar.isTradingDay(today)) {
+        for {
+          _ <- IO.println("Today is a trading day. Processing...")
+          _ <- processTradingDay(today, controller, eventStore)
+          _ <- IO.println("")
+          _ <- IO.println("Trading day complete. Shutting down...")
+        } yield ()
+      } else {
+        IO.println(s"Today is not a trading day. Shutting down...")
+      }
+    } yield ()
+  }
+
+  val run: IO[Unit] = {
+    val port = sys.env.get("BMPS_PORT").map(_.toInt).getOrElse(8081)
+    val readOnly = sys.env.get("BMPS_READ_ONLY_MODE").map(_.toBoolean).getOrElse(false)
+    
+    createResource(port, readOnly).use { case (stateRef, controller, eventStore, restServer) =>
+      val mode = if (readOnly) "read only" else "read write"
+      IO.println(s"REST API server started in $mode mode on port $port") *>
+      (if (readOnly) readOnlyModeLogic(stateRef, controller, eventStore) else IO.never)
+    }
   }
 
 }

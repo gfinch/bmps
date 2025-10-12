@@ -62,13 +62,14 @@ object RestServer {
     eventStore: EventStore,
     leadAccountBroker: LeadAccountBroker,
     reportService: ReportService,
-    port: Int = 8081
+    port: Int,
+    readOnly: Boolean
   ): Resource[IO, org.http4s.server.Server] = {
 
     val routes = HttpRoutes.of[IO] {
       
       // PUT /phase/start - Start a phase with specified trading date and options
-      case req @ PUT -> Root / "phase" / "start" =>
+      case req @ PUT -> Root / "phase" / "start" if !readOnly =>
         req.as[StartPhaseRequest].flatMap { request =>
           logger.info(s"Received start phase request: $request")
           
@@ -103,6 +104,10 @@ object RestServer {
           logger.error("Failed to parse start phase request", err)
           BadRequest(ErrorResponse(s"Invalid request: ${err.getMessage}").asJson)
         }
+
+      case PUT -> Root / "phase" / "start" if readOnly =>
+          Forbidden(ErrorResponse("Server is running in read-only mode").asJson)
+
 
       // GET /phase/events?tradingDate=YYYY-MM-DD&phase=planning - Get events for a phase
       case GET -> Root / "phase" / "events" :? TradingDateQueryParam(tradingDateStr) +& PhaseQueryParam(phaseStr) =>
