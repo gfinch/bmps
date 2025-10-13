@@ -35,5 +35,24 @@ libraryDependencies += "ch.qos.logback" % "logback-classic" % "1.4.11"
 // Forward environment variables to the running application
 run / envVars := Map(
   "DATABENTO_KEY" -> sys.env.getOrElse("DATABENTO_KEY", ""),
-  "POLY_KEY" -> sys.env.getOrElse("POLY_KEY", "")
+  "TRADOVATE_PASS" -> sys.env.getOrElse("TRADOVATE_PASS", ""),
+  "TRADOVATE_KEY" -> sys.env.getOrElse("TRADOVATE_KEY", ""),
+  "TRADOVATE_DEVICE" -> sys.env.getOrElse("TRADOVATE_DEVICE", "")
 )
+
+// Assembly settings for creating fat JAR
+assembly / assemblyMergeStrategy := {
+  case PathList("META-INF", xs @ _*) => xs match {
+    case "MANIFEST.MF" :: Nil => MergeStrategy.discard
+    case "services" :: _ => MergeStrategy.concat
+    case _ => MergeStrategy.discard
+  }
+  case "reference.conf" => MergeStrategy.concat
+  case "application.conf" => MergeStrategy.concat
+  case x if x.endsWith(".proto") => MergeStrategy.first
+  case x if x.contains("module-info") => MergeStrategy.discard
+  case _ => MergeStrategy.first
+}
+
+assembly / mainClass := Some("bmps.core.AppLauncher")
+assembly / assemblyJarName := s"${name.value}-assembly-${version.value}.jar"
