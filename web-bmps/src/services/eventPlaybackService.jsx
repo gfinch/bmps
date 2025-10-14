@@ -17,6 +17,12 @@ class EventPlaybackService {
       trading: null      // Current timestamp pointer for trading
     }
     
+    // Track the last known end timestamp for each phase (for auto-follow detection)
+    this.lastEndTimestamp = {
+      planning: null,
+      trading: null
+    }
+    
     // Playback control
     this.isPlaying = {
       planning: false,
@@ -63,27 +69,32 @@ class EventPlaybackService {
     
     if (events.length === 0) {
       this.currentTimestamp[phase] = null
+      this.lastEndTimestamp[phase] = null
       this.publishVisibleEvents(phase)
       return
     }
     
-    const latestTimestamp = events[events.length - 1].timestamp
     const currentTs = this.currentTimestamp[phase]
+    const previousEndTs = this.lastEndTimestamp[phase]
+    const uniqueTimestamps = this.getUniqueTimestamps(phase)
+    const newEndTs = uniqueTimestamps.length > 0 ? uniqueTimestamps[uniqueTimestamps.length - 1] : null
     
     // Auto-follow: if we were at the latest timestamp and new events arrived,
     // move to the new latest timestamp
-    if (currentTs !== null) {
-      const uniqueTimestamps = this.getUniqueTimestamps(phase)
-      const wasAtEnd = currentTs === uniqueTimestamps[uniqueTimestamps.length - 1]
+    if (currentTs !== null && previousEndTs !== null && newEndTs !== null) {
+      // Check if we were at the end before this update
+      const wasAtEnd = currentTs === previousEndTs
       
-      if (wasAtEnd && latestTimestamp > currentTs) {
-        console.debug(`Auto-following ${phase} to new latest timestamp: ${latestTimestamp}`)
-        this.currentTimestamp[phase] = latestTimestamp
+      if (wasAtEnd && newEndTs > previousEndTs) {
+        // We were at the end and new candles arrived - auto-follow to the new end
+        console.debug(`Auto-following ${phase}: was at ${previousEndTs}, moving to new end ${newEndTs}`)
+        this.currentTimestamp[phase] = newEndTs
         this.publishVisibleEvents(phase)
+      } else if (!wasAtEnd) {
+        console.debug(`${phase} not at end (current: ${currentTs}, previous end: ${previousEndTs}), not auto-following`)
       }
-    } else {
+    } else if (currentTs === null) {
       // Initialize to first timestamp when buffer is first populated
-      const uniqueTimestamps = this.getUniqueTimestamps(phase)
       if (uniqueTimestamps.length > 0) {
         const firstTimestamp = uniqueTimestamps[0]
         console.debug(`Initializing ${phase} to first timestamp: ${firstTimestamp}`)
@@ -93,6 +104,9 @@ class EventPlaybackService {
         console.debug(`${phase} buffer updated but no events with valid timestamps`)
       }
     }
+    
+    // Update the tracked end timestamp for next comparison
+    this.lastEndTimestamp[phase] = newEndTs
   }
 
   // Navigation API
@@ -118,6 +132,12 @@ class EventPlaybackService {
     
     // Reset timestamps
     this.currentTimestamp = {
+      planning: null,
+      trading: null
+    }
+    
+    // Reset tracked end timestamps
+    this.lastEndTimestamp = {
       planning: null,
       trading: null
     }
