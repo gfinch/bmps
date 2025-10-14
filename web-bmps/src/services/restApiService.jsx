@@ -3,8 +3,8 @@
  * Handles phase control and event polling via REST endpoints
  */
 
-// const API_URL = 'http://3.142.245.141:8081'
-const API_URL = 'http://localhost:8081'
+const API_URL = 'http://bmps-alb-1860575311.us-east-2.elb.amazonaws.com'
+// const API_URL = 'http://localhost:8081'
 
 /**
  * REST API Service for phase management

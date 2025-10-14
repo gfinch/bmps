@@ -214,7 +214,7 @@ class DatabentoSource(duration: CandleDuration) extends DataSource {
    * Note: Live stream prices are in fixed-point format (multiply by 1e-9 to get actual price)
    */
   private def parseJsonLineToCandle(jsonLine: String): Option[Candle] = {
-    println(jsonLine)
+    // println(jsonLine)
     if (jsonLine.isEmpty || jsonLine == "{}") {
       return None
     }
@@ -373,7 +373,7 @@ class DatabentoSource(duration: CandleDuration) extends DataSource {
       .evalMap { line =>
         IO {
           // Log EVERY message received from the stream
-          println(s"[DatabentoSource] <<< Received: $line")
+          // println(s"[DatabentoSource] <<< Received: $line")
 
           if (line.contains("\"rtype\":23") && line.contains("Heartbeat")) {
             // Extract ts_event from heartbeat to check if we're past endMs
@@ -401,7 +401,7 @@ class DatabentoSource(duration: CandleDuration) extends DataSource {
                 println(s"[DatabentoSource]     -> Got a candle with ts ${candle.timestamp} > $endMs.")
                 None // End the stream
               case c @ Some(candle) => 
-                println(s"[DatabentoSource]     -> SUCCESS: Parsed candle: ${candle}")
+                // println(s"[DatabentoSource]     -> SUCCESS: Parsed candle: ${candle}")
                 Some(c) //Emit and continue
             }
           } else {
@@ -452,7 +452,7 @@ class DatabentoSource(duration: CandleDuration) extends DataSource {
                      s"&stype_out=raw_symbol" +
                      s"&start_date=$dateStr"
       
-      println(s"[DatabentoSource] Step 2: instrument_id -> raw_symbol")
+      // println(s"[DatabentoSource] Step 2: instrument_id -> raw_symbol")
       
       val rawSymbol = makeSymbologyRequest(step2Url, instrumentId)
       println(s"[DatabentoSource] Step 2 result: $rawSymbol")
