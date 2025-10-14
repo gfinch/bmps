@@ -12,6 +12,7 @@ import bmps.core.brokers.rest.PlaceOsoResponse
 import bmps.core.brokers.rest.OrderState
 import bmps.core.models.OrderStatus._
 import bmps.core.models.CancelReason
+import bmps.core.utils.TimestampUtils
 
 case class TradovateOrder(order: Order, osoResult: PlaceOsoResponse)
 
@@ -23,14 +24,20 @@ class TradovateAccountBroker(val accountId: String, val riskPerTrade: Double, tr
 
     def placeOrder(order: Order, candle: Candle): Order = {
         if (candle.isLive) {
+            println(s"Attempting to place order with Tradovate: ${order.timestamp} - ${order.orderType} - ${order.entryPoint}")
             val (osoResult, newOrder) = doPlaceOrder(order, candle)
+            println(s"OSO order id: ${osoResult.orderId}, profit id: ${osoResult.oso1Id}, loss id: ${osoResult.oso2Id}")
 
             val systemOrderId = order.timestamp
             val tradovateOrder = TradovateOrder(order, osoResult)
             tradovateOrders.put(systemOrderId, tradovateOrder)
 
             order
-        } else order //don't place an order with Tradovate if we're back testing or catching up
+        } else {
+            println(s"[TradovateAccountBroker] Not placing order - back testing or catching up.")
+            println(s"[TradovateAccountBroker] ${TimestampUtils.toNewYorkTimeString(candle.timestamp)} - ${TimestampUtils.toNewYorkTimeString(candle.createdAt)}")
+            order //don't place an order with Tradovate if we're back testing or catching up
+        }
     }
     def fillOrder(order: Order, candle: Candle): Order = {
         if (candle.isLive) {
@@ -59,7 +66,9 @@ class TradovateAccountBroker(val accountId: String, val riskPerTrade: Double, tr
     }
 
     private def doExitOrder(order: Order, candle: Candle, cancelReason: String): Order = {
+        println(s"[TradovateAccountBroker] Exiting order ${order.timestamp} - Reason: $cancelReason")
         tradovateOrders.get(order.timestamp).flatMap { tradovateOrder =>
+            println(s"[TradovateAccountBroker] Tradovate order id: ${tradovateOrder.osoResult.orderId} profit id: ${tradovateOrder.osoResult.oso1Id}, loss id: ${tradovateOrder.osoResult.oso2Id}")
             tradovateOrder.osoResult.orderId.map { oid => 
                 val newOrder = doCancelOrLiquidate(tradovateOrder.order, oid, candle, cancelReason)
                 val newTradovateOrder = tradovateOrder.copy(order = newOrder)
@@ -83,7 +92,7 @@ class TradovateAccountBroker(val accountId: String, val riskPerTrade: Double, tr
                 (tradovateOrder.osoResult.orderId, tradovateOrder.osoResult.oso1Id, tradovateOrder.osoResult.oso2Id) match {
                     case (Some(mainOrder), Some(profitOrder), Some(lossOrder)) =>
                         val orderState = tradovateBroker.orderStatus(mainOrder)
-                        val newOrder = mapStatusToOrder(tradovateOrder.order, orderState, profitOrder, lossOrder, candle)
+                        val newOrder = mapStatusToOrder(tradovateOrder.order, orderState, mainOrder, profitOrder, lossOrder, candle)
                         Some(tradovateOrder.copy(order = newOrder))
                     case (Some(mainOrder), _, _) => 
                         println(s"[TradovateAccountBroker] Unexpected order state. Main order with no child orders.")
@@ -103,12 +112,14 @@ class TradovateAccountBroker(val accountId: String, val riskPerTrade: Double, tr
     }
 
 
-    private def mapStatusToOrder(order: Order, orderState: OrderState, profitOrder: Long, lossOrder: Long, candle: Candle): Order = {
+    private def mapStatusToOrder(order: Order, orderState: OrderState, mainOrderId: Long, profitOrder: Long, lossOrder: Long, candle: Candle): Order = {
         (order.status, orderState.status) match {
             case (Placed, Placed) | (Cancelled, Cancelled) => order //No change
             case (_, Filled) => 
                 val profitOrderStatus = tradovateBroker.orderStatus(profitOrder)
                 val lossOrderStatus = tradovateBroker.orderStatus(lossOrder)
+                println(s"[TradovateAccountBroker] Tradovate order ${mainOrderId} has been filled.")
+                println(s"[TradovateAccountBroker] Profit order ($profitOrder) status: ${profitOrderStatus.status}, Loss order ($lossOrder) status: ${lossOrderStatus.status}")
                 (profitOrderStatus.status, lossOrderStatus.status) match { 
                     case (Placed, Placed) if order.status == Placed => order //No change
                     case (Placed, Placed) => 
@@ -118,6 +129,7 @@ class TradovateAccountBroker(val accountId: String, val riskPerTrade: Double, tr
                     case (_, Filled) =>
                         order.copy(status = Loss, closeTimestamp = Some(candle.timestamp))
                     case _ => //Unexpected state - cancel or liquidate
+                        println(s"[TradovateAccountBroker] .")
                         doCancelOrLiquidate(order, orderState.orderId, candle: Candle, "Profit or Loss are in unexpected state.")
                         doCancelOrLiquidate(order, profitOrder, candle: Candle, "Profit or Loss are in unexpected state.")
                         doCancelOrLiquidate(order, lossOrder, candle: Candle, "Profit or Loss are in unexpected state.")
@@ -133,7 +145,7 @@ class TradovateAccountBroker(val accountId: String, val riskPerTrade: Double, tr
 
     private def doPlaceOrder(order: Order, candle: Candle): (PlaceOsoResponse, Order) = {
         require(order.status == OrderStatus.Planned, "Attempting to place an order that was already placed.")
-        require(tradovateOrders.get(order.timestamp).isEmpty, "Attempting to place an order that was already placed.")
+        require(tradovateOrders.get(order.timestamp).isEmpty, "Attempting to place an order whose tradovate order ids are missing.")
         val (contract, contracts) = determineContracts(order, riskPerTrade)
         val plannedOrder = PlannedOrder(
             entry = order.entryPoint, 

@@ -12,7 +12,7 @@ import org.http4s.circe.CirceEntityCodec._
 import io.circe.generic.auto._
 import io.circe.syntax._
 import io.circe.{Decoder, Encoder}
-import com.comcast.ip4s.Port
+import com.comcast.ip4s.{Host, Port}
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
@@ -146,7 +146,7 @@ object RestServer {
 
       // GET /orderReport?tradingDate=YYYY-MM-DD&accountId=optional - Get order report
       case GET -> Root / "orderReport" :? TradingDateQueryParam(tradingDateStr) +& OptionalAccountIdQueryParam(accountIdOpt) =>
-        logger.info(s"Received order report request: tradingDate=$tradingDateStr, accountId=$accountIdOpt")
+        // logger.info(s"Received order report request: tradingDate=$tradingDateStr, accountId=$accountIdOpt")
         
         // Parse trading date
         val tradingDateResult = scala.util.Try {
@@ -209,8 +209,10 @@ object RestServer {
     val app = Router("/" -> corsRoutes).orNotFound
 
     val portVal = Port.fromInt(port).getOrElse(Port.fromInt(8081).get)
+    val host = Host.fromString("0.0.0.0").getOrElse(Host.fromString("localhost").get)
     
     EmberServerBuilder.default[IO]
+      .withHost(host)
       .withPort(portVal)
       .withHttpApp(app)
       .build
