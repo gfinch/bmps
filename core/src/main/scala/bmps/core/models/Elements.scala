@@ -42,7 +42,20 @@ case class Candle(
     createdAt: Long
 ) {
     final val DojiThreshold = 0.25
-    lazy val isLive: Boolean = createdAt - timestamp <= 10000 //Ten seconds
+    lazy val durationMillis = duration match {
+        case CandleDuration.OneMinute => 60 * 1000
+        case CandleDuration.TwoMinute => 2 * 60 * 1000
+        case CandleDuration.FiveMinute => 5 * 60 * 1000
+        case CandleDuration.FifteenMinute => 15 * 60 * 1000
+        case CandleDuration.ThirtyMinute => 30 * 60 * 1000
+        case CandleDuration.OneHour => 60 * 60 * 1000
+        case CandleDuration.OneDay => 24 * 60 * 60 * 1000
+    }
+
+    lazy val isLive: Boolean = {
+        createdAt - (timestamp + durationMillis) <= 60000 //Sixty seconds
+    }
+
     lazy val isBullish: Boolean = (close - DojiThreshold) > open
     lazy val isBearish: Boolean = (close + DojiThreshold) < open
     lazy val isDoji: Boolean = !isBearish && !isBearish

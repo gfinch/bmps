@@ -76,8 +76,16 @@ class PhaseService {
     this.isPolling = true
     
     try {
-      // Call REST API to start phase
-      await restApiService.startPhase(phase, tradingDate)
+      // Check if trading date is today
+      const today = new Date().toISOString().split('T')[0] // YYYY-MM-DD format
+      const isToday = tradingDate === today
+      
+      if (isToday) {
+        console.debug(`Trading date is today - skipping startPhase API call, will only poll for existing events`)
+      } else {
+        // Call REST API to start phase (for historical dates)
+        await restApiService.startPhase(phase, tradingDate)
+      }
       
       // Determine which buffer to use
       const targetBuffer = phase === 'planning' ? 'planning' : 'trading'
