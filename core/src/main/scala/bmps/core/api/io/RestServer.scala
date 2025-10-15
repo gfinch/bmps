@@ -22,6 +22,7 @@ import bmps.core.models.{SystemStatePhase, Event, EventType, Order}
 import bmps.core.brokers.{LeadAccountBroker, OrderReport}
 import bmps.core.services.ReportService
 import bmps.core.utils.TimestampUtils
+import bmps.core.utils.MarketCalendar
 
 object RestServer {
 
@@ -32,7 +33,13 @@ object RestServer {
     phase: String,
     tradingDate: String,
     options: Option[Map[String, String]] = None
-  )
+  ) { 
+    lazy val isToday = {
+      val todayNY = TimestampUtils.today()
+      val reqDate = TimestampUtils.toNewYorkLocalDate(tradingDate)
+      todayNY.isEqual(reqDate)
+    }
+  }
 
   case class PhaseEventsResponse(
     events: List[Event],
@@ -75,13 +82,16 @@ object RestServer {
           
           // Parse phase
           val phaseOpt = request.phase.toLowerCase match {
-            case "planning" => Some(SystemStatePhase.Planning)
+            case "planning" if !request.isToday => Some(SystemStatePhase.Planning)
             case "preparing" => Some(SystemStatePhase.Preparing)
             case "trading" => Some(SystemStatePhase.Trading)
             case _ => None
           }
 
           phaseOpt match {
+            case None if request.isToday =>
+              BadRequest(ErrorResponse(s"Not allowed to backtest today's trade. (${request.tradingDate})").asJson)
+
             case None =>
               BadRequest(ErrorResponse(s"Invalid phase: ${request.phase}").asJson)
             
@@ -111,7 +121,7 @@ object RestServer {
 
       // GET /phase/events?tradingDate=YYYY-MM-DD&phase=planning - Get events for a phase
       case GET -> Root / "phase" / "events" :? TradingDateQueryParam(tradingDateStr) +& PhaseQueryParam(phaseStr) =>
-        logger.info(s"Received get events request: tradingDate=$tradingDateStr, phase=$phaseStr")
+        // logger.info(s"Received get events request: tradingDate=$tradingDateStr, phase=$phaseStr")
         
         // Parse trading date
         val tradingDateResult = scala.util.Try {
@@ -130,7 +140,6 @@ object RestServer {
           case (Right(tradingDate), Right(phase)) =>
             eventStore.getEvents(tradingDate, phase).flatMap { case (events, isComplete) =>
               val newYorkOffset = TimestampUtils.newYorkOffset(tradingDate)
-              println(s"$phase isComplete: $isComplete offset: $newYorkOffset")
               Ok(PhaseEventsResponse(events, isComplete, newYorkOffset).asJson)
             }.handleErrorWith { err =>
               logger.error(s"Failed to retrieve events for $tradingDate/$phase", err)
@@ -202,6 +211,14 @@ object RestServer {
       // GET /health - Health check endpoint
       case GET -> Root / "health" =>
         Ok(Map("status" -> "ok").asJson)
+
+      // GET /todayIsMarketDay - Check if today is a market day
+      case GET -> Root / "isTodayATradingDay" =>
+        if (MarketCalendar.isTodayTradingDay()) {
+          Ok(Map("todayIsATradingDay" -> true).asJson)
+        } else {
+          Ok(Map("todayIsATradingDay" -> false).asJson)
+        }
     }
 
     // Apply CORS middleware to allow requests from frontend

@@ -1,12 +1,21 @@
 package bmps.core.utils
 
 import java.time.{LocalDate, DayOfWeek}
+import java.time.ZoneId
 
 /**
  * Utility for determining if a date is a valid US market trading day
  * Handles weekends and major US market holidays
  */
 object MarketCalendar {
+  
+  /**
+    * Check if today is a trading day.
+    */
+  def isTodayTradingDay(): Boolean = {
+     val today = LocalDate.now(ZoneId.of("America/New_York"))
+     isTradingDay(today)
+  }
   
   /**
    * Check if a date is a trading day (not weekend, not holiday)
