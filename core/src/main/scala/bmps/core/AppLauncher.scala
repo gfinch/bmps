@@ -147,6 +147,7 @@ object AppLauncher extends IOApp.Simple {
         } yield ()
       } else {
         IO.println(s"Today is not a trading day. Shutting down...")
+        IO.sleep(30.seconds) //This allows time for step functions to learn that today is not a trading day.
       }
     } yield ()
   }

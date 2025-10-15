@@ -59,8 +59,6 @@ case class Order(low: Float,
     require(high > low, "High and Low of an order zone cannot be equal or inverted.")
 
     final val DollarsPerMicro = 5.0 //Five dollars per point on micros (MES)
-    final val MaxContracts = 50
-    final val TenMinutes = 10 * 60 * 1000
 
     lazy val entryPoint = orderType match {
         case Long => high
@@ -120,7 +118,26 @@ object Order {
     }
 }
 
-object SerializableOrder {
+trait DetermineContracts{
+    protected def determineContracts(order: Order, riskPerTrade: Double): (String, Int) = {
+        require(order.atRiskPerContract > 0, "atRiskPerContract must be positive")
+        require(riskPerTrade > 0, "riskPerTrade must be positive")
+        val mesContracts: Int = Math.floor(riskPerTrade / order.atRiskPerContract).toInt
+
+        val (contractType, contracts) = if (mesContracts >= 10) {
+            (ContractType.ES, Math.round(mesContracts.toDouble / 10.0).toInt)
+        } else (ContractType.MES, mesContracts)
+
+        val contract = contractType match {
+            case ContractType.ES => order.contract
+            case ContractType.MES => "M" + order.contract
+        }
+
+        (contract, contracts)
+    }
+}
+
+object SerializableOrder extends DetermineContracts {
     def fromOrder(order: Order, riskPerTrade: Double): SerializableOrder = {
 
         //For the purposes of simulation, we'll assume $500 at risk per order

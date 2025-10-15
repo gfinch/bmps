@@ -36,8 +36,8 @@ class TradingEventGenerator(leadAccount: LeadAccountBroker, swingService: SwingS
 
         //Order processing
         val withNewOrders = OrderService.buildOrders(withSwings)
-        val withPlacedOrders = placeOrders(withNewOrders, candle)
-        val withOrders = adjustOrderState(withPlacedOrders, candle)
+        val withAdjustedOrders = adjustOrderState(withNewOrders, candle)
+        val withOrders = placeOrders(withAdjustedOrders, candle)
         
         //Event processing
         val newSwingPoints = withOrders.tradingSwingPoints.drop(state.tradingSwingPoints.length)

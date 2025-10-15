@@ -13,10 +13,11 @@ import bmps.core.brokers.rest.OrderState
 import bmps.core.models.OrderStatus._
 import bmps.core.models.CancelReason
 import bmps.core.utils.TimestampUtils
+import bmps.core.models.DetermineContracts
 
 case class TradovateOrder(order: Order, osoResult: PlaceOsoResponse)
 
-class TradovateAccountBroker(val accountId: String, val riskPerTrade: Double, tradovateBroker: TradovateBroker) extends AccountBroker {
+class TradovateAccountBroker(val accountId: String, val riskPerTrade: Double, tradovateBroker: TradovateBroker) extends AccountBroker with DetermineContracts {
     val brokerType: BrokerType = BrokerType.TradovateAccountBroker
 
     //Keeps a private version of each order for this broker to use.
@@ -183,22 +184,5 @@ class TradovateAccountBroker(val accountId: String, val riskPerTrade: Double, tr
     private def doCancelOrLiquidate(order: Order, orderId: Long, candle: Candle, cancelReason: String): Order = {
         tradovateBroker.cancelOrLiquidate(orderId)
         order.copy(status = OrderStatus.Cancelled, closeTimestamp = Some(candle.timestamp), cancelReason = Some(cancelReason))
-    }
-
-    private def determineContracts(order: Order, riskPerTrade: Double): (String, Int) = {
-        require(order.atRiskPerContract > 0, "atRiskPerContract must be positive")
-        require(riskPerTrade > 0, "riskPerTrade must be positive")
-        val mesContracts: Int = Math.floor(riskPerTrade / order.atRiskPerContract).toInt
-
-        val (contractType, contracts) = if (mesContracts >= 10) {
-            (ContractType.ES, Math.round(mesContracts.toDouble / 10.0).toInt)
-        } else (ContractType.MES, mesContracts)
-
-        val contract = contractType match {
-            case ContractType.ES => order.contract
-            case ContractType.MES => "M" + order.contract
-        }
-
-        (contract, contracts)
     }
 }

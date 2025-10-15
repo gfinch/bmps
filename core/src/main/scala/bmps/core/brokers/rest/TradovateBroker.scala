@@ -4,6 +4,7 @@ import bmps.core.models.{OrderStatus, ContractType}
 import io.circe._, io.circe.generic.auto._, io.circe.parser._, io.circe.syntax._
 import java.net.http.{HttpClient, HttpRequest, HttpResponse}
 import java.net.URI
+import java.util.concurrent.atomic.AtomicReference
 import scala.util.{Try, Success, Failure}
 import scala.concurrent.duration._
 import java.time.Duration
@@ -61,8 +62,28 @@ class TradovateBroker(
 
     private val httpClient = HttpClient.newHttpClient()
     
-    // Lazy initialization of access token - will authenticate on first use
-    lazy val accessToken: String = authenticate()
+    // Thread-safe token container supporting lazy initialization and refresh
+    private val tokenContainer: AtomicReference[Option[String]] = new AtomicReference(None)
+    private val tokenExpirationTime: AtomicReference[Long] = new AtomicReference(0L)
+    
+    /**
+     * Get current access token, authenticating lazily if needed
+     */
+    private def accessToken: String = {
+        tokenContainer.get() match {
+            case Some(token) => token
+            case None =>
+                // Authenticate and try to set atomically
+                val token = authenticate()
+                if (tokenContainer.compareAndSet(None, Some(token))) {
+                    // We successfully set it
+                    token
+                } else {
+                    // Another thread beat us to it, use their token
+                    tokenContainer.get().getOrElse(token)
+                }
+        }
+    }
 
     /**
      * Place an OSO (Order Sends Order) bracket order
@@ -264,6 +285,14 @@ class TradovateBroker(
             decode[AccessTokenResponse](response.body()) match {
                 case Right(tokenResp) =>
                     println("✓ Authentication successful")
+                    // Parse and store expiration time
+                    Try {
+                        java.time.Instant.parse(tokenResp.expirationTime).toEpochMilli
+                    }.foreach { expiryMs =>
+                        tokenExpirationTime.set(expiryMs)
+                        val expiresIn = (expiryMs - System.currentTimeMillis()) / 1000 / 60
+                        println(s"  Token expires in ~$expiresIn minutes")
+                    }
                     tokenResp.accessToken
                 case Left(error) =>
                     throw new RuntimeException(s"Failed to parse auth response: ${error.getMessage}\nBody: ${response.body()}")
@@ -276,7 +305,16 @@ class TradovateBroker(
     }
     
     /**
-     * Execute HTTP request with exponential backoff retry logic for rate limits
+     * Re-authenticate and update the access token
+     */
+    private def clearToken(): Unit = {
+        println("[TradovateBroker] Access token expired, refreshing...")
+        val oldToken = tokenContainer.get()
+        tokenContainer.compareAndSet(oldToken, None)
+    }
+    
+    /**
+     * Execute HTTP request with exponential backoff retry logic for rate limits and token expiration
      */
     private def executeWithRetry[T](request: HttpRequest, parseResponse: String => Try[T], 
                                     retryCount: Int = 0): T = {
@@ -290,6 +328,13 @@ class TradovateBroker(
                         throw new RuntimeException(s"Failed to parse response: ${error.getMessage}\nBody: ${response.body()}")
                 }
             
+            case 401 if retryCount == 0 => // Expired access token - refresh and retry once
+                println("[TradovateBroker] Received 401 Unauthorized, refreshing access token...")
+                clearToken()
+                // Rebuild the request with the new token
+                val newRequest = rebuildRequestWithNewToken(request)
+                executeWithRetry(newRequest, parseResponse, retryCount + 1)
+            
             case 429 | 503 if retryCount < maxRetries => // Rate limit or service unavailable
                 val delayMs = initialRetryDelayMs * Math.pow(2, retryCount).toLong
                 println(s"Rate limit hit, retrying in ${delayMs}ms (attempt ${retryCount + 1}/$maxRetries)")
@@ -301,6 +346,31 @@ class TradovateBroker(
                     s"HTTP $statusCode: ${response.body()}"
                 )
         }
+    }
+    
+    /**
+     * Rebuild an HTTP request with a new access token
+     */
+    private def rebuildRequestWithNewToken(oldRequest: HttpRequest): HttpRequest = {
+        val builder = HttpRequest.newBuilder()
+            .uri(oldRequest.uri())
+            .header("Authorization", s"Bearer $accessToken")
+            .header("Content-Type", "application/json")
+            .header("Accept", "application/json")
+            .timeout(oldRequest.timeout().orElse(Duration.ofSeconds(30)))
+        
+        oldRequest.method() match {
+            case "GET" => builder.GET()
+            case "POST" => 
+                // Re-send the same body
+                oldRequest.bodyPublisher().ifPresent(publisher => 
+                    builder.POST(publisher)
+                )
+                builder
+            case _ => builder
+        }
+        
+        builder.build()
     }
     
     private def buildRequest(method: String, endpoint: String, body: Option[String] = None): HttpRequest = {
