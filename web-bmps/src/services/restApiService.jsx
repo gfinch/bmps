@@ -3,7 +3,8 @@
  * Handles phase control and event polling via REST endpoints
  */
 
-const API_URL = 'http://bmps.misfortunesheir.com'
+const API_URL = 'https://bmps.misfortunesheir.com'
+const BACKTEST_API_URL = 'https://bmps.misfortunesheir.com:444'
 // const API_URL = 'http://localhost:8081'
 
 /**
@@ -15,6 +16,16 @@ class RestApiService {
   }
 
   /**
+   * Get the appropriate API URL based on trading date
+   * @param {string} tradingDate - Trading date in YYYY-MM-DD format
+   * @returns {string} API URL to use
+   */
+  getApiUrl(tradingDate) {
+    const today = new Date().toISOString().split('T')[0]
+    return tradingDate === today ? API_URL : BACKTEST_API_URL
+  }
+
+  /**
    * Start a phase on the backend
    * @param {string} phase - Phase name ('planning', 'preparing', 'trading')
    * @param {string} tradingDate - Trading date in YYYY-MM-DD format
@@ -23,6 +34,7 @@ class RestApiService {
   async startPhase(phase, tradingDate) {
     console.debug(`REST API: Starting phase ${phase}`, { tradingDate })
     
+    const apiUrl = this.getApiUrl(tradingDate)
     const body = {
       phase,
       tradingDate,
@@ -30,7 +42,7 @@ class RestApiService {
     }
 
     try {
-      const response = await fetch(`${API_URL}/phase/start`, {
+      const response = await fetch(`${apiUrl}/phase/start`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -61,9 +73,10 @@ class RestApiService {
   async pollPhaseEvents(phase, tradingDate) {
     console.debug(`REST API: Polling events for ${phase} on ${tradingDate}`)
     
+    const apiUrl = this.getApiUrl(tradingDate)
     try {
       const response = await fetch(
-        `${API_URL}/phase/events?tradingDate=${tradingDate}&phase=${phase}`,
+        `${apiUrl}/phase/events?tradingDate=${tradingDate}&phase=${phase}`,
         {
           method: 'GET',
           headers: {
@@ -210,13 +223,14 @@ class RestApiService {
   async getOrderReport(tradingDate, accountId = null) {
     console.debug(`REST API: Getting order report for ${tradingDate}`, { accountId })
     
+    const apiUrl = this.getApiUrl(tradingDate)
     try {
       const params = new URLSearchParams({ tradingDate })
       if (accountId) {
         params.append('accountId', accountId)
       }
       
-      const response = await fetch(`${API_URL}/orderReport?${params.toString()}`, {
+      const response = await fetch(`${apiUrl}/orderReport?${params.toString()}`, {
         method: 'GET',
         headers: {
           'Accept': 'application/json',
@@ -239,15 +253,17 @@ class RestApiService {
 
   /**
    * Get available trading dates from EventStore with profitability status
+   * @param {string} tradingDate - Trading date to determine which API to query
    * @returns {Promise<Array<{date: string, profitable: boolean|null}>>} 
    *          Array of date objects with profitability info
    *          - profitable: true = profitable, false = unprofitable, null = neutral/no trades
    */
-  async getAvailableDates() {
+  async getAvailableDates(tradingDate) {
     console.debug('REST API: Getting available dates with profitability')
     
+    const apiUrl = this.getApiUrl(tradingDate)
     try {
-      const response = await fetch(`${API_URL}/availableDates`, {
+      const response = await fetch(`${apiUrl}/availableDates`, {
         method: 'GET',
         headers: {
           'Accept': 'application/json',
@@ -270,12 +286,14 @@ class RestApiService {
 
   /**
    * Get aggregate order report across all trading days
+   * @param {string} tradingDate - Trading date to determine which API to query
    * @param {string} [accountId] - Optional account ID to filter by specific broker
    * @returns {Promise<Object>} OrderReport with orders, winning, losing, averageWinDollars, averageLossDollars, maxDrawdownDollars, totalPnL
    */
-  async getAggregateOrderReport(accountId = null) {
+  async getAggregateOrderReport(tradingDate, accountId = null) {
     console.debug('REST API: Getting aggregate order report', { accountId })
     
+    const apiUrl = this.getApiUrl(tradingDate)
     try {
       const params = new URLSearchParams()
       if (accountId) {
@@ -283,8 +301,8 @@ class RestApiService {
       }
       
       const url = params.toString() 
-        ? `${API_URL}/aggregateOrderReport?${params.toString()}`
-        : `${API_URL}/aggregateOrderReport`
+        ? `${apiUrl}/aggregateOrderReport?${params.toString()}`
+        : `${apiUrl}/aggregateOrderReport`
       
       const response = await fetch(url, {
         method: 'GET',
@@ -309,14 +327,32 @@ class RestApiService {
 
   /**
    * Check health of the REST API
+   * @param {string} tradingDate - Trading date to determine which API to check
    * @returns {Promise<boolean>}
    */
-  async checkHealth() {
+  async checkHealth(tradingDate) {
+    const apiUrl = this.getApiUrl(tradingDate)
     try {
-      const response = await fetch(`${API_URL}/health`)
+      const response = await fetch(`${apiUrl}/health`)
       return response.ok
     } catch (error) {
       console.error('REST API: Health check failed:', error)
+      return false
+    }
+  }
+
+  /**
+   * Check health of a specific API server
+   * @param {boolean} isLive - true for live API, false for backtest API
+   * @returns {Promise<boolean>}
+   */
+  async checkServerHealth(isLive) {
+    const apiUrl = isLive ? API_URL : BACKTEST_API_URL
+    try {
+      const response = await fetch(`${apiUrl}/health`)
+      return response.ok
+    } catch (error) {
+      console.error(`REST API: Health check failed for ${isLive ? 'live' : 'backtest'} server:`, error)
       return false
     }
   }
