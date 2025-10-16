@@ -11,15 +11,21 @@ const navItems = [
 
 export default function Layout({ children }) {
   const location = useLocation()
-  const [isConnected, setIsConnected] = useState(false)
+  const [isLiveConnected, setIsLiveConnected] = useState(false)
+  const [isBacktestConnected, setIsBacktestConnected] = useState(false)
 
   useEffect(() => {
     const checkHealth = async () => {
       try {
-        const healthy = await restApiService.checkHealth()
-        setIsConnected(healthy)
+        const [liveHealthy, backtestHealthy] = await Promise.all([
+          restApiService.checkServerHealth(true),
+          restApiService.checkServerHealth(false)
+        ])
+        setIsLiveConnected(liveHealthy)
+        setIsBacktestConnected(backtestHealthy)
       } catch (err) {
-        setIsConnected(false)
+        setIsLiveConnected(false)
+        setIsBacktestConnected(false)
       }
     }
     
@@ -58,13 +64,19 @@ export default function Layout({ children }) {
               ))}
             </div>
             
-            {/* Connection Status Indicator */}
-            <div className="flex items-center">
+            {/* Connection Status Indicators */}
+            <div className="flex items-center gap-2">
               <div 
                 className={`w-2 h-2 rounded-full ${
-                  isConnected ? 'bg-green-500' : 'bg-red-500'
+                  isBacktestConnected ? 'bg-green-500' : 'bg-red-500'
                 }`}
-                title={isConnected ? 'Connected to server' : 'Disconnected from server'}
+                title={isBacktestConnected ? 'Backtest server connected' : 'Backtest server disconnected'}
+              />
+              <div 
+                className={`w-2 h-2 rounded-full ${
+                  isLiveConnected ? 'bg-green-500' : 'bg-red-500'
+                }`}
+                title={isLiveConnected ? 'Live server connected' : 'Live server disconnected'}
               />
             </div>
           </div>

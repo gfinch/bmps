@@ -63,27 +63,27 @@ export default function ResultsPage() {
   useEffect(() => {
     const fetchAvailableDates = async () => {
       try {
-        const dateInfos = await restApiService.getAvailableDates()
+        const dateInfos = await restApiService.getAvailableDates(tradingDate)
         setAvailableDates(dateInfos)
       } catch (err) {
         console.error('Failed to fetch available dates:', err)
       }
     }
     fetchAvailableDates()
-  }, [])
+  }, [tradingDate])
 
   // Fetch all-time P&L when component mounts
   useEffect(() => {
     const fetchAllTimePnL = async () => {
       try {
-        const report = await restApiService.getAggregateOrderReport()
+        const report = await restApiService.getAggregateOrderReport(tradingDate)
         setAllTimePnL(report.totalPnL)
       } catch (err) {
         console.error('Failed to fetch all-time P&L:', err)
       }
     }
     fetchAllTimePnL()
-  }, [])
+  }, [tradingDate])
 
   useEffect(() => {
     fetchOrderReport()
@@ -105,16 +105,16 @@ export default function ResultsPage() {
     setError(null)
     try {
       const report = isAllTime 
-        ? await restApiService.getAggregateOrderReport()
+        ? await restApiService.getAggregateOrderReport(tradingDate)
         : await restApiService.getOrderReport(tradingDate)
       setOrderReport(report)
       
       // Always refresh the all-time P&L display
-      const allTimeReport = await restApiService.getAggregateOrderReport()
+      const allTimeReport = await restApiService.getAggregateOrderReport(tradingDate)
       setAllTimePnL(allTimeReport.totalPnL)
       
       // Refresh available dates to update calendar colors
-      const dateInfos = await restApiService.getAvailableDates()
+      const dateInfos = await restApiService.getAvailableDates(tradingDate)
       setAvailableDates(dateInfos)
     } catch (err) {
       console.error('Failed to fetch order report:', err)

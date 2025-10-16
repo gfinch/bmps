@@ -27,7 +27,8 @@ import scala.concurrent.duration._
  */
 object ConsoleClient extends IOApp {
 
-  private val API_URL = "http://localhost:8081"
+  // private val API_URL = "http://localhost:8081"
+  private val API_URL = "https://bmps.misfortunesheir.com:444"
   private val client = new OkHttpClient()
   private val formatter = DateTimeFormatter.ISO_LOCAL_DATE
 
