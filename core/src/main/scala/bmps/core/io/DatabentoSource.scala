@@ -40,7 +40,7 @@ import java.sql.Timestamp
  * val candles = source.candlesInRangeStream(startMs, endMs, ZoneId.of("America/New_York"))
  * }}}
  */
-class DatabentoSource(duration: CandleDuration) extends DataSource {
+class DatabentoSource(durations: Set[CandleDuration]) extends DataSource {
   
   // Java 11+ HTTP client for historical API requests
   private val httpClient = HttpClient.newHttpClient()
@@ -62,15 +62,16 @@ class DatabentoSource(duration: CandleDuration) extends DataSource {
   private val mostLiquidSymbol = "ES.n.0"
   
   // Validate that only supported durations are used
-  require(duration == CandleDuration.OneMinute || duration == CandleDuration.OneHour, 
-    s"Only OneMinute and OneHour durations are supported, got: $duration")
+  require(durations.subsetOf(Set(CandleDuration.OneSecond, CandleDuration.OneMinute, CandleDuration.OneHour)), 
+    s"Only OneSecond, OneMinute, and OneHour durations are supported, got: $durations")
   
   // Convert duration to Databento schema
-  private val schema = duration match {
+  private val schemas = durations.map(d => d match {
+    case CandleDuration.OneSecond => "ohlcv-1s"
     case CandleDuration.OneMinute => "ohlcv-1m"
     case CandleDuration.OneHour => "ohlcv-1h"
-    case _ => throw new IllegalArgumentException(s"Unsupported duration: $duration")
-  }
+    case _ => throw new IllegalArgumentException(s"Unsupported duration: $d")
+  }).toList
 
   /**
    * Resolve the current contract symbol from the continuous contract symbol.
@@ -126,13 +127,15 @@ class DatabentoSource(duration: CandleDuration) extends DataSource {
    * Fetch historical candles using the HTTP REST API for dates before today.
    */
   private def fetchHistoricalCandlesStream(startMs: Long, endMs: Long): Stream[IO, Candle] = {
-    Stream.eval(fetchHistoricalCandles(startMs, endMs)).flatMap(Stream.emits)
+    schemas.filterNot(_ == "ohlcv-1s").map { schema => 
+      Stream.eval(fetchHistoricalCandles(schema, startMs, endMs)).flatMap(Stream.emits)
+    }.reduce(_ ++ _)
   }
   
   /**
    * Make HTTP request to historical API and parse response.
    */
-  private def fetchHistoricalCandles(startMs: Long, endMs: Long): IO[List[Candle]] = {
+  private def fetchHistoricalCandles(schema: String, startMs: Long, endMs: Long): IO[List[Candle]] = {
     // Convert milliseconds to ISO 8601 format in UTC
     val startTime = Instant.ofEpochMilli(startMs).toString
     val endTime = Instant.ofEpochMilli(endMs).toString
@@ -221,6 +224,7 @@ class DatabentoSource(duration: CandleDuration) extends DataSource {
     
     try {
       // Extract values - handle both quoted strings and plain numbers
+      val rtypePattern = """"rtype":"?(\d+)"?""".r
       val openPattern = """"open":"?([0-9.]+)"?""".r
       val highPattern = """"high":"?([0-9.]+)"?""".r
       val lowPattern = """"low":"?([0-9.]+)"?""".r
@@ -234,6 +238,7 @@ class DatabentoSource(duration: CandleDuration) extends DataSource {
       val tsOutPattern = """"ts_out":"?(\d+)"?""".r
       
       for {
+        rtype <- rtypePattern.findFirstMatchIn(jsonLine).map(_.group(1).toInt)
         openRaw <- openPattern.findFirstMatchIn(jsonLine).map(_.group(1).toDouble)
         highRaw <- highPattern.findFirstMatchIn(jsonLine).map(_.group(1).toDouble)
         lowRaw <- lowPattern.findFirstMatchIn(jsonLine).map(_.group(1).toDouble)
@@ -244,6 +249,13 @@ class DatabentoSource(duration: CandleDuration) extends DataSource {
                       .orElse(Some(TimestampUtils.millisToNanos(Instant.now().toEpochMilli)))
       } yield {
         // Databento live stream uses fixed-point integers (divide by 1e9 to get actual price)
+        val candleDuration = rtype match {
+          case 32 => CandleDuration.OneSecond
+          case 33 => CandleDuration.OneMinute
+          case 34 => CandleDuration.OneHour
+          case _ => throw new IllegalStateException(s"Unsupported rtype for candle: $rtype")
+        }
+
         val open = openRaw / 1e9
         val high = highRaw / 1e9
         val low = lowRaw / 1e9
@@ -258,7 +270,7 @@ class DatabentoSource(duration: CandleDuration) extends DataSource {
           low = low.toFloat,
           close = close.toFloat,
           timestamp = timestampMs,
-          duration = duration,
+          duration = candleDuration,
           currentTimestampMs
         )
       }
@@ -351,10 +363,12 @@ class DatabentoSource(duration: CandleDuration) extends DataSource {
       // Convert startMs to UTC nanoseconds
       val startNanos = TimestampUtils.millisToNanos(startMs)
       
-      val subscribeMessage = s"schema=$schema|stype_in=continuous|symbols=$mostLiquidSymbol|start=$startNanos"
-      writer.println(subscribeMessage)
-      println(s"[DatabentoSource] Sent subscription: $subscribeMessage")
-      
+      schemas.foreach { schema => 
+        val subscribeMessage = s"schema=$schema|stype_in=continuous|symbols=$mostLiquidSymbol|start=$startNanos"
+        writer.println(subscribeMessage)
+        println(s"[DatabentoSource] Sent subscription: $subscribeMessage")
+      }
+
       // Start the session
       writer.println("start_session=1")
       println(s"[DatabentoSource] Started session")
@@ -392,7 +406,7 @@ class DatabentoSource(duration: CandleDuration) extends DataSource {
                 println(s"[DatabentoSource]     -> Unable to parse heartbeat message.")
                 Some(None) //Ignore bad messages
             }
-          } else if (line.contains("\"rtype\":34") || line.contains("\"rtype\":33")) {
+          } else if (line.contains("\"rtype\":34") || line.contains("\"rtype\":33") || line.contains("\"rtype\":32")) {
             parseJsonLineToCandle(line) match {
               case None => 
                 println(s"[DatabentoSource]     -> FAILED: Could not parse as candle")

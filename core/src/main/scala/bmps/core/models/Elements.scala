@@ -7,6 +7,7 @@ import java.time.Instant
 import java.time.Duration
 import java.time.LocalTime
 import bmps.core.utils.TimestampUtils
+import bmps.core.models.CandleDuration.OneSecond
 
 case class Line(Float: Float, startTime: Long, endTime: Option[Long])
 
@@ -16,6 +17,7 @@ case class Zone(low: Float, high: Float, startTime: Long, endTime: Option[Long])
 
 sealed trait CandleDuration
 object CandleDuration {
+    case object OneSecond extends CandleDuration
     case object OneMinute extends CandleDuration
     case object TwoMinute extends CandleDuration
     case object FiveMinute extends CandleDuration
@@ -43,6 +45,7 @@ case class Candle(
 ) {
     final val DojiThreshold = 0.25
     lazy val durationMillis = duration match {
+        case OneSecond => 1000
         case CandleDuration.OneMinute => 60 * 1000
         case CandleDuration.TwoMinute => 2 * 60 * 1000
         case CandleDuration.FiveMinute => 5 * 60 * 1000
@@ -53,7 +56,7 @@ case class Candle(
     }
 
     lazy val isLive: Boolean = {
-        createdAt - (timestamp + durationMillis) <= 60000 //Sixty seconds
+        createdAt - (timestamp + durationMillis) <= durationMillis
     }
 
     lazy val isBullish: Boolean = (close - DojiThreshold) > open

@@ -107,7 +107,7 @@ class TradovateAccountBroker(val accountId: String, val riskPerTrade: Double, tr
                 println(s"[TradovateAccountBroker] Attempting to update an already closed order.")
                 Some(tradovateOrder)
             case None => 
-                println(s"[TradovateAccountBroker] Unexpected udpateOrder request. The order has not been seen before.")
+                println(s"[TradovateAccountBroker] This order was never placed and cannot be updated.")
                 None
         }
     }
