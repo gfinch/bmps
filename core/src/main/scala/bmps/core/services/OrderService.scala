@@ -31,19 +31,18 @@ object OrderService {
         processors.foldLeft(state) { (lastState, nextProcess) => nextProcess(lastState) }
     }
     
-    def findOrderToPlace(state: SystemState): Option[Order] = {
-        require(state.tradingCandles.nonEmpty, "placeOrders called before there are candles in Trade state.")
+    def findOrderToPlace(state: SystemState, candle: Candle): Option[Order] = {
         state.orders.find { order => 
-            order.status == OrderStatus.Planned && shouldPlaceOrder(order, state)
+            order.status == OrderStatus.Planned && shouldPlaceOrder(order, state, candle)
         }
     }
 
-    private def shouldPlaceOrder(order: Order, state: SystemState): Boolean = {
+    private def shouldPlaceOrder(order: Order, state: SystemState, candle: Candle): Boolean = {
         val activeOrders = state.orders.count(_.isActive)
         val isOrderReady = if (order.entryType == EntryType.FairValueGapOrderBlock) {
-            FairValueGapOrderBlockService.shouldPlaceOrder(order, state.tradingCandles.last)
+            FairValueGapOrderBlockService.shouldPlaceOrder(order, candle)
         } else if (order.entryType == EntryType.EngulfingOrderBlock) {
-            EngulfingOrderBlockService.shouldPlaceOrder(order, state)
+            EngulfingOrderBlockService.shouldPlaceOrder(order, state, candle)
         } else true
         (activeOrders == 0 && isOrderReady)
     }

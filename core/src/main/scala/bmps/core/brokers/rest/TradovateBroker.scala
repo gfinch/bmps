@@ -114,7 +114,7 @@ class TradovateBroker(
             "action" -> Json.fromString(action),
             "symbol" -> Json.fromString(plannedOrder.contractId),
             "orderQty" -> Json.fromInt(plannedOrder.contracts),
-            "orderType" -> Json.fromString("Limit"),
+            "orderType" -> Json.fromString("Limit"), 
             "price" -> Json.fromDoubleOrNull(plannedOrder.entry.toDouble),
             "isAutomated" -> Json.fromBoolean(true), // Required for algorithmic trading
             "bracket1" -> takeProfitBracket,

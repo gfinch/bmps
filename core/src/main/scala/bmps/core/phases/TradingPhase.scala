@@ -28,6 +28,19 @@ class TradingEventGenerator(leadAccount: LeadAccountBroker, swingService: SwingS
     }
 
     def process(state: SystemState, candle: Candle): (SystemState, List[Event]) = {
+        candle.duration match {
+            case CandleDuration.OneSecond => processOneSecond(state, candle)
+            case CandleDuration.OneMinute => processOneMinute(state, candle)
+            case _ => (state, List.empty[Event])
+        }
+    }
+
+    def processOneSecond(state: SystemState, candle: Candle): (SystemState, List[Event]) = {
+        val newState = placeOrders(state, candle)
+        (newState, List.empty[Event])
+    }
+
+    def processOneMinute(state: SystemState, candle: Candle): (SystemState, List[Event]) = {
         //Candle and swing processing
         val updatedCandles = state.tradingCandles :+ candle
         val (swings, directionOption) = swingService.computeSwings(updatedCandles)
@@ -55,7 +68,7 @@ class TradingEventGenerator(leadAccount: LeadAccountBroker, swingService: SwingS
     }
     
     private def placeOrders(state: SystemState, candle: Candle): SystemState = {
-        val placedOrders = OrderService.findOrderToPlace(state).map(leadAccount.placeOrder(_, candle)) match {
+        val placedOrders = OrderService.findOrderToPlace(state, candle: Candle).map(leadAccount.placeOrder(_, candle)) match {
             case Some(placedOrder) =>
                 state.orders.map(order => if (order.timestamp == placedOrder.timestamp) placedOrder else order)
             case None =>

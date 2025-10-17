@@ -5,7 +5,7 @@ import cats.effect.Ref
 import fs2.Stream
 import bmps.core.api.intf.{CandleSource, EventGenerator}
 import bmps.core.api.storage.EventStore
-import bmps.core.models.{SystemState, Candle, Event}
+import bmps.core.models.{SystemState, Candle, Event, CandleDuration}
 import java.time.LocalDate
 import bmps.core.models.SystemStatePhase
 
@@ -59,9 +59,11 @@ class PhaseRunner(source: CandleSource, processor: EventGenerator) {
           val (newState, events) = processor.process(state, candle)
           (newState, (candle, events))
         }.flatMap { case (candle, events) =>
-          val candleEvent = Event.fromCandle(candle)
-          val allEvents = candleEvent :: events
-          eventStore.addEvents(tradingDate, phase, allEvents)
+          if (candle.duration != CandleDuration.OneSecond) {
+            val candleEvent = Event.fromCandle(candle)
+            val allEvents = candleEvent :: events
+            eventStore.addEvents(tradingDate, phase, allEvents)
+          } else IO.unit
         }
       }.compile.drain
         .handleErrorWith { error =>

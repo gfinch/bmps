@@ -54,13 +54,22 @@ object AppLauncher extends IOApp.Simple {
     new LeadAccountBroker(brokers, riskPerTradeUI)
   }
 
-  private def loadDataSources(): (DataSource, DataSource) = {
+  private def loadDataSources(): (DataSource, DataSource, DataSource) = {
     val dataSource = config.getString("bmps.core.candle-datasource")
      dataSource match {
       case "DatabentoSource" =>
-        (new DatabentoSource(CandleDuration.OneHour), new DatabentoSource(CandleDuration.OneMinute))
+        (
+          new DatabentoSource(Set(CandleDuration.OneHour)), 
+          new DatabentoSource(Set(CandleDuration.OneMinute)),
+          new DatabentoSource(Set(CandleDuration.OneSecond, CandleDuration.OneMinute))
+        )
       case "ParquetSource" => 
-        (new ParquetSource(CandleDuration.OneHour), new ParquetSource(CandleDuration.OneMinute))
+        val oneMinuteSource = new ParquetSource(CandleDuration.OneMinute)
+        (
+          new ParquetSource(CandleDuration.OneHour), 
+          oneMinuteSource,
+          oneMinuteSource,
+        )
       case _ => 
         throw new IllegalArgumentException(s"$dataSource not supported.")
     }
@@ -76,13 +85,13 @@ object AppLauncher extends IOApp.Simple {
 
     // Load account brokers and data sources from configuration
     leadAccount = loadAccountBrokers()
-    (oneHourSource, oneMinuteSource) = loadDataSources()
+    (planningSource, preparingSource, tradingSource) = loadDataSources()
 
     // populate with PhaseRunner instances, using configured AccountBrokers for TradingPhase
     runners: Map[SystemStatePhase, PhaseRunner] = Map(
-      SystemStatePhase.Planning -> PlanningPhaseBuilder.build(oneHourSource),
-      SystemStatePhase.Preparing -> PreparingPhaseBuilder.build(oneMinuteSource),
-      SystemStatePhase.Trading -> TradingPhaseBuilder.build(leadAccount, oneMinuteSource)
+      SystemStatePhase.Planning -> PlanningPhaseBuilder.build(planningSource),
+      SystemStatePhase.Preparing -> PreparingPhaseBuilder.build(preparingSource),
+      SystemStatePhase.Trading -> TradingPhaseBuilder.build(leadAccount, tradingSource)
     )
     controller = new PhaseController(stateRef, eventStore, runners, sem)
     // Create report service
