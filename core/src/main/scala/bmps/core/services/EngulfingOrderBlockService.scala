@@ -45,14 +45,13 @@ object EngulfingOrderBlockService {
         require(order.entryType == EntryType.EngulfingOrderBlock, s"Called EngulfingOrderBlock.shouldPlace order with ${order.entryType}")
         
         //Use below for limit orders
-        // val orderIsReady = order.orderType match {
-        //     case OrderType.Long => candle.close >= order.entryPoint && candle.timestamp > order.timestamp
-        //     case OrderType.Short => candle.close <= order.entryPoint && candle.timestamp > order.timestamp
-        //     case _ => false
-        // }
+        val orderIsReady = order.orderType match {
+            case OrderType.Long => candle.close >= order.entryPoint && candle.timestamp > order.timestamp
+            case OrderType.Short => candle.close <= order.entryPoint && candle.timestamp > order.timestamp
+            case _ => false
+        }
         
         //Placing market order, so make sure we're within one tick either way of entry. 
-        val orderIsReady = math.abs(candle.close - order.entryPoint) <= 0.25 && candle.timestamp > order.timestamp
         val recentFailedOrder = recentEOBLossOrder(state.orders, candle)
 
         orderIsReady && !recentFailedOrder

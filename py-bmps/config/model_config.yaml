@@ -1,0 +1,42 @@
+# BMPS Model Configuration
+
+data:
+  data_dir: "data"
+  feature_dim: 69
+  label_dim: 194
+  validation_split: 0.2
+  random_seed: 42
+
+model:
+  # XGBoost parameters for multi-target regression/classification
+  n_estimators: 1000
+  max_depth: 6
+  learning_rate: 0.1
+  subsample: 0.8
+  colsample_bytree: 0.8
+  reg_alpha: 0.1
+  reg_lambda: 1.0
+  random_state: 42
+  n_jobs: -1
+  
+  # Multi-target strategy
+  strategy: "independent"  # Train separate model for each target
+  
+  # Probability calibration
+  calibration: true
+  calibration_method: "isotonic"  # or "sigmoid"
+
+training:
+  early_stopping_rounds: 50
+  eval_metric: "logloss"
+  verbose: 100
+  
+prediction:
+  # Threshold for considering a setup viable
+  default_threshold: 0.7
+  # Return top N setups above threshold
+  top_n_setups: 5
+
+paths:
+  model_dir: "models"
+  log_dir: "logs"

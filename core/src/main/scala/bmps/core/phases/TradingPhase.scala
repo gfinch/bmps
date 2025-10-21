@@ -19,7 +19,7 @@ import bmps.core.io.DatabentoSource
 import bmps.core.io.DataSource
 import bmps.core.utils.TimestampUtils
 
-class TradingEventGenerator(leadAccount: LeadAccountBroker, swingService: SwingService = new SwingService(1)) extends EventGenerator {
+class TradingEventGenerator(leadAccount: LeadAccountBroker, swingService: SwingService = new SwingService(3)) extends EventGenerator {
     require(leadAccount.brokerCount >= 1, "Must have at least one account broker defined.")
 
     def initialize(state: SystemState, options: Map[String, String] = Map.empty): SystemState = {
@@ -49,8 +49,7 @@ class TradingEventGenerator(leadAccount: LeadAccountBroker, swingService: SwingS
 
         //Order processing
         val withNewOrders = OrderService.buildOrders(withSwings)
-        val withAdjustedOrders = adjustOrderState(withNewOrders, candle)
-        val withOrders = placeOrders(withAdjustedOrders, candle)
+        val withOrders = adjustOrderState(withNewOrders, candle)
         
         //Event processing
         val newSwingPoints = withOrders.tradingSwingPoints.drop(state.tradingSwingPoints.length)

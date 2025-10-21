@@ -2,16 +2,17 @@ package bmps.core.services
 
 import bmps.core.models.SystemState
 import bmps.core.models.Candle
+import bmps.core.models.{OrderType, EntryType, Order, OrderStatus}
+import bmps.core.utils.TimestampUtils
+import java.time.{Instant, LocalTime}
+import bmps.core.brokers.LeadAccountBroker
 
 case class TradeOutcomeLabels(
     candleTimestamp: Long, // Trade happens after candle closes
-    long_xx_move_win: Boolean,
-    long_yy_move_win: Boolean,
-    long_zz_move_win: Boolean,
-    short_xx_move_win: Boolean,
-    short_yy_move_win: Boolean,
-    short_zz_move_win: Boolean
-)
+    winners: Seq[Boolean]
+) {
+  lazy val toLabelVector: Seq[Float] = winners.map(b => if (b) 1.0f else 0.0f)
+}
 
 case class MarketFeatures(
     // Current candle features
@@ -113,94 +114,98 @@ case class MarketFeatures(
 }
 
 object MarketFeatures {
+
+  lazy val stopLossTicks: Seq[Int] = (4 to 100).toSeq
+  lazy val orderTypes: Seq[OrderType] = Seq(OrderType.Long, OrderType.Short)
+  lazy val tradeOutcomLabelNames = stopLossTicks.flatMap { tick => 
+    orderTypes.map { orderType => s"${orderType}_$tick"}
+  }
   
   /** Get feature names in the same order as toFeatureVector */
-  def featureNames: Array[String] = Array(
-    // Candle OHLCV (5)
-    "candle_open",
-    "candle_high",
-    "candle_low",
-    "candle_close",
-    "candle_volume",
+  def featureNames: Array[String] = {
+    val baseFeatures = Array(
+      // Candle OHLCV (5)
+      "candle_open",
+      "candle_high", 
+      "candle_low",
+      "candle_close",
+      "candle_volume",
+      
+      // Candle structure (4)
+      "candle_body_ratio",
+      "candle_position_in_range",
+      "candle_upper_wick_ratio",
+      "candle_lower_wick_ratio",
+      
+      // Time features (2)
+      "minutes_since_open",
+      "minutes_until_close"
+    )
     
-    // Candle structure (4)
-    "candle_body_ratio",
-    "candle_position_in_range",
-    "candle_upper_wick_ratio",
-    "candle_lower_wick_ratio",
+    val timeComponents = Array("time_sin", "time_cos")
+    val previousCloses = (0 until 5).map(i => s"prev_close_${i}").toArray
+    val recentDirections = (0 until 3).map(i => s"recent_direction_${i}").toArray
+    val recentSizes = (0 until 3).map(i => s"recent_size_${i}").toArray
     
-    // Time features (2)
-    "minutes_since_open",
-    "minutes_until_close"
-  ) ++
-  // Time components (2)
-  Array("time_sin", "time_cos") ++
-  
-  // Previous 5 closes (5)
-  (0 until 5).map(i => s"prev_close_${i}").toArray ++
-  
-  // Recent candle directions (3)
-  (0 until 3).map(i => s"recent_direction_${i}").toArray ++
-  
-  // Recent candle sizes (3)
-  (0 until 3).map(i => s"recent_size_${i}").toArray ++
-  
-  // Ultra short momentum (3: 1, 2, 3 min)
-  Array("momentum_1min", "momentum_2min", "momentum_3min") ++
-  
-  // Short momentum (3: 5, 10, 15 min)
-  Array("momentum_5min", "momentum_10min", "momentum_15min") ++
-  
-  // Medium momentum (2: 30, 60 min)
-  Array("momentum_30min", "momentum_60min") ++
-  
-  // Momentum acceleration (3: 5, 10, 15 min)
-  Array("momentum_accel_5min", "momentum_accel_10min", "momentum_accel_15min") ++
-  
-  // Ultra short volatility (3: 5, 10, 15 min)
-  Array("volatility_5min", "volatility_10min", "volatility_15min") ++
-  
-  // Medium volatility (2: 30, 60 min)
-  Array("volatility_30min", "volatility_60min") ++
-  
-  // RSI (3: 7, 14, 30 min)
-  Array("rsi_7min", "rsi_14min", "rsi_30min") ++
-  
-  // Volume spikes (3: 5, 10, 20 min)
-  Array("volume_spike_5min", "volume_spike_10min", "volume_spike_20min") ++
-  
-  // Volume features (2)
-  Array("volume_trend", "relative_volume") ++
-  
-  // Price vs SMA (3: 10, 20, 60 min)
-  Array("price_vs_sma_10min", "price_vs_sma_20min", "price_vs_sma_60min") ++
-  
-  // Price vs EMA (3: 10, 20, 60 min)
-  Array("price_vs_ema_10min", "price_vs_ema_20min", "price_vs_ema_60min") ++
-  
-  // ATR (2: 7, 14 min)
-  Array("atr_7min", "atr_14min") ++
-  
-  // ATR percent (1)
-  Array("atr_percent") ++
-  
-  // Distance to recent high (3: 10, 30, 60 min)
-  Array("dist_to_high_10min", "dist_to_high_30min", "dist_to_high_60min") ++
-  
-  // Distance to recent low (3: 10, 30, 60 min)
-  Array("dist_to_low_10min", "dist_to_low_30min", "dist_to_low_60min") ++
-  
-  // Price percentile rank (3: 10, 30, 60 min)
-  Array("price_pctile_10min", "price_pctile_30min", "price_pctile_60min") ++
-  
-  // Trend alignment (3: 5vs15, 5vs30, 15vs60)
-  Array("trend_align_5_15", "trend_align_5_30", "trend_align_15_60")
+    val ultraShortMomentum = Array("momentum_1min", "momentum_2min", "momentum_3min")
+    val shortMomentum = Array("momentum_5min", "momentum_10min", "momentum_15min")
+    val mediumMomentum = Array("momentum_30min", "momentum_60min")
+    val momentumAccel = Array("momentum_accel_5min", "momentum_accel_10min", "momentum_accel_15min")
+    
+    val ultraShortVol = Array("volatility_5min", "volatility_10min", "volatility_15min")
+    val mediumVol = Array("volatility_30min", "volatility_60min")
+    
+    val rsi = Array("rsi_7min", "rsi_14min", "rsi_30min")
+    val volumeSpikes = Array("volume_spike_5min", "volume_spike_10min", "volume_spike_20min")
+    val volumeFeats = Array("volume_trend", "relative_volume")
+    
+    val priceSMA = Array("price_vs_sma_10min", "price_vs_sma_20min", "price_vs_sma_60min")
+    val priceEMA = Array("price_vs_ema_10min", "price_vs_ema_20min", "price_vs_ema_60min")
+    
+    val atr = Array("atr_7min", "atr_14min")
+    val atrPercent = Array("atr_percent")
+    
+    val distHigh = Array("dist_to_high_10min", "dist_to_high_30min", "dist_to_high_60min")
+    val distLow = Array("dist_to_low_10min", "dist_to_low_30min", "dist_to_low_60min")
+    val pricePercentile = Array("price_pctile_10min", "price_pctile_30min", "price_pctile_60min")
+    val trendAlign = Array("trend_align_5_15", "trend_align_5_30", "trend_align_15_60")
+    
+    baseFeatures ++ timeComponents ++ previousCloses ++ recentDirections ++ recentSizes ++
+    ultraShortMomentum ++ shortMomentum ++ mediumMomentum ++ momentumAccel ++
+    ultraShortVol ++ mediumVol ++ rsi ++ volumeSpikes ++ volumeFeats ++
+    priceSMA ++ priceEMA ++ atr ++ atrPercent ++
+    distHigh ++ distLow ++ pricePercentile ++ trendAlign
+  }
 }
 
-class MarketFeaturesService() {
+class MarketFeaturesService(leadAccount: LeadAccountBroker, lagCandles: Int = 20) {
 
-  def computeMarketFeatures(state: SystemState, candle: Candle): (MarketFeatures, SystemState) = {
-    val candles = state.tradingCandles
+  def computeLabels(state: SystemState): TradeOutcomeLabels = {
+    require(state.contractSymbol.nonEmpty, "SystemState does not contain a base contract.")
+    val contract = state.contractSymbol.get
+    val futureCandles = state.tradingCandles.takeRight(lagCandles + 1)
+    val (candle, candles) = (futureCandles.head, futureCandles.tail)
+
+    val stopLosses = MarketFeatures.stopLossTicks
+    val orders = stopLosses.flatMap { ticks => 
+      val entry = candle.close
+      MarketFeatures.orderTypes.map { orderType =>
+        Order.fromLevelAndTicks(entry, ticks, orderType, EntryType.XGBoostOrderBlock, candle.timestamp, contract)
+          .copy(status = OrderStatus.Placed, placedTimestamp = Some(candles.head.timestamp))
+      }
+    }
+
+    val finalOrders = candles.foldLeft(orders) { (orders, nextCandle) =>
+      orders.map(o => leadAccount.updateOrderStatus(o, candle))
+    }
+    
+    val outcomes = finalOrders.map(o => if (o.status == OrderStatus.Profit) true else false)
+    TradeOutcomeLabels(candle.timestamp, outcomes)
+  }
+
+  def computeMarketFeatures(state: SystemState): MarketFeatures = {
+    val candles = state.tradingCandles.dropRight(lagCandles)
+    val candle = candles.last
     
     // Horizon definitions optimized for minute candles
     val ultraShortHorizons = Seq(1, 2, 3)
@@ -266,7 +271,7 @@ class MarketFeaturesService() {
       // Trend alignment
       trendAlignment = computeTrendAlignment(candles, Seq((5, 15), (5, 30), (15, 60)))
     )
-    (features, state)
+    features
   }
 
   private def computeMomentum(candles: Seq[Candle], horizons: Seq[Int]): Seq[Float] = {
@@ -289,9 +294,12 @@ class MarketFeaturesService() {
 
     horizons.map { n =>
       val window = logReturns.takeRight(n)
-      val mean = window.sum / window.size
-      val variance = window.map(r => math.pow(r - mean, 2)).sum / window.size
-      math.sqrt(variance).toFloat
+      if (window.isEmpty) 0.0f
+      else {
+        val mean = window.sum / window.size
+        val variance = window.map(r => math.pow(r - mean, 2)).sum / window.size
+        math.sqrt(variance).toFloat
+      }
     }
   }
 
@@ -318,7 +326,8 @@ class MarketFeaturesService() {
       val avgLoss = lossesSum / n.toDouble
 
       val rsi =
-        if (avgLoss == 0.0) 100.0
+        if (avgLoss == 0.0 && avgGain == 0.0) 50.0 // flat series -> neutral
+        else if (avgLoss == 0.0) 100.0
         else if (avgGain == 0.0) 0.0
         else {
           val rs = avgGain / avgLoss
@@ -453,7 +462,7 @@ class MarketFeaturesService() {
 
   // Time components: encode time of day cyclically
   private def computeTimeComponents(candle: Candle): Seq[Float] = {
-    val time = candle.timestamp.toLocalTime
+    val time = Instant.ofEpochMilli(candle.timestamp).atZone(TimestampUtils.NewYorkZone).toLocalTime
     val minuteOfDay = time.getHour * 60 + time.getMinute
     
     // Encode as sin/cos for cyclical nature (0-1440 minutes in a day)
@@ -497,15 +506,15 @@ class MarketFeaturesService() {
 
   // Time-of-day features (assumes US market hours: 9:30 AM - 4:00 PM ET)
   private def computeMinutesSinceOpen(candle: Candle): Float = {
-    val time = candle.timestamp.toLocalTime
-    val marketOpen = java.time.LocalTime.of(9, 30)
+    val time = Instant.ofEpochMilli(candle.timestamp).atZone(TimestampUtils.NewYorkZone).toLocalTime
+    val marketOpen = LocalTime.of(9, 30)
     val minutesSinceOpen = java.time.Duration.between(marketOpen, time).toMinutes
     minutesSinceOpen.toFloat
   }
 
   private def computeMinutesUntilClose(candle: Candle): Float = {
-    val time = candle.timestamp.toLocalTime
-    val marketClose = java.time.LocalTime.of(16, 0)
+    val time = Instant.ofEpochMilli(candle.timestamp).atZone(TimestampUtils.NewYorkZone).toLocalTime
+    val marketClose = LocalTime.of(16, 0)
     val minutesUntilClose = java.time.Duration.between(time, marketClose).toMinutes
     minutesUntilClose.toFloat
   }
@@ -555,7 +564,7 @@ class MarketFeaturesService() {
     // Simple linear regression slope
     val indices = (0 until volumes.length).map(_.toDouble)
     val meanX = indices.sum / indices.length
-    val meanY = volumes.sum / volumes.length
+    val meanY = volumes.sum / volumes.length.toDouble
     
     val numerator = indices.zip(volumes).map { case (x, y) => (x - meanX) * (y - meanY) }.sum
     val denominator = indices.map(x => math.pow(x - meanX, 2)).sum
@@ -569,10 +578,10 @@ class MarketFeaturesService() {
     if (candles.length < n + 1) return 1.0f
     
     val recentVolumes = candles.takeRight(n + 1).init  // exclude current candle
-    val avgVolume = if (recentVolumes.isEmpty) 1.0 else recentVolumes.map(_.volume).sum / recentVolumes.length.toDouble
+    val avgVolume = if (recentVolumes.isEmpty) 1.0 else recentVolumes.map(_.volume.toDouble).sum / recentVolumes.length.toDouble
     
     if (avgVolume == 0.0) 1.0f
-    else (candles.last.volume / avgVolume).toFloat
+    else (candles.last.volume.toDouble / avgVolume).toFloat
   }
 
   // ATR as percentage of current price
@@ -593,9 +602,11 @@ class MarketFeaturesService() {
     val currentPrice = candles.last.close
     
     horizons.map { n =>
-      if (candles.length < n) return 0.0f
-      val recentHigh = candles.takeRight(n).map(_.high).max
-      ((currentPrice - recentHigh) / recentHigh).toFloat
+      if (candles.length < n) 0.0f
+      else {
+        val recentHigh = candles.takeRight(n).map(_.high).max
+        ((currentPrice - recentHigh) / recentHigh).toFloat
+      }
     }
   }
 
@@ -605,9 +616,11 @@ class MarketFeaturesService() {
     val currentPrice = candles.last.close
     
     horizons.map { n =>
-      if (candles.length < n) return 0.0f
-      val recentLow = candles.takeRight(n).map(_.low).min
-      ((currentPrice - recentLow) / recentLow).toFloat
+      if (candles.length < n) 0.0f
+      else {
+        val recentLow = candles.takeRight(n).map(_.low).min
+        ((currentPrice - recentLow) / recentLow).toFloat
+      }
     }
   }
 
@@ -618,12 +631,13 @@ class MarketFeaturesService() {
     val currentPrice = candles.last.close
     
     horizons.map { n =>
-      if (candles.length < n) return 0.5f
-      
-      val recentPrices = candles.takeRight(n).map(_.close)
-      val belowCurrent = recentPrices.count(_ <= currentPrice)
-      
-      (belowCurrent.toFloat / recentPrices.length.toFloat)
+      if (candles.length < n) 0.5f
+      else {
+        val recentPrices = candles.takeRight(n).map(_.close)
+        val belowCurrent = recentPrices.count(_ <= currentPrice)
+        
+        (belowCurrent.toFloat / recentPrices.length.toFloat)
+      }
     }
   }
 
@@ -632,15 +646,16 @@ class MarketFeaturesService() {
     if (candles.isEmpty) return Seq.fill(horizonPairs.length)(0.0f)
     
     horizonPairs.map { case (short, long) =>
-      if (candles.length <= long) return 0.0f
-      
-      val shortMom = computeMomentum(candles, Seq(short)).head
-      val longMom = computeMomentum(candles, Seq(long)).head
-      
-      // Return 1.0 if both positive, -1.0 if both negative, 0.0 if misaligned
-      if (shortMom > 0 && longMom > 0) 1.0f
-      else if (shortMom < 0 && longMom < 0) -1.0f
-      else 0.0f
+      if (candles.length <= long) 0.0f
+      else {
+        val shortMom = computeMomentum(candles, Seq(short)).head
+        val longMom = computeMomentum(candles, Seq(long)).head
+        
+        // Return 1.0 if both positive, -1.0 if both negative, 0.0 if misaligned
+        if (shortMom > 0 && longMom > 0) 1.0f
+        else if (shortMom < 0 && longMom < 0) -1.0f
+        else 0.0f
+      }
     }
   }
 }
