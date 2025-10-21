@@ -48,10 +48,11 @@ class ParquetSource(duration: CandleDuration) extends DataSource {
       val high = rs.getDouble("high").toFloat
       val low = rs.getDouble("low").toFloat
       val close = rs.getDouble("close").toFloat
+      val volume = rs.getLong("volume")
       val duration = timeframeToDuration(timeframe)
       val createdAt = Instant.now().toEpochMilli
       
-      Candle(open, high, low, close, epochMillis, duration, createdAt)
+      Candle(open, high, low, close, volume, epochMillis, duration, createdAt)
     }
 
     val qIO = buildQuery(startMs, endMs)

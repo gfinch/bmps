@@ -39,6 +39,7 @@ case class Candle(
     high: Float,
     low: Float,
     close: Float,
+    volume: Long,
     timestamp: Long,
     duration: CandleDuration,
     createdAt: Long
@@ -79,6 +80,7 @@ case class Candle(
             Seq(previous.high, high).max,
             Seq(previous.low, low).min,
             close,
+            previous.volume + volume,
             previous.timestamp,
             CandleDuration.TwoMinute,
             Seq(previous.createdAt, createdAt).max

@@ -1,0 +1,45 @@
+# BMPS Model API Docker Compose
+# 
+# This runs both the Scala core app and Python model API together.
+# The services can communicate via internal Docker network.
+
+version: '3.8'
+
+services:
+  # Python ML Model API
+  bmps-model-api:
+    build:
+      context: ./py-bmps
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8001"  # Model API on port 8001
+    environment:
+      - PYTHONPATH=/app
+    volumes:
+      - ./py-bmps:/app
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - bmps-network
+
+  # Scala Core App (assuming you have this containerized)
+  bmps-core:
+    build:
+      context: .
+      dockerfile: Dockerfile  # Your existing Scala Dockerfile
+    ports:
+      - "8000:8000"  # Core app on port 8000
+    environment:
+      - MODEL_API_URL=http://bmps-model-api:8001
+    depends_on:
+      bmps-model-api:
+        condition: service_healthy
+    networks:
+      - bmps-network
+
+networks:
+  bmps-network:
+    driver: bridge

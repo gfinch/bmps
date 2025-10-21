@@ -16,6 +16,9 @@ class PhaseController(
     semaphore: Semaphore[IO]
 ) {
 
+  /** Get access to the state reference for external use */
+  def getStateRef(): IO[Ref[IO, SystemState]] = IO.pure(stateRef)
+
   /** Start the requested phase. The runner will process candles and sink events
     * to the EventStore. On successful completion the canonical stateRef is 
     * replaced with the final state.

@@ -127,7 +127,7 @@ class DatabentoSource(durations: Set[CandleDuration]) extends DataSource {
    * Fetch historical candles using the HTTP REST API for dates before today.
    */
   private def fetchHistoricalCandlesStream(startMs: Long, endMs: Long): Stream[IO, Candle] = {
-    schemas.filterNot(_ == "ohlcv-1s").map { schema => 
+    schemas.map { schema => 
       Stream.eval(fetchHistoricalCandles(schema, startMs, endMs)).flatMap(Stream.emits)
     }.reduce(_ ++ _)
   }
@@ -229,6 +229,7 @@ class DatabentoSource(durations: Set[CandleDuration]) extends DataSource {
       val highPattern = """"high":"?([0-9.]+)"?""".r
       val lowPattern = """"low":"?([0-9.]+)"?""".r
       val closePattern = """"close":"?([0-9.]+)"?""".r
+      val volumePattern = """"volume":"?(\d+)"?""".r
       
       // ts_event can be in root (historical) or nested in hd object (live)
       val tsEventRootPattern = """"ts_event":"?(\d+)"?""".r
@@ -243,6 +244,7 @@ class DatabentoSource(durations: Set[CandleDuration]) extends DataSource {
         highRaw <- highPattern.findFirstMatchIn(jsonLine).map(_.group(1).toDouble)
         lowRaw <- lowPattern.findFirstMatchIn(jsonLine).map(_.group(1).toDouble)
         closeRaw <- closePattern.findFirstMatchIn(jsonLine).map(_.group(1).toDouble)
+        volume <- volumePattern.findFirstMatchIn(jsonLine).map(_.group(1).toLong)
         tsEventNanos <- tsEventHdPattern.findFirstMatchIn(jsonLine).map(_.group(1).toLong)
                         .orElse(tsEventRootPattern.findFirstMatchIn(jsonLine).map(_.group(1).toLong))
         tsOutNanos <- tsOutPattern.findFirstMatchIn(jsonLine).map(_.group(1).toLong)
@@ -269,9 +271,10 @@ class DatabentoSource(durations: Set[CandleDuration]) extends DataSource {
           high = high.toFloat,
           low = low.toFloat,
           close = close.toFloat,
+          volume = volume,
           timestamp = timestampMs,
           duration = candleDuration,
-          currentTimestampMs
+          createdAt = currentTimestampMs
         )
       }
     } catch {

@@ -5,7 +5,7 @@
 
 const API_URL = 'https://bmps.misfortunesheir.com'
 const BACKTEST_API_URL = 'https://bmps.misfortunesheir.com:444'
-// const API_URL = 'http://localhost:8081'
+const LOCAL_URL = 'http://localhost:8081'
 
 /**
  * REST API Service for phase management
@@ -22,7 +22,8 @@ class RestApiService {
    */
   getApiUrl(tradingDate) {
     const today = new Date().toISOString().split('T')[0]
-    return tradingDate === today ? API_URL : BACKTEST_API_URL
+    // return tradingDate === today ? API_URL : BACKTEST_API_URL
+    return LOCAL_URL
   }
 
   /**

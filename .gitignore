@@ -14,3 +14,17 @@ target/
 
 .DS_Store
 .env
+
+# Python ML training data (large files)
+py-bmps/data/
+py-bmps/models/
+py-bmps/__pycache__/
+py-bmps/src/__pycache__/
+__pycache__/
+*.pyc
+*.pyo
+venv/
+
+# Temporary files
+*.tmp
+*.parquet

@@ -31,6 +31,7 @@ object EntryType {
     case object MarketStructureShiftOrderBlock extends EntryType
     case object SupermanOrderBlock extends EntryType
     case object JediOrderBlock extends EntryType
+    case object XGBoostOrderBlock extends EntryType
 }
 
 object CancelReason {
@@ -115,6 +116,19 @@ object Order {
             case OrderType.Short => Order(firstCandle.high, secondCandle.high, timestamp, orderType, entryType, contract)
             case OrderType.Long => Order(secondCandle.low, firstCandle.low, timestamp, orderType, entryType, contract)
         }        
+    }
+
+    def fromLevelAndTicks(level: Float, ticks: Int, orderType: OrderType, entryType: EntryType, timestamp: Long, contract: String) = {
+        orderType match {
+            case OrderType.Long =>
+                val low = level - (ticks * 0.25f)
+                val high = level
+                Order(low, high, timestamp, orderType, entryType, contract)
+            case OrderType.Short =>
+                val low = level
+                val high = level + (ticks * 0.25f)
+                Order(low, high, timestamp, orderType, entryType, contract)
+        }
     }
 }
 
