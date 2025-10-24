@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  bmps-combined:
+    build:
+      context: .
+      dockerfile: Dockerfile.combined
+    image: bmps-combined:latest
+    container_name: bmps-combined
+    ports:
+      # REST API port for external access
+      - "${BMPS_PORT:-8081}:${BMPS_PORT:-8081}"
+      # Python API port (optional, for debugging)
+      - "8001:8001"
+    environment:
+      # Application configuration
+      - BMPS_PORT=${BMPS_PORT:-8081}
+      - BMPS_READ_ONLY_MODE=${BMPS_READ_ONLY_MODE:-false}
+      
+      # Data source API keys (required)
+      - DATABENTO_KEY=${DATABENTO_KEY}
+      
+      # Tradovate broker credentials (if using TradovateBroker)
+      - TRADOVATE_PASS=${TRADOVATE_PASS:-}
+      - TRADOVATE_KEY=${TRADOVATE_KEY:-}
+      - TRADOVATE_DEVICE=${TRADOVATE_DEVICE:-}
+    volumes:
+      # Mount custom application.conf if needed
+      - ./core/src/main/resources/application.conf:/app/application.conf:ro
+      
+      # Optional: Mount data directory for parquet files
+      # - ./data:/app/data:ro
+      
+      # Optional: Mount model files if they're not baked into the image
+      - ./py-bmps/models:/app/py-bmps/models:ro
+      - ./py-bmps/config:/app/py-bmps/config:ro
+    networks:
+      - bmps-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health", "&&", "curl", "-f", "http://localhost:${BMPS_PORT:-8081}/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  bmps-network:
+    driver: bridge

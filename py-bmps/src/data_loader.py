@@ -93,6 +93,7 @@ class BMPSDataLoader:
     def process_features_and_labels(self, df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
         """
         Process feature_vector and label_vector columns into numpy arrays.
+        Uses only the first label_dim targets from the full label vector.
         
         Args:
             df: Raw DataFrame with string-encoded vectors
@@ -101,6 +102,7 @@ class BMPSDataLoader:
             Tuple of (features, labels) as numpy arrays
         """
         logger.info("Processing feature and label vectors...")
+        logger.info(f"Using only first {self.label_dim} targets out of full label vector")
         
         n_samples = len(df)
         features = np.zeros((n_samples, self.feature_dim), dtype=np.float32)
@@ -118,10 +120,13 @@ class BMPSDataLoader:
                     raise ValueError(f"Expected {self.feature_dim} features, got {len(feature_vec)}")
                 features[j] = feature_vec
                 
-                label_vec = self.parse_vector_string(df.iloc[j]['label_vector'])
-                if len(label_vec) != self.label_dim:
-                    raise ValueError(f"Expected {self.label_dim} labels, got {len(label_vec)}")
-                labels[j] = label_vec
+                # Parse full label vector but only use first label_dim targets
+                full_label_vec = self.parse_vector_string(df.iloc[j]['label_vector'])
+                if len(full_label_vec) < self.label_dim:
+                    raise ValueError(f"Label vector has {len(full_label_vec)} targets, need at least {self.label_dim}")
+                
+                # Use only the first label_dim targets
+                labels[j] = full_label_vec[:self.label_dim]
             
             if (i // batch_size + 1) % 10 == 0:
                 logger.info(f"Processed {end_idx}/{n_samples} samples")
@@ -151,8 +156,10 @@ class BMPSDataLoader:
     
     def get_data_stats(self, features: np.ndarray, labels: np.ndarray) -> dict:
         """Get statistics about the dataset."""
-        # Convert labels to binary (any non-zero value is positive)
-        positive_labels = (labels > 0).any(axis=1).sum()
+        # Calculate statistics for regression labels
+        positive_labels = (labels > 0).sum()
+        negative_labels = (labels < 0).sum()
+        zero_labels = (labels == 0).sum()
         
         stats = {
             'n_samples': len(features),
@@ -162,11 +169,16 @@ class BMPSDataLoader:
             'feature_std': float(np.std(features)),
             'feature_min': float(np.min(features)),
             'feature_max': float(np.max(features)),
-            'positive_samples': int(positive_labels),
-            'positive_rate': float(positive_labels / len(features)),
             'label_mean': float(np.mean(labels)),
             'label_std': float(np.std(labels)),
-            'label_nonzero_rate': float(np.mean(labels != 0))
+            'label_min': float(np.min(labels)),
+            'label_max': float(np.max(labels)),
+            'positive_labels': int(positive_labels),
+            'negative_labels': int(negative_labels),
+            'zero_labels': int(zero_labels),
+            'positive_rate': float(positive_labels / labels.size),
+            'negative_rate': float(negative_labels / labels.size),
+            'zero_rate': float(zero_labels / labels.size)
         }
         
         return stats

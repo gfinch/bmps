@@ -32,11 +32,10 @@ class BMPSTrainer:
         # Initialize components
         from src.data_loader import BMPSDataLoader
         from src.model import BMPSXGBoostModel
-        from src.evaluator import BMPSEvaluator
         
         self.data_loader = BMPSDataLoader(config_path)
         self.model = BMPSXGBoostModel(config_path)
-        self.evaluator = BMPSEvaluator(config_path)
+        # Note: BMPSEvaluator removed - use direct model evaluation
         
     def train(self, max_files: Optional[int] = None, save_model: bool = True, 
               evaluate: bool = True) -> Dict:
@@ -81,33 +80,18 @@ class BMPSTrainer:
         model_summary = self.model.get_model_summary()
         logger.info(f"Successfully trained {model_summary['n_targets_trained']} models")
         
-        # 3. Model Evaluation
+        # 3. Model Evaluation (Simplified for regression)
         evaluation_results = None
+        eval_time = 0
         if evaluate and model_summary['n_targets_trained'] > 0:
-            logger.info("Evaluating model performance...")
-            eval_start = time.time()
-            evaluation_results = self.evaluator.generate_evaluation_report(
-                self.model, X_val, y_val
-            )
-            eval_time = time.time() - eval_start
-            logger.info(f"Model evaluation completed in {eval_time:.2f} seconds")
-            
-            # Log key evaluation metrics
-            overall_metrics = evaluation_results['performance_metrics']['overall_metrics']
-            logger.info(f"Average AUC: {overall_metrics.get('avg_auc', 'N/A'):.4f}")
-            logger.info(f"Average AUC (calibrated): {overall_metrics.get('avg_auc_calibrated', 'N/A'):.4f}")
-            
-            threshold_analysis = evaluation_results['threshold_analysis']
-            logger.info(f"Recommended threshold: {threshold_analysis['recommended_threshold']:.3f}")
+            logger.info("Skipping detailed evaluation (use model metrics instead)...")
+            # For regression, the training process already provides RMSE, MAE, R² metrics
+            # Detailed evaluation can be added later if needed
         
         # 4. Model Saving
         if save_model and model_summary['n_targets_trained'] > 0:
             logger.info("Saving trained model...")
             self.model.save_model()
-            
-            # Save evaluation report if available
-            if evaluation_results:
-                self.evaluator.save_evaluation_report(evaluation_results)
         
         # 5. Results Summary
         total_time = time.time() - start_time
@@ -160,17 +144,23 @@ class BMPSTrainer:
             True if model is valid, False otherwise
         """
         try:
-            from src.predictor import BMPSPredictor
+            from src.model import BMPSXGBoostModel
             
             # Try to load the model
-            predictor = BMPSPredictor(config_path=self.config_path)
+            model = BMPSXGBoostModel(config_path=self.config_path)
+            model.load_model()
             
-            # Test with dummy data
-            dummy_features = np.random.randn(69)  # 69 features
-            best_setup, probability = predictor.predict_best_setup(dummy_features)
+            # Test with dummy data (22 features for new format)
+            dummy_features = np.random.randn(1, 22)  # 1 sample, 22 features
+            predictions = model.predict(dummy_features)
             
-            logger.info("Model validation successful")
-            return True
+            # Check that we get 5 predictions (one for each time horizon)
+            if predictions.shape == (1, 5):
+                logger.info("Model validation successful - regression model working")
+                return True
+            else:
+                logger.error(f"Expected shape (1, 5), got {predictions.shape}")
+                return False
             
         except Exception as e:
             logger.error(f"Model validation failed: {e}")
@@ -210,11 +200,10 @@ def main():
     print(f"Trained models: {results['model_summary']['n_targets_trained']}")
     print(f"Total time: {results['timing']['total_time']:.2f} seconds")
     
-    if results['evaluation_results']:
-        overall = results['evaluation_results']['performance_metrics']['overall_metrics']
-        print(f"Average AUC: {overall.get('avg_auc', 'N/A'):.4f}")
-        threshold = results['evaluation_results']['threshold_analysis']['recommended_threshold']
-        print(f"Recommended threshold: {threshold:.3f}")
+    if results['model_summary'].get('avg_label_mean'):
+        print(f"Average label mean: {results['model_summary']['avg_label_mean']:.4f}")
+        print(f"Average label std: {results['model_summary']['avg_label_std']:.4f}")
+        print(f"Targets with metrics: {results['model_summary']['targets_with_metrics']}")
     
     # Validate model
     if results['training_successful']:

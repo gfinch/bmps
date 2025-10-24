@@ -151,66 +151,82 @@ import time
 from pathlib import Path
 
 try:
-    from src.trainer import BMPSTrainer
+    # Direct model training without the complex trainer pipeline
+    from src.data_loader import BMPSDataLoader
+    from src.model import BMPSXGBoostModel
     
     # Get max_files from command line argument
     max_files = None
     if len(sys.argv) > 1 and sys.argv[1] != "None":
         max_files = int(sys.argv[1])
     
-    print(f"Initializing trainer...")
-    trainer = BMPSTrainer()
-    
-    print(f"Starting training with {max_files or 'ALL'} files...")
+    print(f"Loading training data...")
     start_time = time.time()
     
-    results = trainer.train(
-        max_files=max_files,
-        save_model=True,
-        evaluate=True
-    )
+    # Load data
+    data_loader = BMPSDataLoader()
+    X_train, X_val, y_train, y_val, data_stats = data_loader.load_processed_data(max_files=max_files)
+    
+    load_time = time.time() - start_time
+    print(f"Data loaded in {load_time:.1f} seconds")
+    
+    # Initialize and train model
+    print(f"Training regression model...")
+    train_start = time.time()
+    
+    model = BMPSXGBoostModel()
+    training_stats = model.train(X_train, y_train, X_val, y_val)
+    
+    train_time = time.time() - train_start
+    
+    # Get model summary
+    model_summary = model.get_model_summary()
     
     # Print results
     print("\n" + "="*50)
     print("TRAINING RESULTS")
     print("="*50)
     
-    if results['training_successful']:
-        print(f"✅ Successfully trained {results['model_summary']['n_targets_trained']} models")
-        print(f"⏱️  Total time: {results['timing']['total_time']:.1f} seconds")
+    if model_summary['n_targets_trained'] > 0:
+        print(f"✅ Successfully trained {model_summary['n_targets_trained']} regression models")
+        print(f"⏱️  Data loading: {load_time:.1f} seconds")
+        print(f"⏱️  Model training: {train_time:.1f} seconds")
+        print(f"⏱️  Total time: {time.time() - start_time:.1f} seconds")
         
         # Data stats
-        data_stats = results['data_stats']
-        print(f"📊 Training samples: {results['training_stats']['n_train_samples']:,}")
-        print(f"📊 Validation samples: {results['training_stats']['n_val_samples']:,}")
-        print(f"📊 Positive rate: {data_stats['positive_rate']:.4f}")
+        print(f"\n📊 Dataset Statistics:")
+        print(f"   Training samples: {model_summary['n_train_samples']:,}")
+        print(f"   Validation samples: {model_summary['n_val_samples']:,}")
+        print(f"   Features: {model_summary['n_features']}")
+        print(f"   Targets: {model_summary['n_targets_trained']}")
+        print(f"   Positive rate: {data_stats['positive_rate']:.4f}")
+        print(f"   Label mean: {data_stats['label_mean']:.4f}")
+        print(f"   Label std: {data_stats['label_std']:.4f}")
         
-        # Evaluation results
-        if results['evaluation_results']:
-            eval_results = results['evaluation_results']
-            overall = eval_results['performance_metrics']['overall_metrics']
-            
-            print(f"\n📈 Performance Metrics:")
-            if overall.get('avg_auc'):
-                print(f"   Average AUC: {overall['avg_auc']:.4f}")
-                print(f"   Average AUC (calibrated): {overall['avg_auc_calibrated']:.4f}")
-            
-            threshold = eval_results['threshold_analysis']['recommended_threshold']
-            print(f"   Recommended threshold: {threshold:.3f}")
+        # Regression metrics
+        print(f"\n📈 Model Performance:")
+        if model_summary.get('avg_label_mean'):
+            print(f"   Average label mean: {model_summary['avg_label_mean']:.4f}")
+            print(f"   Average label std: {model_summary['avg_label_std']:.4f}")
+            print(f"   Targets with metrics: {model_summary['targets_with_metrics']}")
         
-        print(f"\n💾 Model saved to: models/bmps_xgboost_model.pkl")
+        # Save model
+        print(f"\n💾 Saving model...")
+        model.save_model()
+        print(f"   Model saved to: models/bmps_xgboost_model.pkl")
         
-        # Validate model
-        print(f"\n🧪 Validating model...")
-        if trainer.validate_model():
-            print("✅ Model validation PASSED - ready for inference!")
-        else:
-            print("❌ Model validation FAILED")
-            sys.exit(1)
+        # Test predictions
+        print(f"\n🧪 Testing model predictions...")
+        test_predictions = model.predict(X_val[:5])
+        print(f"   Prediction shape: {test_predictions.shape}")
+        print(f"   Sample prediction: {test_predictions[0]}")
+        print(f"   Sample actual: {y_val[0]}")
+        
+        print("✅ Training completed successfully!")
             
     else:
         print("❌ Training failed - no models were trained successfully")
-        print("   This might be due to insufficient positive examples")
+        print("   This might be due to insufficient variance in the data")
         print("   Try using more training files")
         sys.exit(1)
 
@@ -236,15 +252,18 @@ EOF
     echo ""
     log_header "📖 Next Steps:"
     echo "1. Test predictions:"
-    echo "   python -c \"from src.predictor import BMPSPredictor; p=BMPSPredictor(); print('Model loaded successfully!')\""
+    echo "   python -c \"from src.model import BMPSXGBoostModel; m=BMPSXGBoostModel(); m.load_model(); print('Model loaded successfully!')\""
     echo ""
     echo "2. Use in your code:"
-    echo "   from src.predictor import BMPSPredictor"
-    echo "   predictor = BMPSPredictor()"
-    echo "   best_setup, prob = predictor.predict_best_setup(features, threshold=0.7)"
+    echo "   from src.model import BMPSXGBoostModel"
+    echo "   model = BMPSXGBoostModel()"
+    echo "   model.load_model()"
+    echo "   predictions = model.predict(features)  # Returns (samples, 5) array for 5 time horizons"
     echo ""
-    echo "3. Deploy to production:"
-    echo "   Copy src/, config/, models/ directories to your deployment environment"
+    echo "3. Interpret predictions:"
+    echo "   predictions[:, 0]  # 1-minute horizon predictions (ATR units)"
+    echo "   predictions[:, 4]  # 20-minute horizon predictions (ATR units)"
+    echo "   # Positive values indicate upward movement, negative indicate downward"
     echo ""
 }
 

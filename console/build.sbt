@@ -17,3 +17,6 @@ libraryDependencies ++= Seq(
 
 // Set main class for running
 Compile / mainClass := Some("bmps.console.TrainingDatasetApp")
+
+// Fork to avoid threading issues
+Compile / run / fork := true

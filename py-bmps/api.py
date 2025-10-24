@@ -1,8 +1,11 @@
 """
-BMPS Model API Server
+BMPS Model API Server (Regression Version)
 
-FastAPI server for serving XGBoost model predictions.
+FastAPI server for serving XGBoost regression model predictions.
 Designed for internal communication with the BMPS Scala core.
+
+New model predicts continuous price movements (in ATR units) for multiple time horizons:
+- 1 minute, 2 minutes, 5 minutes, 10 minutes, 20 minutes
 """
 
 import logging
@@ -11,30 +14,44 @@ from typing import List, Optional, Dict, Any
 from pathlib import Path
 from contextlib import asynccontextmanager
 
+import numpy as np
+import yaml
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 import uvicorn
 
-from src.predictor import BMPSPredictor
+from src.model import BMPSXGBoostModel
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Global predictor instance
-predictor: Optional[BMPSPredictor] = None
+# Load configuration
+with open("config/model_config.yaml", 'r') as f:
+    config = yaml.safe_load(f)
+
+# Get model dimensions from config
+n_features = config['data']['feature_dim']  # 22 features
+n_targets = config['data']['label_dim']     # 5 time horizons
+
+# Time horizon labels
+TIME_HORIZONS = ["1min", "2min", "5min", "10min", "20min"]
+
+# Global model instance
+model: Optional[BMPSXGBoostModel] = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Handle startup and shutdown events."""
     # Startup
-    global predictor
+    global model
     try:
-        logger.info("Loading BMPS predictor...")
-        predictor = BMPSPredictor()
-        logger.info("Model loaded successfully!")
+        logger.info("Loading BMPS regression model...")
+        model = BMPSXGBoostModel()
+        model.load_model()
+        logger.info(f"Model loaded successfully! Features: {n_features}, Targets: {n_targets}")
     except Exception as e:
         logger.error(f"Failed to load model: {e}")
         raise
@@ -64,33 +81,18 @@ app.add_middleware(
 
 
 # Request/Response models
-class PredictionRequest(BaseModel):
-    """Request model for single prediction."""
-    features: List[float] = Field(..., description="69 technical features", min_length=69, max_length=69)
-    threshold: float = Field(0.7, description="Minimum probability threshold", ge=0.0, le=1.0)
+class PointPredictionRequest(BaseModel):
+    """Request model for predictions with ATR conversion to points."""
+    features: List[float] = Field(..., description="22 ATR-normalized technical features", min_length=22, max_length=22)
+    atr_value: float = Field(..., description="Current ATR value in points for conversion", gt=0.0)
 
-
-class BatchPredictionRequest(BaseModel):
-    """Request model for batch predictions."""
-    features_batch: List[List[float]] = Field(..., description="Batch of feature arrays")
-    threshold: float = Field(0.7, description="Minimum probability threshold", ge=0.0, le=1.0)
-    top_k: int = Field(5, description="Number of top setups to return", ge=1, le=10)
-
-
-class PredictionResponse(BaseModel):
-    """Response model for single prediction."""
-    best_setup: Optional[int] = Field(description="Best setup ID (0-193) or null if none above threshold")
-    probability: Optional[float] = Field(description="Probability of success for best setup")
-    setup_name: Optional[str] = Field(description="Human-readable setup name")
-    confidence: str = Field(description="Confidence level: low/medium/high")
+class PointPredictionResponse(BaseModel):
+    """Response model for point-based predictions."""
+    predictions_atr: List[float] = Field(description=f"Predicted price movements for {TIME_HORIZONS} (ATR units)")
+    predictions_points: List[float] = Field(description=f"Predicted price movements for {TIME_HORIZONS} (price points)")
+    time_horizons: List[str] = Field(default=TIME_HORIZONS, description="Time horizon labels")
     inference_time_ms: float = Field(description="Time taken for inference in milliseconds")
     
-
-class BatchPredictionResponse(BaseModel):
-    """Response model for batch predictions."""
-    predictions: List[PredictionResponse] = Field(description="List of predictions")
-    total_inference_time_ms: float = Field(description="Total time for batch inference")
-
 
 class HealthResponse(BaseModel):
     """Health check response."""
@@ -103,289 +105,82 @@ class HealthResponse(BaseModel):
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
     """Health check endpoint."""
-    if predictor is None:
+    if model is None:
         raise HTTPException(status_code=503, detail="Model not loaded")
     
     # Quick inference test
     try:
         start_time = time.time()
-        # Test with dummy features
-        test_features = [0.0] * 69
-        predictor.predict_best_setup(test_features, threshold=0.9)  # High threshold so no result expected
+        # Test with dummy features (22 features for new model)
+        test_features = np.random.randn(1, 22)
+        predictions = model.predict(test_features)
         inference_time = (time.time() - start_time) * 1000
         
-        return HealthResponse(
-            status="healthy",
-            model_loaded=True,
-            inference_time_ms=inference_time
-        )
-    except Exception as e:
-        logger.error(f"Health check failed: {e}")
-        return HealthResponse(
-            status="unhealthy",
-            model_loaded=True,
-            inference_time_ms=None
-        )
-
-
-# Startup event
-@app.on_event("startup")
-async def startup_event():
-    """Load the model on startup."""
-    global predictor
-    try:
-        logger.info("Loading BMPS predictor...")
-        predictor = BMPSPredictor()
-        logger.info("Model loaded successfully!")
-    except Exception as e:
-        logger.error(f"Failed to load model: {e}")
-        raise
-
-
-# Health check endpoint
-@app.get("/health", response_model=HealthResponse)
-async def health_check():
-    """Health check endpoint."""
-    if predictor is None:
-        raise HTTPException(status_code=503, detail="Model not loaded")
-    
-    # Quick inference test
-    try:
-        start_time = time.time()
-        # Test with dummy features
-        test_features = [0.0] * 69
-        predictor.predict_best_setup(test_features, threshold=0.9)  # High threshold so no result expected
-        inference_time = (time.time() - start_time) * 1000
-        
-        return HealthResponse(
-            status="healthy",
-            model_loaded=True,
-            inference_time_ms=inference_time
-        )
-    except Exception as e:
-        logger.error(f"Health check failed: {e}")
-        return HealthResponse(
-            status="unhealthy",
-            model_loaded=True,
-            inference_time_ms=None
-        )
-
-
-# Single prediction endpoint
-@app.post("/predict", response_model=PredictionResponse)
-async def predict_best_setup(request: PredictionRequest):
-    """
-    Predict the best trading setup for given features.
-    
-    Returns the setup with highest probability above the threshold.
-    """
-    if predictor is None:
-        raise HTTPException(status_code=503, detail="Model not loaded")
-    
-    try:
-        start_time = time.time()
-        
-        # Make prediction
-        best_setup, probability = predictor.predict_best_setup(
-            features=request.features,
-            threshold=request.threshold
-        )
-        
-        inference_time = (time.time() - start_time) * 1000
-        
-        # Determine confidence level
-        if probability is None:
-            confidence = "none"
-        elif probability < 0.6:
-            confidence = "low"
-        elif probability < 0.8:
-            confidence = "medium"
-        else:
-            confidence = "high"
-        
-        # Get setup name (if available)
-        setup_name = None
-        if best_setup is not None:
-            # Convert setup index back to (order_type, stop_loss_ticks) format
-            # stopLossTicks: (4 to 100) = 97 values
-            # orderTypes: [Long, Short] = 2 values  
-            # Total: 97 * 2 = 194 setups
-            # Index mapping: Long_4=0, Short_4=1, Long_5=2, Short_5=3, ...
-            stop_loss_ticks = list(range(4, 101))  # 4 to 100 inclusive
-            order_types = ["Long", "Short"]
-            
-            tick_index = best_setup // 2  # Which stop loss tick (0-96)
-            order_type_index = best_setup % 2  # Which order type (0=Long, 1=Short)
-            
-            if tick_index < len(stop_loss_ticks):
-                tick = stop_loss_ticks[tick_index]
-                order_type = order_types[order_type_index]
-                setup_name = f"{order_type}_{tick}"
-        
-        return PredictionResponse(
-            best_setup=best_setup,
-            probability=probability,
-            setup_name=setup_name,
-            confidence=confidence,
-            inference_time_ms=inference_time
-        )
-        
-    except Exception as e:
-        logger.error(f"Prediction failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
-
-
-# Batch prediction endpoint
-@app.post("/predict/batch", response_model=BatchPredictionResponse)
-async def predict_batch(request: BatchPredictionRequest):
-    """
-    Predict best setups for a batch of feature arrays.
-    
-    More efficient than multiple single predictions.
-    """
-    if predictor is None:
-        raise HTTPException(status_code=503, detail="Model not loaded")
-    
-    try:
-        start_time = time.time()
-        predictions = []
-        
-        for features in request.features_batch:
-            if len(features) != 69:
-                raise HTTPException(
-                    status_code=400, 
-                    detail=f"Each feature array must have exactly 69 elements, got {len(features)}"
-                )
-            
-            pred_start = time.time()
-            best_setup, probability = predictor.predict_best_setup(
-                features=features,
-                threshold=request.threshold
+        # Verify we get the expected output shape
+        if predictions.shape == (1, 5):
+            return HealthResponse(
+                status="healthy",
+                model_loaded=True,
+                inference_time_ms=inference_time
             )
-            pred_time = (time.time() - pred_start) * 1000
+        else:
+            raise ValueError(f"Unexpected prediction shape: {predictions.shape}")
             
-            # Determine confidence
-            if probability is None:
-                confidence = "none"
-            elif probability < 0.6:
-                confidence = "low"
-            elif probability < 0.8:
-                confidence = "medium"
-            else:
-                confidence = "high"
-            
-            setup_name = None
-            if best_setup is not None:
-                # Convert setup index back to (order_type, stop_loss_ticks) format
-                stop_loss_ticks = list(range(4, 101))  # 4 to 100 inclusive
-                order_types = ["Long", "Short"]
-                
-                tick_index = best_setup // 2  # Which stop loss tick (0-96)
-                order_type_index = best_setup % 2  # Which order type (0=Long, 1=Short)
-                
-                if tick_index < len(stop_loss_ticks):
-                    tick = stop_loss_ticks[tick_index]
-                    order_type = order_types[order_type_index]
-                    setup_name = f"{order_type}_{tick}"
-            
-            predictions.append(PredictionResponse(
-                best_setup=best_setup,
-                probability=probability,
-                setup_name=setup_name,
-                confidence=confidence,
-                inference_time_ms=pred_time
-            ))
-        
-        total_time = (time.time() - start_time) * 1000
-        
-        return BatchPredictionResponse(
-            predictions=predictions,
-            total_inference_time_ms=total_time
-        )
-        
     except Exception as e:
-        logger.error(f"Batch prediction failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Batch prediction failed: {str(e)}")
+        logger.error(f"Health check failed: {e}")
+        return HealthResponse(
+            status="unhealthy",
+            model_loaded=True,
+            inference_time_ms=None
+        )
 
-
-# Top setups endpoint
-@app.post("/predict/top")
-async def predict_top_setups(request: PredictionRequest):
+# Point-based predictions endpoint
+@app.post("/predictedPointMoves", response_model=PointPredictionResponse)
+async def predict_point_moves(request: PointPredictionRequest):
     """
-    Get top N setups above threshold with their probabilities.
+    Predict price movements converted from ATR units to actual price points.
+    
+    Takes ATR-normalized features and an ATR value, returns predictions in both 
+    ATR units and converted price points for all time horizons.
     """
-    if predictor is None:
+    if model is None:
         raise HTTPException(status_code=503, detail="Model not loaded")
     
     try:
         start_time = time.time()
         
-        top_setups = predictor.predict_top_setups(
-            features=request.features,
-            threshold=request.threshold,
-            top_k=5
-        )
+        # Convert features list to numpy array (add batch dimension)
+        features_array = np.array(request.features).reshape(1, -1)
+        
+        # Make prediction in ATR units
+        predictions = model.predict(features_array)
+        pred_atr = predictions[0].tolist()  # ATR units
+        
+        # Convert to price points
+        pred_points = [atr_val * request.atr_value for atr_val in pred_atr]
         
         inference_time = (time.time() - start_time) * 1000
+
+        # Log prediction results
+        logger.info(f"ATR Predictions: {pred_atr}")
+        logger.info(f"Point Predictions: {pred_points}")
         
-        results = []
-        for setup_id, prob in top_setups:
-            # Convert setup index back to (order_type, stop_loss_ticks) format
-            stop_loss_ticks = list(range(4, 101))  # 4 to 100 inclusive  
-            order_types = ["Long", "Short"]
-            
-            tick_index = setup_id // 2  # Which stop loss tick (0-96)
-            order_type_index = setup_id % 2  # Which order type (0=Long, 1=Short)
-            
-            setup_name = f"Setup_{setup_id:03d}"  # fallback
-            if tick_index < len(stop_loss_ticks):
-                tick = stop_loss_ticks[tick_index]
-                order_type = order_types[order_type_index]
-                setup_name = f"{order_type}_{tick}"
-            
-            results.append({
-                "setup": setup_id,
-                "probability": prob,
-                "setup_name": setup_name
-            })
-        
-        return {
-            "top_setups": results,
-            "count": len(results),
-            "inference_time_ms": inference_time
-        }
+        return PointPredictionResponse(
+            predictions_atr=[round(p, 4) for p in pred_atr],
+            predictions_points=[round(p, 4) for p in pred_points],
+            time_horizons=TIME_HORIZONS,
+            inference_time_ms=round(inference_time, 2)
+        )
         
     except Exception as e:
-        logger.error(f"Top setups prediction failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
-
-
-# Model info endpoint
-@app.get("/model/info")
-async def model_info():
-    """Get information about the loaded model."""
-    if predictor is None:
-        raise HTTPException(status_code=503, detail="Model not loaded")
-    
-    try:
-        model_summary = predictor.get_model_summary()
-        return {
-            "model_type": "XGBoost Multi-Target",
-            "n_features": 69,
-            "n_targets": 194,
-            "model_summary": model_summary,
-            "api_version": "1.0.0"
-        }
-    except Exception as e:
-        logger.error(f"Failed to get model info: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get model info: {str(e)}")
-
+        logger.error(f"Point prediction failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Point prediction failed: {str(e)}")
 
 if __name__ == "__main__":
     # Run the API server
     uvicorn.run(
         "api:app",
-        host="127.0.0.1",  # Only accessible locally
+        host="0.0.0.0",  # Accessible from anywhere in container
         port=8001,  # Different from your main app (probably 8000)
         reload=False,  # Set to True for development
         log_level="info"
