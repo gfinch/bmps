@@ -3,6 +3,7 @@ package bmps.core.models
 sealed trait OrderStatus
 object OrderStatus {
     case object Planned extends OrderStatus
+    case object PlaceNow extends OrderStatus
     case object Placed extends OrderStatus
     case object Filled extends OrderStatus
     case object Profit extends OrderStatus
@@ -123,11 +124,11 @@ object Order {
             case OrderType.Long =>
                 val low = level - (ticks * 0.25f)
                 val high = level
-                Order(low, high, timestamp, orderType, entryType, contract)
+                Order(low, high, timestamp, orderType, entryType, contract, OrderStatus.PlaceNow)
             case OrderType.Short =>
                 val low = level
                 val high = level + (ticks * 0.25f)
-                Order(low, high, timestamp, orderType, entryType, contract)
+                Order(low, high, timestamp, orderType, entryType, contract, OrderStatus.PlaceNow)
         }
     }
 }

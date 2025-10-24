@@ -2,8 +2,8 @@
 
 data:
   data_dir: "data"
-  feature_dim: 69
-  label_dim: 194
+  feature_dim: 22  # New ATR-normalized features from MarketFeaturesService
+  label_dim: 5    # New regression labels for 1,2,5,10,20 minute horizons
   validation_split: 0.2
   random_seed: 42
 
@@ -22,20 +22,21 @@ model:
   # Multi-target strategy
   strategy: "independent"  # Train separate model for each target
   
-  # Probability calibration
-  calibration: true
-  calibration_method: "isotonic"  # or "sigmoid"
+  # Calibration not applicable for regression
+  calibration: false
 
 training:
   early_stopping_rounds: 50
-  eval_metric: "logloss"
+  eval_metric: "rmse"  # Root Mean Squared Error for regression
   verbose: 100
+  min_variance_threshold: 1e-6  # Minimum variance required for training
   
 prediction:
-  # Threshold for considering a setup viable
-  default_threshold: 0.7
-  # Return top N setups above threshold
-  top_n_setups: 5
+  # Thresholds for regression predictions (in ATR units)
+  strong_signal_threshold: 1.0   # Strong directional signal
+  weak_signal_threshold: 0.5     # Weak directional signal
+  # Return predictions for all 5 time horizons
+  return_all_horizons: true
 
 paths:
   model_dir: "models"

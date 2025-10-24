@@ -1,0 +1,70 @@
+# Combined Multi-stage build for BMPS Core + Python API
+
+# Stage 1: Build the Scala application with sbt
+FROM sbtscala/scala-sbt:eclipse-temurin-17.0.15_6_1.11.7_3.7.3 AS scala-builder
+
+WORKDIR /app
+
+# Copy project files
+COPY project project
+COPY build.sbt .
+COPY core core
+
+# Build the application
+RUN sbt "core/assembly"
+
+# Stage 2: Final runtime image with both Python and Java
+FROM eclipse-temurin:17-jre-jammy
+
+WORKDIR /app
+
+# Install Python 3.11 and curl
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        python3.11 \
+        python3.11-venv \
+        python3-pip \
+        curl && \
+    rm -rf /var/lib/apt/lists/*
+
+# Create Python virtual environment
+RUN python3.11 -m venv /app/venv
+ENV PATH="/app/venv/bin:$PATH"
+
+# Copy Python requirements and install dependencies
+COPY py-bmps/requirements.txt /app/py-bmps/requirements.txt
+RUN /app/venv/bin/pip install --no-cache-dir -r /app/py-bmps/requirements.txt
+
+# Copy Python application code
+COPY py-bmps /app/py-bmps
+
+# Copy the assembled JAR from builder stage
+COPY --from=scala-builder /app/core/target/scala-2.13/bmps-core-assembly-*.jar /app/bmps-core.jar
+
+# Copy application configuration
+COPY core/src/main/resources/application.conf /app/application.conf
+
+# Copy startup script
+COPY start.sh /app/start.sh
+
+# Create a non-root user to run the applications
+RUN groupadd -r bmps && useradd -r -g bmps bmps && \
+    chown -R bmps:bmps /app && \
+    chmod +x /app/start.sh
+
+# Switch to non-root user
+USER bmps
+
+# Expose both ports
+EXPOSE 8001 8081
+
+# Set default environment variables
+ENV BMPS_PORT=8081 \
+    BMPS_READ_ONLY_MODE=false
+
+# Health check that validates both services
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+  CMD curl -f http://localhost:8001/health && curl -f http://localhost:${BMPS_PORT}/health || exit 1
+
+# Start both services
+CMD ["/app/start.sh"]

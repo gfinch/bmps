@@ -20,22 +20,81 @@
 
 set -e  # Exit on any error
 
+# Configuration (set defaults before parsing arguments)
+OUTPUT_DIR="/tmp/training_datasets"
+CONSOLE_PROJECT="console"
+LAG_MINUTES=20
+CLEAN_OUTPUT=false  # Set to true to clean existing data before generation
+START_YEAR=2020     # Default start year
+END_YEAR=2025       # Default end year
+
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --clean)
+            CLEAN_OUTPUT=true
+            shift
+            ;;
+        --year=*)
+            # Parse single year or year range
+            year_arg="${1#*=}"
+            if [[ "$year_arg" == *"-"* ]]; then
+                # Year range like --year=2020-2022
+                START_YEAR=$(echo "$year_arg" | cut -d'-' -f1)
+                END_YEAR=$(echo "$year_arg" | cut -d'-' -f2)
+            else
+                # Single year like --year=2020
+                START_YEAR="$year_arg"
+                END_YEAR="$year_arg"
+            fi
+            shift
+            ;;
+        --help|-h)
+            echo "Usage: $0 [OPTIONS]"
+            echo ""
+            echo "Options:"
+            echo "  --clean           Clean existing training data before generation"
+            echo "  --year=YYYY       Process single year (e.g., --year=2020)"
+            echo "  --year=YYYY-YYYY  Process year range (e.g., --year=2020-2022)"
+            echo "  --help            Show this help message"
+            echo ""
+            echo "This script generates training datasets with strategic validation holdouts."
+            echo "Sequential processing ensures reliability and proper error handling."
+            echo ""
+            echo "Examples:"
+            echo "  $0 --clean                    # Process all years (2020-2025)"
+            echo "  $0 --year=2020               # Process only 2020"
+            echo "  $0 --year=2020-2022          # Process 2020, 2021, 2022"
+            echo ""
+            echo "For parallel processing, run multiple instances:"
+            echo "  $0 --year=2020 &"
+            echo "  $0 --year=2021 &"
+            echo "  $0 --year=2022 &"
+            echo "  wait  # Wait for all to complete"
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1"
+            echo "Use --help for usage information"
+            exit 1
+            ;;
+    esac
+done
+
 # Signal handling for graceful shutdown
 cleanup() {
-    log_warning "Received interrupt signal. Stopping after current month completes..."
+    log_warning "Received interrupt signal. Stopping after current batch completes..."
     STOP_PROCESSING=true
     
-    # If we get a second interrupt, exit immediately
-    trap 'log_error "Force quit! Exiting immediately..."; exit 130' SIGINT SIGTERM
+    # Clean up any result files from concurrent processing
+    rm -f /tmp/bmps_generation_*_job*.log.result 2>/dev/null
+    
+    # If we get a second interrupt, kill all background jobs and exit immediately
+    trap 'log_error "Force quit! Killing background jobs and exiting..."; pkill -P $$; exit 130' SIGINT SIGTERM
 }
 
 # Trap signals (Ctrl+C = SIGINT, kill = SIGTERM)
 trap cleanup SIGINT SIGTERM
-
-# Configuration
-OUTPUT_DIR="/tmp/training_datasets"
-CONSOLE_PROJECT="console"
-LAG_MINUTES=20
 
 # Colors for output
 RED='\033[0;31m'
@@ -61,6 +120,38 @@ log_error() {
     echo -e "${RED}[$(date +'%Y-%m-%d %H:%M:%S')] ✗${NC} $1"
 }
 
+# Handle clean output option
+if [ "$CLEAN_OUTPUT" = true ] && [ -d "$OUTPUT_DIR" ]; then
+    if [ "$START_YEAR" = "2020" ] && [ "$END_YEAR" = "2025" ]; then
+        # Full range requested - clean everything
+        existing_size=$(du -sh "$OUTPUT_DIR" 2>/dev/null | cut -f1 || echo "Unknown")
+        existing_files=$(find "$OUTPUT_DIR" -name "*.parquet" -type f 2>/dev/null | wc -l)
+        log_warning "CLEAN_OUTPUT=true - Removing ALL existing training data..."
+        log_warning "  Removing: $existing_files parquet files ($existing_size)"
+        rm -rf "$OUTPUT_DIR"
+        log_success "✓ Cleaned entire output directory: $OUTPUT_DIR"
+    else
+        # Specific year(s) requested - clean only those years
+        log_warning "CLEAN_OUTPUT=true - Removing data for years $START_YEAR-$END_YEAR only..."
+        total_removed=0
+        for year in $(seq $START_YEAR $END_YEAR); do
+            for month in $(seq 1 12); do
+                year_month_dir="$OUTPUT_DIR/$year-$(printf '%02d' $month)"
+                if [ -d "$year_month_dir" ]; then
+                    files_in_dir=$(find "$year_month_dir" -name "*.parquet" -type f 2>/dev/null | wc -l)
+                    total_removed=$((total_removed + files_in_dir))
+                    rm -rf "$year_month_dir"
+                    log_warning "  Removed: $year_month_dir ($files_in_dir files)"
+                fi
+            done
+        done
+        log_success "✓ Cleaned $total_removed files for years $START_YEAR-$END_YEAR"
+    fi
+    echo ""
+elif [ "$CLEAN_OUTPUT" = true ]; then
+    log "CLEAN_OUTPUT=true but no existing data found to clean"
+fi
+
 # Create output directory and progress tracking
 mkdir -p "$OUTPUT_DIR"
 PROGRESS_FILE="$OUTPUT_DIR/.generation_progress"
@@ -68,6 +159,9 @@ PROGRESS_FILE="$OUTPUT_DIR/.generation_progress"
 log "Starting BMPS Training Dataset Generation"
 log "Output directory: $OUTPUT_DIR"
 log "Lag minutes: $LAG_MINUTES"
+log "Clean mode: $CLEAN_OUTPUT"
+log "Processing years: $START_YEAR to $END_YEAR"
+log "Processing: Sequential (reliable and resumable)"
 echo ""
 log_warning "To gracefully stop this script:"
 log_warning "  1st Ctrl+C: Stops after current month completes"
@@ -183,6 +277,8 @@ has_completed_days() {
     return 1
 }
 
+
+
 # Function to process a single month
 process_month() {
     local year=$1
@@ -221,8 +317,11 @@ process_month() {
     # Create month directory
     mkdir -p "$output_subdir"
     
-    # Iterate through each day in the month
+    # Process days sequentially (concurrent version was too complex)
     local last_day=$(get_last_day_of_month $year $month)
+    
+    log "    Processing $last_day days sequentially..."
+    
     for day in $(seq 1 $last_day); do
         local current_date=$(printf "%04d-%02d-%02d" $year $month $day)
         
@@ -280,14 +379,17 @@ failed_months=0
 existing_days=0
 existing_files=$(find "$OUTPUT_DIR" -name "*.parquet" -type f 2>/dev/null | wc -l)
 
-log "Processing data from January 2020 to October 2025..."
+log "Processing data from $START_YEAR to $END_YEAR..."
 if [ $existing_files -gt 0 ]; then
-    log_success "RESUME MODE: Found $existing_files existing parquet files - will skip completed days"
+    if [ "$CLEAN_OUTPUT" = false ]; then
+        log_success "RESUME MODE: Found $existing_files existing parquet files - will skip completed days"
+        log_warning "NOTE: If you've updated MarketFeaturesService, consider using --clean to regenerate with new features"
+    fi
 fi
 echo ""
 
 # Process each year and month
-for year in {2020..2025}; do
+for year in $(seq $START_YEAR $END_YEAR); do
     # Determine month range
     if [ $year -eq 2025 ]; then
         # Only process through October 2025

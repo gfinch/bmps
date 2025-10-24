@@ -11,6 +11,7 @@ from typing import Dict, List, Optional, Tuple, Any
 import numpy as np
 import xgboost as xgb
 from sklearn.calibration import CalibratedClassifierCV
+from sklearn.preprocessing import RobustScaler
 from sklearn.multioutput import MultiOutputRegressor
 from sklearn.metrics import log_loss, roc_auc_score
 import yaml
@@ -24,8 +25,8 @@ class BMPSXGBoostModel:
     """
     Multi-target XGBoost model for BMPS trading setup prediction.
     
-    This model predicts probabilities for 194 different trading setups
-    using 69 technical features.
+    This model predicts probabilities for multiple trading setups
+    using 69 technical features. The number of targets is configurable.
     """
     
     def __init__(self, config_path: str = "config/model_config.yaml"):
@@ -35,16 +36,21 @@ class BMPSXGBoostModel:
         
         self.model_config = self.config['model']
         self.training_config = self.config['training']
+        self.data_config = self.config['data']
         self.model_dir = Path(self.config['paths']['model_dir'])
         self.model_dir.mkdir(exist_ok=True)
+        
+        # Get number of targets from config
+        self.n_targets = self.data_config['label_dim']
         
         # Model components
         self.models: Dict[int, Any] = {}  # One model per target
         self.calibrated_models: Dict[int, Any] = {}  # Calibrated versions
+        self.feature_scaler: Optional[RobustScaler] = None  # Feature scaler
         self.feature_importance: Optional[np.ndarray] = None
         self.training_stats: Dict = {}
         
-        # Initialize base XGBoost parameters
+        # Initialize base XGBoost parameters for regression
         self.xgb_params = {
             'n_estimators': self.model_config['n_estimators'],
             'max_depth': self.model_config['max_depth'],
@@ -55,32 +61,63 @@ class BMPSXGBoostModel:
             'reg_lambda': self.model_config['reg_lambda'],
             'random_state': self.model_config['random_state'],
             'n_jobs': self.model_config['n_jobs'],
-            'objective': 'binary:logistic',  # For probability output
-            'eval_metric': 'logloss'
+            'objective': 'reg:squarederror',  # For regression
+            'eval_metric': 'rmse'
         }
     
+    def preprocess_features(self, X: np.ndarray, fit_scaler: bool = True) -> np.ndarray:
+        """
+        Preprocess features with scaling and cleaning.
+        
+        Args:
+            X: Raw features
+            fit_scaler: Whether to fit the scaler (True for training, False for inference)
+            
+        Returns:
+            Scaled and cleaned features
+        """
+        # Handle missing values and infinities
+        X_clean = np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0)
+        
+        # Initialize scaler if needed (RobustScaler is better for outliers than StandardScaler)
+        if self.feature_scaler is None:
+            self.feature_scaler = RobustScaler()
+        
+        # Fit and transform (training) or just transform (inference)
+        if fit_scaler:
+            X_scaled = self.feature_scaler.fit_transform(X_clean)
+            logger.info(f"Fitted feature scaler on {X.shape[1]} features")
+        else:
+            X_scaled = self.feature_scaler.transform(X_clean)
+        
+        return X_scaled
+
     def preprocess_labels(self, y: np.ndarray) -> np.ndarray:
         """
-        Preprocess labels to binary classification format.
+        Preprocess labels for regression.
         
-        Convert continuous labels to binary (0/1) based on whether
-        they indicate a profitable setup.
+        The new labels are already continuous regression targets
+        representing future price movements in ATR units.
         
         Args:
             y: Label array of shape (n_samples, n_targets)
             
         Returns:
-            Binary label array
+            Cleaned label array (handle NaNs and infinities)
         """
-        # For now, treat any positive value as success (1), others as failure (0)
-        # This can be adjusted based on domain knowledge
-        return (y > 0).astype(int)
+        # Handle missing values and infinities
+        y_clean = np.nan_to_num(y, nan=0.0, posinf=10.0, neginf=-10.0)
+        
+        # Optional: clip extreme values to reasonable range (e.g., ±5 ATR units)
+        y_clipped = np.clip(y_clean, -5.0, 5.0)
+        
+        return y_clipped
     
     def train_single_target(self, X_train: np.ndarray, y_train: np.ndarray, 
                            X_val: np.ndarray, y_val: np.ndarray, 
-                           target_idx: int) -> Tuple[xgb.XGBClassifier, Dict]:
+                           target_idx: int) -> Tuple[xgb.XGBRegressor, Dict]:
         """
-        Train XGBoost model for a single target.
+        Train XGBoost regression model for a single target.
         
         Args:
             X_train: Training features
@@ -92,44 +129,39 @@ class BMPSXGBoostModel:
         Returns:
             Tuple of (trained_model, training_stats)
         """
-        # Check for class imbalance
-        pos_rate = np.mean(y_train)
+        from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
         
-        # Adjust parameters for highly imbalanced data
+        # Use base regression parameters
         params = self.xgb_params.copy()
-        if pos_rate < 0.01:  # Less than 1% positive
-            # Increase scale_pos_weight to handle imbalance
-            params['scale_pos_weight'] = max(1, int(1.0 / pos_rate))
         
-        # Create model
-        model = xgb.XGBClassifier(**params)
+        # Create regression model
+        model = xgb.XGBRegressor(**params)
         
         # Simple training without early stopping for now 
-        # (will add it back with proper callback syntax later)
         model.fit(X_train, y_train, verbose=False)
         
-        # Calculate validation metrics
-        val_pred_proba = model.predict_proba(X_val)[:, 1] if len(np.unique(y_val)) > 1 else np.zeros_like(y_val)
+        # Calculate validation predictions and metrics
+        val_pred = model.predict(X_val)
         
         stats = {
             'target_idx': target_idx,
-            'positive_rate': float(pos_rate),
             'n_samples': len(y_train),
-            'n_positive': int(np.sum(y_train)),
+            'label_mean': float(np.mean(y_train)),
+            'label_std': float(np.std(y_train)),
+            'label_min': float(np.min(y_train)),
+            'label_max': float(np.max(y_train))
         }
         
-        # Add metrics if we have both classes in validation
-        if len(np.unique(y_val)) > 1 and np.sum(y_val) > 0:
-            try:
-                stats['val_logloss'] = float(log_loss(y_val, val_pred_proba))
-                stats['val_auc'] = float(roc_auc_score(y_val, val_pred_proba))
-            except Exception as e:
-                logger.warning(f"Could not calculate metrics for target {target_idx}: {e}")
-                stats['val_logloss'] = None
-                stats['val_auc'] = None
-        else:
-            stats['val_logloss'] = None
-            stats['val_auc'] = None
+        # Add regression metrics
+        try:
+            stats['val_rmse'] = float(np.sqrt(mean_squared_error(y_val, val_pred)))
+            stats['val_mae'] = float(mean_absolute_error(y_val, val_pred))
+            stats['val_r2'] = float(r2_score(y_val, val_pred))
+        except Exception as e:
+            logger.warning(f"Could not calculate metrics for target {target_idx}: {e}")
+            stats['val_rmse'] = None
+            stats['val_mae'] = None
+            stats['val_r2'] = None
             
         return model, stats
     
@@ -149,37 +181,40 @@ class BMPSXGBoostModel:
         """
         logger.info("Starting multi-target XGBoost training...")
         
-        # Preprocess labels
-        y_train_binary = self.preprocess_labels(y_train)
-        y_val_binary = self.preprocess_labels(y_val)
+        # Preprocess features (scale and clean)
+        X_train_processed = self.preprocess_features(X_train, fit_scaler=True)
+        X_val_processed = self.preprocess_features(X_val, fit_scaler=False)
         
-        n_targets = y_train_binary.shape[1]
-        logger.info(f"Training {n_targets} individual models...")
+        # Preprocess labels (for regression)
+        y_train_processed = self.preprocess_labels(y_train)
+        y_val_processed = self.preprocess_labels(y_val)
+        
+        n_targets = y_train_processed.shape[1]
+        logger.info(f"Training {n_targets} individual regression models...")
         
         self.training_stats = {
             'n_targets': n_targets,
-            'n_features': X_train.shape[1],
-            'n_train_samples': X_train.shape[0],
-            'n_val_samples': X_val.shape[0],
+            'n_features': X_train_processed.shape[1],
+            'n_train_samples': X_train_processed.shape[0],
+            'n_val_samples': X_val_processed.shape[0],
             'target_stats': []
         }
         
         # Train each target independently
         for target_idx in range(n_targets):
-            if target_idx % 20 == 0:
-                logger.info(f"Training target {target_idx + 1}/{n_targets}")
+            logger.info(f"Training target {target_idx + 1}/{n_targets}")
                 
-            y_target_train = y_train_binary[:, target_idx]
-            y_target_val = y_val_binary[:, target_idx]
+            y_target_train = y_train_processed[:, target_idx]
+            y_target_val = y_val_processed[:, target_idx]
             
-            # Skip targets with no positive examples
-            if np.sum(y_target_train) == 0:
-                logger.warning(f"Target {target_idx} has no positive examples, skipping")
+            # Skip targets with insufficient variance (constant values)
+            if np.std(y_target_train) < 1e-6:
+                logger.warning(f"Target {target_idx} has no variance (std={np.std(y_target_train)}), skipping")
                 continue
             
             try:
                 model, stats = self.train_single_target(
-                    X_train, y_target_train, X_val, y_target_val, target_idx
+                    X_train_processed, y_target_train, X_val_processed, y_target_val, target_idx
                 )
                 self.models[target_idx] = model
                 self.training_stats['target_stats'].append(stats)
@@ -193,9 +228,8 @@ class BMPSXGBoostModel:
         # Calculate feature importance (average across all models)
         self._calculate_feature_importance()
         
-        # Apply calibration if requested
-        if self.model_config.get('calibration', False):
-            self._calibrate_models(X_val, y_val_binary)
+        # Note: Calibration not applicable for regression models
+        # Skip calibration for regression targets
         
         return self.training_stats
     
@@ -232,35 +266,34 @@ class BMPSXGBoostModel:
         
         logger.info(f"Calibrated {len(self.calibrated_models)} models")
     
-    def predict_probabilities(self, X: np.ndarray, use_calibrated: bool = True) -> np.ndarray:
+    def predict(self, X: np.ndarray) -> np.ndarray:
         """
-        Predict probabilities for all targets.
+        Predict regression values for all targets.
         
         Args:
             X: Features of shape (n_samples, n_features)
-            use_calibrated: Whether to use calibrated models
             
         Returns:
-            Probability array of shape (n_samples, n_targets)
+            Prediction array of shape (n_samples, n_targets)
         """
-        n_samples = X.shape[0]
-        n_targets = len(self.models)
-        probabilities = np.zeros((n_samples, 194))  # Full 194 targets
+        # Preprocess features using the same scaler as training
+        X_processed = self.preprocess_features(X, fit_scaler=False)
         
-        models_to_use = self.calibrated_models if use_calibrated and self.calibrated_models else self.models
+        n_samples = X_processed.shape[0]
+        predictions = np.zeros((n_samples, self.n_targets))
         
-        for target_idx, model in models_to_use.items():
+        for target_idx, model in self.models.items():
+            if target_idx >= self.n_targets:  # Skip any targets beyond our configured limit
+                continue
+                
             try:
-                proba = model.predict_proba(X)
-                if proba.shape[1] > 1:  # Binary classification with 2 classes
-                    probabilities[:, target_idx] = proba[:, 1]  # Probability of positive class
-                else:  # Only one class present during training
-                    probabilities[:, target_idx] = 0.0
+                pred = model.predict(X_processed)
+                predictions[:, target_idx] = pred
             except Exception as e:
                 logger.warning(f"Failed to predict for target {target_idx}: {e}")
-                probabilities[:, target_idx] = 0.0
+                predictions[:, target_idx] = 0.0
         
-        return probabilities
+        return predictions
     
     def save_model(self, model_path: Optional[str] = None):
         """Save the trained model and metadata."""
@@ -270,6 +303,7 @@ class BMPSXGBoostModel:
         model_data = {
             'models': self.models,
             'calibrated_models': self.calibrated_models,
+            'feature_scaler': self.feature_scaler,
             'feature_importance': self.feature_importance,
             'training_stats': self.training_stats,
             'config': self.config
@@ -290,6 +324,7 @@ class BMPSXGBoostModel:
         
         self.models = model_data['models']
         self.calibrated_models = model_data['calibrated_models']
+        self.feature_scaler = model_data.get('feature_scaler')  # Handle backward compatibility
         self.feature_importance = model_data['feature_importance']
         self.training_stats = model_data['training_stats']
         
@@ -312,8 +347,9 @@ class BMPSXGBoostModel:
         if self.training_stats['target_stats']:
             target_stats = self.training_stats['target_stats']
             summary.update({
-                'avg_positive_rate': np.mean([s['positive_rate'] for s in target_stats]),
-                'targets_with_metrics': len([s for s in target_stats if s['val_auc'] is not None])
+                'avg_label_mean': np.mean([s['label_mean'] for s in target_stats]),
+                'avg_label_std': np.mean([s['label_std'] for s in target_stats]),
+                'targets_with_metrics': len([s for s in target_stats if s['val_rmse'] is not None])
             })
         
         return summary
@@ -325,9 +361,9 @@ if __name__ == "__main__":
     sys.path.append('.')
     from src.data_loader import BMPSDataLoader
     
-    # Load a small dataset for testing
+    # Load a larger dataset for better testing
     loader = BMPSDataLoader()
-    X_train, X_val, y_train, y_val, stats = loader.load_processed_data(max_files=2)
+    X_train, X_val, y_train, y_val, stats = loader.load_processed_data(max_files=20)  # Use 20 files instead of 2
     
     # Initialize and train model
     model = BMPSXGBoostModel()
@@ -337,6 +373,7 @@ if __name__ == "__main__":
     print(f"Model summary: {model.get_model_summary()}")
     
     # Test prediction
-    probas = model.predict_probabilities(X_val[:5])
-    print(f"Sample predictions shape: {probas.shape}")
-    print(f"Sample prediction (first 5 targets): {probas[0, :5]}")
+    predictions = model.predict(X_val[:5])
+    print(f"Sample predictions shape: {predictions.shape}")
+    print(f"Sample prediction (all targets): {predictions[0]}")
+    print(f"Sample actual labels: {y_val[0]}")

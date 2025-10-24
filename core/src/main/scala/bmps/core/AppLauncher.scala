@@ -27,10 +27,19 @@ import bmps.core.io.ParquetSource
 import bmps.core.utils.MarketCalendar
 import com.typesafe.config.Config
 import bmps.core.utils.MarketCalendar
+import bmps.core.brokers.rest.XGBoostModelBroker
+import bmps.core.services.OrderService
+import bmps.core.services.MarketFeaturesService
+import bmps.core.services.AIOrderBlockService
 
 object AppLauncher extends IOApp.Simple {
 
   lazy val config = ConfigFactory.load()
+
+  private def loadXGBoostModelBroker(): XGBoostModelBroker = {
+    val endpoint = config.getString("bmps.core.xgboost-model-broker-url")
+    XGBoostModelBroker.withDefaults(endpoint)
+  }
   
   /** Load AccountBrokers from configuration */
   private def loadAccountBrokers(): LeadAccountBroker = {
@@ -87,11 +96,16 @@ object AppLauncher extends IOApp.Simple {
     leadAccount = loadAccountBrokers()
     (planningSource, preparingSource, tradingSource) = loadDataSources()
 
+    xgBoostBroker = loadXGBoostModelBroker()
+    marketFeaturesService = new MarketFeaturesService(leadAccount, lagCandles = 0)
+    aiOrderBlockService = new AIOrderBlockService(marketFeaturesService, xgBoostBroker)
+    orderService = new OrderService(aiOrderBlockService)
+
     // populate with PhaseRunner instances, using configured AccountBrokers for TradingPhase
     runners: Map[SystemStatePhase, PhaseRunner] = Map(
       SystemStatePhase.Planning -> PlanningPhaseBuilder.build(planningSource),
       SystemStatePhase.Preparing -> PreparingPhaseBuilder.build(preparingSource),
-      SystemStatePhase.Trading -> TradingPhaseBuilder.build(leadAccount, tradingSource)
+      SystemStatePhase.Trading -> TradingPhaseBuilder.build(leadAccount, tradingSource, orderService)
     )
     controller = new PhaseController(stateRef, eventStore, runners, sem)
     // Create report service

@@ -119,6 +119,7 @@ class LeadAccountBroker(val brokers: List[AccountBroker], riskDollars: Double = 
             takeProfitOrLossFromTallCandle(_,_),
             takeProfitFromShortCandle(_,_),
             takeLossFromShortCandle(_,_),
+            fillNewMarketOrders(_,_),
             exitOrderAtEndOfDay(_,_),
             cancelPlannedOrderCandleOutside(_,_),
             cancelPlacedOrderCandleOutside(_,_), 
@@ -133,6 +134,13 @@ class LeadAccountBroker(val brokers: List[AccountBroker], riskDollars: Double = 
 
     def buildSerializableOrder(order: Order): SerializableOrder = {
         SerializableOrder.fromOrder(order, riskPerTrade)
+    }
+
+    private def fillNewMarketOrders(order: Order, candle: Candle): Order = {
+        if (order.status == PlaceNow) {
+            val placedOrder = placeOrder(order, candle)
+            fillOrder(order, candle)
+        } else order
     }
 
     //Rule: Fill the order if candle crosses entry point.
@@ -202,7 +210,7 @@ class LeadAccountBroker(val brokers: List[AccountBroker], riskDollars: Double = 
 
     //Rule: If the candle is fully above or below the order, cancel it.
     private def cancelPlannedOrderCandleOutside(order: Order, candle: Candle): Order = {
-        if (order.status == Planned) {
+        if (order.status == Planned || order.status == PlaceNow) {
             val reason = CancelReason.FullCandleOutside
             order.orderType match {
                 case OrderType.Long => 
@@ -237,7 +245,7 @@ class LeadAccountBroker(val brokers: List[AccountBroker], riskDollars: Double = 
 
     //Rule: If the order is planned for 10 minutes and wicks above or below, cancel it.
     private def cancelOldPlannedOrderWickOutside(order: Order, candle: Candle): Order = {
-        if (order.status == Planned && order.timestamp + FiveMinutes <= candle.timestamp) {
+        if ((order.status == Planned || order.status == PlaceNow) && order.timestamp + FiveMinutes <= candle.timestamp) {
             val reason = CancelReason.TenMinuteWickOutside
             order.orderType match {
                 case OrderType.Long => 

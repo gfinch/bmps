@@ -166,3 +166,5 @@ object Market {
 }
 
 case class DaytimeExtreme(level: Float, extremeType: ExtremeType, timestamp: Long, endTime: Option[Long], market: Market)
+
+case class ModelPrediction(level: Float, timestamp: Long, horizon: String)

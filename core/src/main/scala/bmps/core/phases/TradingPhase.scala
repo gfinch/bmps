@@ -19,11 +19,11 @@ import bmps.core.io.DatabentoSource
 import bmps.core.io.DataSource
 import bmps.core.utils.TimestampUtils
 
-class TradingEventGenerator(leadAccount: LeadAccountBroker, swingService: SwingService = new SwingService(3)) extends EventGenerator {
+class TradingEventGenerator(leadAccount: LeadAccountBroker, orderService: OrderService, swingService: SwingService = new SwingService(1)) extends EventGenerator {
     require(leadAccount.brokerCount >= 1, "Must have at least one account broker defined.")
 
     def initialize(state: SystemState, options: Map[String, String] = Map.empty): SystemState = {
-        val tradingDirection = OrderService.determineTradingDirection(state)
+        val tradingDirection = orderService.determineTradingDirection(state)
         state.copy(systemStatePhase = SystemStatePhase.Trading, tradingDirection = Some(tradingDirection))
     }
 
@@ -41,6 +41,7 @@ class TradingEventGenerator(leadAccount: LeadAccountBroker, swingService: SwingS
     }
 
     def processOneMinute(state: SystemState, candle: Candle): (SystemState, List[Event]) = {
+
         //Candle and swing processing
         val updatedCandles = state.tradingCandles :+ candle
         val (swings, directionOption) = swingService.computeSwings(updatedCandles)
@@ -48,16 +49,20 @@ class TradingEventGenerator(leadAccount: LeadAccountBroker, swingService: SwingS
         val withSwings = state.copy(tradingCandles = updatedCandles, tradingSwingPoints = swings, swingDirection = newDirection)
 
         //Order processing
-        val withNewOrders = OrderService.buildOrders(withSwings)
+        val withNewOrders = orderService.buildOrders(withSwings)
         val withOrders = adjustOrderState(withNewOrders, candle)
+
+        val (withPlacedOrders, _) = processOneSecond(withOrders, candle)
         
         //Event processing
-        val newSwingPoints = withOrders.tradingSwingPoints.drop(state.tradingSwingPoints.length)
+        val newSwingPoints = withPlacedOrders.tradingSwingPoints.drop(state.tradingSwingPoints.length)
         val swingEvents = newSwingPoints.map(Event.fromSwingPoint)
-        val changedOrders = withOrders.orders.filterNot(state.orders.contains)
+        val changedOrders = withPlacedOrders.orders.filterNot(state.orders.contains)
         val orderEvents = changedOrders.map(Event.fromOrder(_, leadAccount.riskPerTrade))
+        val newModelPredictions = withPlacedOrders.tradingModelPredictions.drop(state.tradingModelPredictions.length)
+        val predictionEvents = newModelPredictions.map(p => Event.fromModelPrediction(candle, p))
 
-        val allEvents = swingEvents ++ orderEvents
+        val allEvents = swingEvents ++ orderEvents ++ predictionEvents
         (withOrders, allEvents)
     }
 
@@ -67,7 +72,7 @@ class TradingEventGenerator(leadAccount: LeadAccountBroker, swingService: SwingS
     }
     
     private def placeOrders(state: SystemState, candle: Candle): SystemState = {
-        val placedOrders = OrderService.findOrderToPlace(state, candle: Candle).map(leadAccount.placeOrder(_, candle)) match {
+        val placedOrders = orderService.findOrderToPlace(state, candle: Candle).map(leadAccount.placeOrder(_, candle)) match {
             case Some(placedOrder) =>
                 state.orders.map(order => if (order.timestamp == placedOrder.timestamp) placedOrder else order)
             case None =>
@@ -95,5 +100,7 @@ class TradingSource(dataSource: DataSource) extends CandleSource {
 }
 
 object TradingPhaseBuilder {
-    def build(leadAccount: LeadAccountBroker, dataSource: DataSource) = new PhaseRunner(new TradingSource(dataSource), new TradingEventGenerator(leadAccount))
+    def build(leadAccount: LeadAccountBroker, dataSource: DataSource, orderService: OrderService) = {
+        new PhaseRunner(new TradingSource(dataSource), new TradingEventGenerator(leadAccount, orderService))
+    }
 }

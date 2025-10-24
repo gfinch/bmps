@@ -260,7 +260,7 @@ object TrainingDatasetApp extends IOApp {
               val runners = Map[SystemStatePhase, PhaseRunner](
                 SystemStatePhase.Planning -> PlanningPhaseBuilder.build(planningSource),
                 SystemStatePhase.Preparing -> PreparingPhaseBuilder.build(preparingSource),
-                SystemStatePhase.Trading -> TradingPhaseBuilder.build(leadAccount, tradingSource)
+                // SystemStatePhase.Trading -> TradingPhaseBuilder.build(leadAccount, tradingSource)
               )
               val controller = new PhaseController(stateRef, eventStore, runners, sem)
               (controller, eventStore, parquetSink)

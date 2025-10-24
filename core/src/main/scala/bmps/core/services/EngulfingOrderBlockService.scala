@@ -51,7 +51,6 @@ object EngulfingOrderBlockService {
             case _ => false
         }
         
-        //Placing market order, so make sure we're within one tick either way of entry. 
         val recentFailedOrder = recentEOBLossOrder(state.orders, candle)
 
         orderIsReady && !recentFailedOrder

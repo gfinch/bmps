@@ -10,9 +10,10 @@ import scala.concurrent.duration._
 import java.time.Duration
 import bmps.core.models.EntryType
 import bmps.core.models.OrderType
+import cats.instances.order
 
 case class PlannedOrder(entry: Float, stopLoss: Float, takeProfit: Float, 
-                        orderType: OrderType, contractId: String, contracts: Int)
+                        orderType: OrderType, contractId: String, contracts: Int, status: OrderStatus)
 
 case class PlaceOsoResponse(orderId: Option[Long], oso1Id: Option[Long], oso2Id: Option[Long], 
                            failureReason: Option[String], failureText: Option[String])
@@ -107,19 +108,28 @@ class TradovateBroker(
             "orderType" -> Json.fromString("Stop"),
             "stopPrice" -> Json.fromDoubleOrNull(plannedOrder.stopLoss.toDouble)
         )
+
+        val orderType = if (plannedOrder.status == OrderStatus.PlaceNow) "Market" else "Limit"
+        val price = if (plannedOrder.status == OrderStatus.PlaceNow) None else Some(plannedOrder.entry.toDouble)
         
-        val payload = Json.obj(
+        val basePayload = Json.obj(
             "accountSpec" -> Json.fromString(accountSpec),
             "accountId" -> Json.fromLong(accountId),
             "action" -> Json.fromString(action),
             "symbol" -> Json.fromString(plannedOrder.contractId),
             "orderQty" -> Json.fromInt(plannedOrder.contracts),
-            "orderType" -> Json.fromString("Limit"), 
-            "price" -> Json.fromDoubleOrNull(plannedOrder.entry.toDouble),
+            "orderType" -> Json.fromString(orderType),
             "isAutomated" -> Json.fromBoolean(true), // Required for algorithmic trading
             "bracket1" -> takeProfitBracket,
             "bracket2" -> stopLossBracket
-        ).noSpaces
+        )
+        
+        val payloadJson = price match {
+            case Some(p) => basePayload.deepMerge(Json.obj("price" -> Json.fromDoubleOrNull(p)))
+            case None => basePayload
+        }
+        
+        val payload = payloadJson.noSpaces
 
         val request = buildRequest("POST", "/order/placeoso", Some(payload))
         executeWithRetry(request, body => decode[PlaceOsoResponse](body).toTry)
