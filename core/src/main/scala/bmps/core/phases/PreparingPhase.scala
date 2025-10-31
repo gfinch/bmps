@@ -16,7 +16,7 @@ import bmps.core.utils.TimestampUtils.midnight
 import bmps.core.utils.TimestampUtils
 import breeze.linalg.min
 
-class PreparingEventGenerator(swingService: SwingService = new SwingService(1)) extends EventGenerator {
+class PreparingEventGenerator(swingService: SwingService = new SwingService(5, 0.5f)) extends EventGenerator {
 
     def initialize(state: SystemState, options: Map[String, String] = Map.empty): SystemState = {
         val earliestPlanZone = state.planZones.filter(_.isActive).map(_.startTime).minOption
@@ -27,6 +27,7 @@ class PreparingEventGenerator(swingService: SwingService = new SwingService(1)) 
 
     def process(state: SystemState, candle: Candle): (SystemState, List[Event]) = {
         val updatedCandles = state.tradingCandles :+ candle
+        // val (swings, directionOption) = swingService.computeSwings(updatedCandles)
         val (swings, directionOption) = swingService.computeSwings(updatedCandles)
         val newDirection = directionOption.getOrElse(state.swingDirection)
         val withSwings = state.copy(tradingCandles = updatedCandles, tradingSwingPoints = swings, swingDirection = newDirection)
@@ -48,14 +49,17 @@ class PreparingEventGenerator(swingService: SwingService = new SwingService(1)) 
 class PreparingSource(dataSource: DataSource) extends CandleSource {
     def candles(state: SystemState): Stream[IO, Candle] = {
         val (plannedStart, endMs) = computePreparingWindow(state)
-        val minPrestart = state.tradingReplayStartTime.map(s => if (s < plannedStart) s else plannedStart).getOrElse(plannedStart)
-        val startMs = state.tradingCandles.lastOption.map(_.timestamp + 1).getOrElse(minPrestart)
-        println(s"Planned: $plannedStart, MinPrestart: $minPrestart, StartMs: $startMs")
+        // val minPrestart = state.tradingReplayStartTime.map(s => if (s < plannedStart) s else plannedStart).getOrElse(plannedStart)
+        // val startMs = state.tradingCandles.lastOption.map(_.timestamp + 1).getOrElse(minPrestart)
+        // println(s"Planned: $plannedStart, MinPrestart: $minPrestart, StartMs: $startMs")
+
+        val startMs = state.tradingCandles.lastOption.map(_.timestamp + 1).getOrElse(plannedStart)
         dataSource.candlesInRangeStream(startMs, endMs)
     }
 
     private def computePreparingWindow(state: SystemState): (Long, Long) = {
-        val startMs = TimestampUtils.midnight(state.tradingDay)
+        // val startMs = TimestampUtils.midnight(state.tradingDay)
+        val startMs = TimestampUtils.sevenThirty(state.tradingDay)
         val endMs = TimestampUtils.newYorkOpen(state.tradingDay)
         
         (startMs, endMs)

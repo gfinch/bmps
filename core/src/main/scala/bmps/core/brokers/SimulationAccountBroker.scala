@@ -8,7 +8,7 @@ import bmps.core.models.OrderType
 trait SimulationAccountBroker extends AccountBroker {
 
     def placeOrder(order: Order, candle: Candle): Order = {
-        order.copy(status = Placed, placedTimestamp = Some(candle.timestamp))
+        order.copy(status = Placed, placedTimestamp = Some(candle.endTime))
     }
     
     def fillOrder(order: Order, candle: Candle): Order = {
@@ -36,7 +36,7 @@ trait SimulationAccountBroker extends AccountBroker {
     }
 
     def cancelOrder(order: Order, candle: Candle, cancelReason: String): Order = {
-        order.copy(status = Cancelled, closeTimestamp = Some(candle.timestamp), cancelReason = Some(cancelReason))
+        order.copy(status = Cancelled, closeTimestamp = Some(candle.endTime), cancelReason = Some(cancelReason))
     }
 
 }

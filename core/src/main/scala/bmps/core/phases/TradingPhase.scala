@@ -18,8 +18,10 @@ import bmps.core.brokers.LeadAccountBroker
 import bmps.core.io.DatabentoSource
 import bmps.core.io.DataSource
 import bmps.core.utils.TimestampUtils
+import bmps.core.brokers.rest.OrderState
+import bmps.core.models.OrderStatus
 
-class TradingEventGenerator(leadAccount: LeadAccountBroker, orderService: OrderService, swingService: SwingService = new SwingService(1)) extends EventGenerator {
+class TradingEventGenerator(leadAccount: LeadAccountBroker, orderService: OrderService, swingService: SwingService = new SwingService(5, 0.5f)) extends EventGenerator {
     require(leadAccount.brokerCount >= 1, "Must have at least one account broker defined.")
 
     def initialize(state: SystemState, options: Map[String, String] = Map.empty): SystemState = {
@@ -36,34 +38,42 @@ class TradingEventGenerator(leadAccount: LeadAccountBroker, orderService: OrderS
     }
 
     def processOneSecond(state: SystemState, candle: Candle): (SystemState, List[Event]) = {
-        val newState = placeOrders(state, candle)
-        (newState, List.empty[Event])
+        //Order processing every second
+        val newState = state.copy(lastOneSecondCandle = Some(candle))
+        val withNewOrders = orderService.buildOrders(newState, candle)
+
+        //Event processing
+        val changedOrders = withNewOrders.orders.filterNot(state.orders.contains)
+        
+        val withOrders = if (changedOrders.nonEmpty) {
+            val lastOneMinuteCandle = state.tradingCandles.last
+            adjustOrderState(withNewOrders, lastOneMinuteCandle) //force market orders to be placed
+        } else withNewOrders
+        
+        val orderEvents = changedOrders.map(Event.fromOrder(_, leadAccount.riskPerTrade))
+        (withOrders, orderEvents)
     }
 
     def processOneMinute(state: SystemState, candle: Candle): (SystemState, List[Event]) = {
-
-        //Candle and swing processing
+        //Candle and swing processing every minute
         val updatedCandles = state.tradingCandles :+ candle
         val (swings, directionOption) = swingService.computeSwings(updatedCandles)
         val newDirection = directionOption.getOrElse(state.swingDirection)
         val withSwings = state.copy(tradingCandles = updatedCandles, tradingSwingPoints = swings, swingDirection = newDirection)
 
-        //Order processing
-        val withNewOrders = orderService.buildOrders(withSwings)
-        val withOrders = adjustOrderState(withNewOrders, candle)
-
-        val (withPlacedOrders, _) = processOneSecond(withOrders, candle)
+        // //Order processing every minute
+        val withOrders = adjustOrderState(withSwings, candle)
+        val withPlacedOrders = placeOrders(withOrders, candle)
+        val withNewOrders = orderService.buildOrders(withPlacedOrders, candle)
         
         //Event processing
-        val newSwingPoints = withPlacedOrders.tradingSwingPoints.drop(state.tradingSwingPoints.length)
+        val newSwingPoints = withNewOrders.tradingSwingPoints.drop(state.tradingSwingPoints.length)
         val swingEvents = newSwingPoints.map(Event.fromSwingPoint)
-        val changedOrders = withPlacedOrders.orders.filterNot(state.orders.contains)
+        val changedOrders = withNewOrders.orders.filterNot(state.orders.contains)
         val orderEvents = changedOrders.map(Event.fromOrder(_, leadAccount.riskPerTrade))
-        val newModelPredictions = withPlacedOrders.tradingModelPredictions.drop(state.tradingModelPredictions.length)
-        val predictionEvents = newModelPredictions.map(p => Event.fromModelPrediction(candle, p))
 
-        val allEvents = swingEvents ++ orderEvents ++ predictionEvents
-        (withOrders, allEvents)
+        val allEvents = swingEvents ++ orderEvents
+        (withNewOrders, allEvents)
     }
 
     private def adjustOrderState(state: SystemState, candle: Candle): SystemState = {

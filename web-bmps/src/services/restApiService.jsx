@@ -23,7 +23,7 @@ class RestApiService {
   getApiUrl(tradingDate) {
     const today = new Date().toISOString().split('T')[0]
     // return tradingDate === today ? API_URL : BACKTEST_API_URL
-    return LOCAL_URL
+    return tradingDate === today ? API_URL : LOCAL_URL
   }
 
   /**

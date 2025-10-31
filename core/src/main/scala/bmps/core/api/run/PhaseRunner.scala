@@ -59,11 +59,11 @@ class PhaseRunner(source: CandleSource, processor: EventGenerator) {
           val (newState, events) = processor.process(state, candle)
           (newState, (candle, events))
         }.flatMap { case (candle, events) =>
-          if (candle.duration != CandleDuration.OneSecond) {
+          val eventsToAdd = if (candle.duration != CandleDuration.OneSecond) {
             val candleEvent = Event.fromCandle(candle)
-            val allEvents = candleEvent :: events
-            eventStore.addEvents(tradingDate, phase, allEvents)
-          } else IO.unit
+            candleEvent :: events
+          } else events
+          eventStore.addEvents(tradingDate, phase, eventsToAdd)
         }
       }.compile.drain
         .handleErrorWith { error =>

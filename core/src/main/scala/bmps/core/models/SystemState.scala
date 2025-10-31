@@ -24,7 +24,7 @@ case class SystemState(
     tradingDirection: Option[Direction] = None,
     tradingCandles: List[Candle] = List.empty,
     tradingSwingPoints: List[SwingPoint] = List.empty,
-    tradingModelPredictions: List[ModelPrediction] = List.empty,
+    lastOneSecondCandle: Option[Candle] = None,
     
     orders: List[Order] = List.empty,
     contractSymbol: Option[String] = None

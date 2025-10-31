@@ -14,27 +14,35 @@ import java.time.Instant
 import java.time.Duration
 import bmps.core.models.Candle
 import bmps.core.models.ContractType
+import bmps.core.models.CandleDuration
 
-class OrderService(aiOrderBlockService: AIOrderBlockService) {
+class OrderService() {
+
+    lazy val secondBySecondProcessors = Seq(
+        BouncingOrderBlockService.processState(_)
+    )
+
+    lazy val minuteByMinuteProcessors = Seq(
+        EngulfingOrderBlockService.processState(_)
+        // FairValueGapOrderBlockService.processState(_)
+    )
 
     def determineTradingDirection(state: SystemState): Direction = {
         MarketTrendService.determineDirection(state.tradingCandles)
     }
 
-    def buildOrders(state: SystemState): SystemState = {
-        require(state.tradingCandles.nonEmpty, "buildOrders called before there are candles in Trade state.")
-        val processors = Seq(
-            // EngulfingOrderBlockService.processState(_), 
-            // FairValueGapOrderBlockService.processState(_),
-            aiOrderBlockService.processState(_)
-        )
-
-        processors.foldLeft(state) { (lastState, nextProcess) => nextProcess(lastState) }
+    def buildOrders(state: SystemState, candle: Candle): SystemState = {
+        if (!state.orders.exists(_.isActive)) { //only create orders if none other are active
+            val processors = if (candle.duration == CandleDuration.OneSecond) secondBySecondProcessors else minuteByMinuteProcessors
+            processors.foldLeft(state) { (lastState, nextProcess) => nextProcess(lastState) }
+        } else {
+            state
+        }
     }
     
     def findOrderToPlace(state: SystemState, candle: Candle): Option[Order] = {
         state.orders.find { order => 
-            order.status == OrderStatus.Planned && shouldPlaceOrder(order, state, candle)
+            order.status == OrderStatus.PlaceNow || (order.status == OrderStatus.Planned && shouldPlaceOrder(order, state, candle))
         }
     }
 
@@ -43,7 +51,7 @@ class OrderService(aiOrderBlockService: AIOrderBlockService) {
         if (activeOrders == 0 && order.status == OrderStatus.PlaceNow) true
         else {
             val isOrderReady = if (order.entryType == EntryType.FairValueGapOrderBlock) {
-            FairValueGapOrderBlockService.shouldPlaceOrder(order, candle)
+                FairValueGapOrderBlockService.shouldPlaceOrder(order, candle)
             } else if (order.entryType == EntryType.EngulfingOrderBlock) {
                 EngulfingOrderBlockService.shouldPlaceOrder(order, state, candle)
             } else true

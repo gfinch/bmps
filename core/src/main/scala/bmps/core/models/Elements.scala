@@ -56,6 +56,8 @@ case class Candle(
         case CandleDuration.OneDay => 24 * 60 * 60 * 1000
     }
 
+    lazy val endTime = timestamp + durationMillis
+
     lazy val isLive: Boolean = {
         createdAt - (timestamp + durationMillis) <= durationMillis
     }
@@ -166,5 +168,3 @@ object Market {
 }
 
 case class DaytimeExtreme(level: Float, extremeType: ExtremeType, timestamp: Long, endTime: Option[Long], market: Market)
-
-case class ModelPrediction(level: Float, timestamp: Long, horizon: String)

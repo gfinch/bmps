@@ -20,7 +20,8 @@ libraryDependencies ++= Seq(
   // HTTP client for Polygon.io REST API calls
   "com.squareup.okhttp3" % "okhttp" % "4.12.0",
   "com.fasterxml.jackson.core" % "jackson-databind" % "2.15.2",
-  "com.fasterxml.jackson.module" %% "jackson-module-scala" % "2.15.2"
+  "com.fasterxml.jackson.module" %% "jackson-module-scala" % "2.15.2",
+  "org.ta4j" % "ta4j-core" % "0.18"
 )
 
 // Embedded websocket server for single-process frontend + core

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { BarChart3, TrendingUp, TrendingDown, DollarSign, Clock, RefreshCw, AlertCircle, Calendar, ChevronLeft, ChevronRight } from 'lucide-react'
+import { BarChart3, TrendingUp, TrendingDown, DollarSign, Clock, RefreshCw, AlertCircle, Calendar, ChevronLeft, ChevronRight, Receipt } from 'lucide-react'
 import { DayPicker } from 'react-day-picker'
 import 'react-day-picker/dist/style.css'
 import { createChart, BaselineSeries } from 'lightweight-charts'
@@ -349,6 +349,7 @@ export default function ResultsPage() {
     avgWin: Math.round(orderReport.averageWinDollars),
     avgLoss: Math.round(orderReport.averageLossDollars),
     maxDrawdown: Math.round(orderReport.maxDrawdownDollars),
+    totalFees: Math.round(orderReport.totalFees || 0),
     totalPnL: Math.round(orderReport.totalPnL)  // Use totalPnL from backend
   } : {
     totalPnL: 0,
@@ -358,7 +359,8 @@ export default function ResultsPage() {
     winRate: 0,
     avgWin: 0,
     avgLoss: 0,
-    maxDrawdown: 0
+    maxDrawdown: 0,
+    totalFees: 0
   }
 
   const trades = orderReport ? orderReport.orders
@@ -386,6 +388,7 @@ export default function ResultsPage() {
         time: closeDate.toLocaleTimeString('en-US', { timeZone: 'America/New_York' }),
         type: orderType,
         price: order.entryPoint,
+        contract: order.contract || 'N/A',
         quantity: order.contracts,
         pnl: pnl
       }
@@ -550,7 +553,7 @@ export default function ResultsPage() {
         )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
         <div className="card p-6">
           <div className="flex items-center justify-between">
             <div>
@@ -598,6 +601,18 @@ export default function ResultsPage() {
             <TrendingDown className="w-8 h-8 text-red-500" />
           </div>
         </div>
+
+        <div className="card p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">Total Fees</p>
+              <p className="text-2xl font-bold text-orange-600">
+                ${tradingResults.totalFees.toLocaleString()}
+              </p>
+            </div>
+            <Receipt className="w-8 h-8 text-orange-500" />
+          </div>
+        </div>
       </div>
 
       <div className="card">
@@ -629,36 +644,85 @@ export default function ResultsPage() {
                   <RefreshCw className="w-8 h-8 text-blue-500 animate-spin" />
                 </div>
               ) : orderReport ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-3">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Winning Trades:</span>
-                      <span className="font-medium text-green-600">{tradingResults.winningTrades}</span>
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-3">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Winning Trades:</span>
+                        <span className="font-medium text-green-600">{tradingResults.winningTrades}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Losing Trades:</span>
+                        <span className="font-medium text-red-600">{tradingResults.losingTrades}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Win Rate:</span>
+                        <span className="font-medium">{tradingResults.winRate}%</span>
+                      </div>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Losing Trades:</span>
-                      <span className="font-medium text-red-600">{tradingResults.losingTrades}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Win Rate:</span>
-                      <span className="font-medium">{tradingResults.winRate}%</span>
+                    <div className="space-y-3">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Average Win:</span>
+                        <span className="font-medium text-green-600">${tradingResults.avgWin.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Average Loss:</span>
+                        <span className="font-medium text-red-600">${tradingResults.avgLoss.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Max Drawdown:</span>
+                        <span className="font-medium text-red-600">${tradingResults.maxDrawdown.toLocaleString()}</span>
+                      </div>
                     </div>
                   </div>
-                  <div className="space-y-3">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Average Win:</span>
-                      <span className="font-medium text-green-600">${tradingResults.avgWin.toLocaleString()}</span>
+
+                  {/* Win Rates by Order Type */}
+                  {orderReport.winRates && orderReport.winRates.length > 0 && (
+                    <div className="mt-8">
+                      <h4 className="text-md font-medium text-gray-900 mb-4">Win Rates by Entry Type</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {orderReport.winRates.map((winRate, index) => {
+                          const totalTrades = winRate.winning + winRate.losing
+                          const winRatePercentage = totalTrades > 0 ? Math.round((winRate.winning / totalTrades) * 100) : 0
+                          const orderTypeName = typeof winRate.orderType === 'object' ? Object.keys(winRate.orderType)[0] : winRate.orderType
+                          return (
+                            <div key={index} className="bg-gray-50 rounded-lg p-4">
+                              <div className="flex items-center justify-between mb-2">
+                                <h5 className="text-sm font-medium text-gray-900">{orderTypeName}</h5>
+                                <span className={`text-sm font-bold ${winRatePercentage >= 50 ? 'text-green-600' : 'text-red-600'}`}>
+                                  {winRatePercentage}%
+                                </span>
+                              </div>
+                              <div className="space-y-1 text-xs text-gray-600">
+                                <div className="flex justify-between">
+                                  <span>Wins:</span>
+                                  <span className="text-green-600 font-medium">{winRate.winning}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span>Losses:</span>
+                                  <span className="text-red-600 font-medium">{winRate.losing}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span>Total:</span>
+                                  <span className="font-medium">{totalTrades}</span>
+                                </div>
+                              </div>
+                              {/* Visual progress bar */}
+                              <div className="mt-3">
+                                <div className="w-full bg-gray-200 rounded-full h-2">
+                                  <div 
+                                    className={`h-2 rounded-full transition-all duration-300 ${winRatePercentage >= 50 ? 'bg-green-500' : 'bg-red-500'}`}
+                                    style={{ width: `${winRatePercentage}%` }}
+                                  ></div>
+                                </div>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Average Loss:</span>
-                      <span className="font-medium text-red-600">${tradingResults.avgLoss.toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Max Drawdown:</span>
-                      <span className="font-medium text-red-600">${tradingResults.maxDrawdown.toLocaleString()}</span>
-                    </div>
-                  </div>
-                </div>
+                  )}
+                </>
               ) : (
                 <div className="text-center py-12">
                   <BarChart3 className="w-16 h-16 text-gray-300 mx-auto mb-4" />
@@ -681,6 +745,7 @@ export default function ResultsPage() {
                         <th className="text-left py-3 px-4 font-medium text-gray-900">Time</th>
                         <th className="text-left py-3 px-4 font-medium text-gray-900">Type</th>
                         <th className="text-left py-3 px-4 font-medium text-gray-900">Entry Price</th>
+                        <th className="text-left py-3 px-4 font-medium text-gray-900">Contract</th>
                         <th className="text-left py-3 px-4 font-medium text-gray-900">Contracts</th>
                         <th className="text-left py-3 px-4 font-medium text-gray-900">P&L</th>
                       </tr>
@@ -707,6 +772,7 @@ export default function ResultsPage() {
                             </span>
                           </td>
                           <td className="py-3 px-4 text-sm text-gray-900">${trade.price.toFixed(2)}</td>
+                          <td className="py-3 px-4 text-sm text-gray-900">{trade.contract}</td>
                           <td className="py-3 px-4 text-sm text-gray-900">{trade.quantity}</td>
                           <td className="py-3 px-4 text-sm">
                             <span className={`font-medium ${
