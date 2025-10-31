@@ -149,7 +149,8 @@ class OrderPaneRenderer {
       'MarketStructureShiftOrderBlock': 'MSS',
       'SupermanOrderBlock': 'SOB',
       'JediOrderBlock': 'JOB',
-      'XGBoostOrderBlock': 'XGB'
+      'XGBoostOrderBlock': 'XGB',
+      'BouncingOrderBlock': 'BOB'
     }
     return entryTypeMap[entryType] || entryType
   }

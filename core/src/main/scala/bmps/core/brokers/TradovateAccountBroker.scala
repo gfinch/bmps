@@ -17,7 +17,11 @@ import bmps.core.models.DetermineContracts
 
 case class TradovateOrder(order: Order, osoResult: PlaceOsoResponse)
 
-class TradovateAccountBroker(val accountId: String, val riskPerTrade: Double, tradovateBroker: TradovateBroker) extends AccountBroker with DetermineContracts {
+class TradovateAccountBroker(val accountId: String, 
+                             val riskPerTrade: Double, 
+                             val feePerESContract: Double,
+                             val feePerMESContract: Double,
+                             tradovateBroker: TradovateBroker) extends AccountBroker with DetermineContracts {
     val brokerType: BrokerType = BrokerType.TradovateAccountBroker
 
     //Keeps a private version of each order for this broker to use.
@@ -130,7 +134,7 @@ class TradovateAccountBroker(val accountId: String, val riskPerTrade: Double, tr
                     case (_, Filled) =>
                         order.copy(status = Loss, closeTimestamp = Some(candle.timestamp))
                     case _ => //Unexpected state - cancel or liquidate
-                        println(s"[TradovateAccountBroker] .")
+                        println(s"[TradovateAccountBroker] - cancelling or liquidating order because of unexpected state.")
                         doCancelOrLiquidate(order, orderState.orderId, candle: Candle, "Profit or Loss are in unexpected state.")
                         doCancelOrLiquidate(order, profitOrder, candle: Candle, "Profit or Loss are in unexpected state.")
                         doCancelOrLiquidate(order, lossOrder, candle: Candle, "Profit or Loss are in unexpected state.")
@@ -146,7 +150,7 @@ class TradovateAccountBroker(val accountId: String, val riskPerTrade: Double, tr
 
     private def doPlaceOrder(order: Order, candle: Candle): (PlaceOsoResponse, Order) = {
         require(order.status == OrderStatus.Planned || order.status == OrderStatus.PlaceNow, "Attempting to place an order that was already placed.")
-        require(tradovateOrders.get(order.timestamp).isEmpty, "Attempting to place an order whose tradovate order ids are missing.")
+        require(tradovateOrders.get(order.timestamp).isEmpty, "Attempting to place an order that was already placed on Tradovate.")
         val (contract, contracts) = determineContracts(order, riskPerTrade)
         val plannedOrder = PlannedOrder(
             entry = order.entryPoint, 

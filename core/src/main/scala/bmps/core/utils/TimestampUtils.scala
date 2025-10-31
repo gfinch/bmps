@@ -34,6 +34,10 @@ object TimestampUtils {
         localDate.atStartOfDay(NewYorkZone).toInstant.toEpochMilli
     }
 
+    def sevenThirty(localDate: LocalDate) = {
+        localDate.atTime(7, 30).atZone(NewYorkZone).toInstant().toEpochMilli()
+    }
+
     def nineAM(localDate: LocalDate) = {
         localDate.atTime(9, 0).atZone(NewYorkZone).toInstant().toEpochMilli()
     }

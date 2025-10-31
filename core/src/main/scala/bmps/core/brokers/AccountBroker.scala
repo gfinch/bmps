@@ -9,6 +9,7 @@ import bmps.core.models.OrderStatus._
 import java.time.Duration
 import bmps.core.models.SerializableOrder
 import bmps.core.utils.TimestampUtils
+import bmps.core.models.EntryType
 
 sealed trait BrokerType
 object BrokerType {
@@ -17,13 +18,17 @@ object BrokerType {
     case object TradovateAccountBroker extends BrokerType
 }
 
+case class WinRateByOrderType(orderType: EntryType, winning: Int, losing: Int)
+
 case class OrderReport(orders: List[SerializableOrder], winning: Int, losing: Int,
                        averageWinDollars: Double, averageLossDollars: Double,
-                       maxDrawdownDollars: Double, totalPnL: Double)
+                       maxDrawdownDollars: Double, totalFees: Double, totalPnL: Double, winRates: Seq[WinRateByOrderType])
 
 trait AccountBroker {
     val accountId: String
     val riskPerTrade: Double
+    val feePerMESContract: Double
+    val feePerESContract: Double
     val brokerType: BrokerType
 
     def placeOrder(order: Order, candle: Candle): Order
@@ -44,6 +49,12 @@ trait AccountBroker {
         val losingOrders = completedOrders.filter(_.status == OrderStatus.Loss)
         val winning = winningOrders.length
         val losing = losingOrders.length
+
+        val totalFees = {
+            val mesFees = completedOrders.filter(_.contract.startsWith("M")).map(_.contracts).sum * feePerMESContract
+            val esFees = completedOrders.filter(_.contract.startsWith("E")).map(_.contracts).sum * feePerESContract
+            mesFees + esFees
+        }
         
         // Calculate average win/loss dollars
         val averageWinDollars = if (winning > 0) {
@@ -73,9 +84,16 @@ trait AccountBroker {
         } else 0.0
         
         // Calculate total P&L
-        val totalPnL = (winning * averageWinDollars) - (losing * averageLossDollars)
+        val totalPnL = (winning * averageWinDollars) - (losing * averageLossDollars) - totalFees
         
-        OrderReport(serializableOrders, winning, losing, averageWinDollars, averageLossDollars, maxDrawdownDollars, totalPnL)
+        // Calculate win rates by order type
+        val winRates = completedOrders.groupBy(_.entryType).map { case (entryType, orders) =>
+            val wins = orders.count(_.status == OrderStatus.Profit)
+            val losses = orders.count(_.status == OrderStatus.Loss)
+            WinRateByOrderType(entryType, wins, losses)
+        }.toSeq
+        
+        OrderReport(serializableOrders, winning, losing, averageWinDollars, averageLossDollars, maxDrawdownDollars, totalFees, totalPnL, winRates)
     }
     
     /**
@@ -96,7 +114,11 @@ trait AccountBroker {
     }
 }
 
-class LeadAccountBroker(val brokers: List[AccountBroker], riskDollars: Double = 550.0) extends AccountBroker {
+class LeadAccountBroker(val brokers: List[AccountBroker], 
+                        riskDollars: Double = 550.0, 
+                        val feePerESContract: Double = 2.20,
+                        val feePerMESContract: Double = 2.20) extends AccountBroker {
+
     final val TenMinutes = Duration.ofMinutes(10).toMillis()
     final val FiveMinutes = Duration.ofMinutes(5).toMillis()
 

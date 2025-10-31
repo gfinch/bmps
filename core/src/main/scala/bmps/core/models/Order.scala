@@ -32,7 +32,7 @@ object EntryType {
     case object MarketStructureShiftOrderBlock extends EntryType
     case object SupermanOrderBlock extends EntryType
     case object JediOrderBlock extends EntryType
-    case object XGBoostOrderBlock extends EntryType
+    case object BouncingOrderBlock extends EntryType
 }
 
 object CancelReason {
@@ -47,6 +47,7 @@ case class Order(low: Float,
                     orderType: OrderType,
                     entryType: EntryType,
                     contract: String, 
+                    profitCap: Option[Float] = None,
                     status: OrderStatus = OrderStatus.Planned,
                     profitMultiplier: Float = 2.0f,
                     placedTimestamp: Option[Long] = None,
@@ -78,12 +79,12 @@ case class Order(low: Float,
     lazy val atRiskPerContract = atRiskPoints * DollarsPerMicro 
     lazy val potentialPerContract = profitPoints * DollarsPerMicro
 
-    lazy val takeProfit = orderType match {
+    lazy val takeProfit = profitCap.getOrElse(orderType match {
         case Long => high + profitPoints
         case Short => low - profitPoints
-    }
+    })
 
-    lazy val isActive = (status == OrderStatus.Placed || status == OrderStatus.Filled)
+    lazy val isActive = (status == OrderStatus.Placed || status == OrderStatus.PlaceNow || status == OrderStatus.Filled)
     lazy val direction: Direction = if (orderType == OrderType.Long) Direction.Up else Direction.Down
 }
 
@@ -94,13 +95,13 @@ case class SerializableOrder(low: Float,
                              entryType: EntryType, 
                              status: OrderStatus,
                              profitMultiplier: Double,
-                             riskDollars: Double,
                              placedTimestamp: Option[Long],
                              filledTimestamp: Option[Long],
                              closeTimestamp: Option[Long],
                              entryPoint: Double,
                              stopLoss: Double,
                              takeProfit: Double,
+                             contract: String,
                              contracts: Int,
                              atRisk: Double,
                              potential: Double,
@@ -118,28 +119,17 @@ object Order {
             case OrderType.Long => Order(secondCandle.low, firstCandle.low, timestamp, orderType, entryType, contract)
         }        
     }
-
-    def fromLevelAndTicks(level: Float, ticks: Int, orderType: OrderType, entryType: EntryType, timestamp: Long, contract: String) = {
-        orderType match {
-            case OrderType.Long =>
-                val low = level - (ticks * 0.25f)
-                val high = level
-                Order(low, high, timestamp, orderType, entryType, contract, OrderStatus.PlaceNow)
-            case OrderType.Short =>
-                val low = level
-                val high = level + (ticks * 0.25f)
-                Order(low, high, timestamp, orderType, entryType, contract, OrderStatus.PlaceNow)
-        }
-    }
 }
 
 trait DetermineContracts{
+    final val mesContractCutoff = 30
+
     protected def determineContracts(order: Order, riskPerTrade: Double): (String, Int) = {
         require(order.atRiskPerContract > 0, "atRiskPerContract must be positive")
         require(riskPerTrade > 0, "riskPerTrade must be positive")
         val mesContracts: Int = Math.floor(riskPerTrade / order.atRiskPerContract).toInt
 
-        val (contractType, contracts) = if (mesContracts >= 10) {
+        val (contractType, contracts) = if (mesContracts >= mesContractCutoff) {
             (ContractType.ES, Math.round(mesContracts.toDouble / 10.0).toInt)
         } else (ContractType.MES, mesContracts)
 
@@ -153,13 +143,20 @@ trait DetermineContracts{
 }
 
 object SerializableOrder extends DetermineContracts {
-    def fromOrder(order: Order, riskPerTrade: Double): SerializableOrder = {
+    final val MicroDollarsPerPoint = 5.0
+    final val MiniDollarsPerPoint = 50.0
 
-        //For the purposes of simulation, we'll assume $500 at risk per order
-        val riskDollars = riskPerTrade
-        val contracts: Int = Math.floor(riskDollars / order.atRiskPerContract).toInt
-        val atRisk = order.atRiskPerContract * contracts
-        val potential = order.potentialPerContract * contracts
+    def fromOrder(order: Order, riskPerTrade: Double): SerializableOrder = {
+        val (contract, contracts) = determineContracts(order, riskPerTrade)
+        val (atRisk, potential) = {
+            val profitPoints = math.abs(order.takeProfit - order.entryPoint)
+            val lossPoints = math.abs(order.stopLoss - order.entryPoint)
+            if (contract.startsWith("M")) {
+                (lossPoints * MicroDollarsPerPoint * contracts, profitPoints * MicroDollarsPerPoint * contracts)
+            } else {
+                (lossPoints * MiniDollarsPerPoint * contracts, profitPoints * MiniDollarsPerPoint * contracts)
+            }
+        }
 
         SerializableOrder(
             low = order.low,
@@ -169,13 +166,13 @@ object SerializableOrder extends DetermineContracts {
             entryType = order.entryType,
             status = order.status,
             profitMultiplier = order.profitMultiplier,
-            riskDollars = riskDollars,
             placedTimestamp = order.placedTimestamp,
             filledTimestamp = order.filledTimestamp,
             closeTimestamp = order.closeTimestamp,
             entryPoint = order.entryPoint.toDouble,
             stopLoss = order.stopLoss.toDouble,
             takeProfit = order.takeProfit.toDouble,
+            contract = contract,
             contracts = contracts,
             atRisk = atRisk,
             potential = potential,

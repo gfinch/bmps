@@ -27,8 +27,7 @@ case class Event(
     planZone: Option[PlanZone] = None,
     daytimeExtreme: Option[DaytimeExtreme] = None,
     order: Option[SerializableOrder] = None,
-    tradingDirection: Option[Direction] = None,
-    modelPrediction: Option[ModelPrediction] = None
+    tradingDirection: Option[Direction] = None
 )
 
 object Event {
@@ -38,7 +37,6 @@ object Event {
     def fromDaytimeExtreme(daytimeExtreme: DaytimeExtreme): Event = Event(EventType.DaytimeExtreme, daytimeExtreme.timestamp, daytimeExtreme = Some(daytimeExtreme))
     def fromOrder(order: Order, riskPerTrade: Double): Event = Event(EventType.Order, order.timestamp, order = Some(SerializableOrder.fromOrder(order, riskPerTrade)))
     def fromTradeDirection(candle: Candle, tradingDirection: Option[Direction]) = Event(EventType.TradingDirection, candle.timestamp, tradingDirection = tradingDirection)
-    def fromModelPrediction(candle: Candle, modelPrediction: ModelPrediction) = Event(EventType.ModelPrediction, candle.timestamp, modelPrediction = Some(modelPrediction))
     def phaseComplete(timestamp: Long): Event = Event(EventType.PhaseComplete, timestamp)
     def phaseErrored(timestamp: Long): Event = Event(EventType.PhaseErrored, timestamp)
     def reset(timestamp: Long): Event = Event(EventType.Reset, timestamp)

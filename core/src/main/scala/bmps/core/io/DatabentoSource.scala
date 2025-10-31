@@ -127,9 +127,20 @@ class DatabentoSource(durations: Set[CandleDuration]) extends DataSource {
    * Fetch historical candles using the HTTP REST API for dates before today.
    */
   private def fetchHistoricalCandlesStream(startMs: Long, endMs: Long): Stream[IO, Candle] = {
-    schemas.map { schema => 
-      Stream.eval(fetchHistoricalCandles(schema, startMs, endMs)).flatMap(Stream.emits)
-    }.reduce(_ ++ _)
+    // Fetch all candles from all schemas and combine them
+    val candleListsIO = schemas.map { schema => 
+      fetchHistoricalCandles(schema, startMs, endMs)
+    }
+    
+    // Combine all IO[List[Candle]] into a single IO[List[Candle]] and sort by timestamp
+    Stream.eval {
+      candleListsIO.foldLeft(IO.pure(List.empty[Candle])) { (accIO, candlesIO) =>
+        for {
+          acc <- accIO
+          candles <- candlesIO
+        } yield acc ++ candles
+      }.map(_.sortBy(_.endTime))
+    }.flatMap(Stream.emits)
   }
   
   /**

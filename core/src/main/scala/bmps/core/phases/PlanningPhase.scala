@@ -15,7 +15,7 @@ import bmps.core.io.DatabentoSource
 import bmps.core.utils.TimestampUtils
 import bmps.core.io.DataSource
 
-class PlanningEventGenerator(dataSource: DataSource, swingService: SwingService = new SwingService(1)) extends EventGenerator {
+class PlanningEventGenerator(dataSource: DataSource, swingService: SwingService = new SwingService(1, 0.2f)) extends EventGenerator {
     def initialize(state: SystemState, options: Map[String, String] = Map.empty): SystemState = {
         val contractSymbol = dataSource.currentContractSymbol
         options.get("tradingDate") match {

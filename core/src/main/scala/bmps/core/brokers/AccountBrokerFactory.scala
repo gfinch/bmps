@@ -12,11 +12,15 @@ object AccountBrokerFactory {
             case BrokerType.SimulatedAccountBroker => 
                 val accountId = brokerConfig.getString("account-id")
                 val riskPerTrade = brokerConfig.getDouble("risk-per-trade")
-                new SimulatedAccountBroker(accountId, riskPerTrade)
+                val feePerESContract: Double = brokerConfig.getDouble("fee-per-es-contract")
+                val feePerMESContract: Double = brokerConfig.getDouble("fee-per-mes-contract")
+                new SimulatedAccountBroker(accountId, riskPerTrade, feePerESContract, feePerMESContract)
 
             case BrokerType.TradovateAccountBroker =>
                 val brokerName = brokerConfig.getString("account-id")
                 val riskPerTrade = brokerConfig.getDouble("risk-per-trade")
+                val feePerESContract: Double = brokerConfig.getDouble("fee-per-es-contract")
+                val feePerMESContract: Double = brokerConfig.getDouble("fee-per-mes-contract")
                 val userName = brokerConfig.getString("tradovate-username")
                 val clientId = brokerConfig.getString("tradovate-client-id")
                 val accountId = brokerConfig.getLong("tradovate-account-id")
@@ -38,6 +42,8 @@ object AccountBrokerFactory {
                 new TradovateAccountBroker(
                     accountId = brokerName,
                     riskPerTrade = riskPerTrade,
+                    feePerESContract = feePerESContract,
+                    feePerMESContract = feePerMESContract,
                     tradovateBroker = broker
                 )
         }
