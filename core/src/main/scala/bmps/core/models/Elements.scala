@@ -8,6 +8,10 @@ import java.time.Duration
 import java.time.LocalTime
 import bmps.core.utils.TimestampUtils
 import bmps.core.models.CandleDuration.OneSecond
+import bmps.core.services.analysis.TrendAnalysis
+import bmps.core.services.analysis.MomentumAnalysis
+import bmps.core.services.analysis.VolatilityAnalysis
+import bmps.core.services.analysis.VolumeAnalysis
 
 case class Line(Float: Float, startTime: Long, endTime: Option[Long])
 
@@ -72,6 +76,8 @@ case class Candle(
     }
 
     lazy val bodyHeight = if (isBullish) close - open else open - close
+    lazy val wickHeight = if (isBullish) high - close else close - low
+    lazy val wickToBodyRatio = wickHeight / bodyHeight
 
     def engulfs(other: Candle): Boolean = bodyHeight > other.bodyHeight
     def isOpposite(other: Candle): Boolean = isBullish && other.isBearish || isBearish && other.isBullish
@@ -168,3 +174,11 @@ object Market {
 }
 
 case class DaytimeExtreme(level: Float, extremeType: ExtremeType, timestamp: Long, endTime: Option[Long], market: Market)
+
+case class TechnicalAnalysis(
+    timestamp: Long,
+    trendAnalysis: TrendAnalysis, 
+    momentumAnalysis: MomentumAnalysis,
+    volumeAnalysis: VolumeAnalysis,
+    volatilityAnalysis: VolatilityAnalysis, 
+)

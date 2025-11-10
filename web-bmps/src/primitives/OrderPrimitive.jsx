@@ -150,7 +150,9 @@ class OrderPaneRenderer {
       'SupermanOrderBlock': 'SOB',
       'JediOrderBlock': 'JOB',
       'XGBoostOrderBlock': 'XGB',
-      'BouncingOrderBlock': 'BOB'
+      'BouncingOrderBlock': 'BOB',
+      'MomentumOrderBlock': 'MOM',
+      'TechnicalAnalysisOrderBlock': 'TAB'
     }
     return entryTypeMap[entryType] || entryType
   }

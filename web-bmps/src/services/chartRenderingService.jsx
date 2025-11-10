@@ -229,6 +229,11 @@ class ChartRenderingService {
       return 'Candle'
     }
 
+    // Check if event has technicalAnalysis property
+    if (actualEvent.technicalAnalysis) {
+      return 'TechnicalAnalysis'
+    }
+
     return null
   }
 

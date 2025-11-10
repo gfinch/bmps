@@ -2,6 +2,10 @@ package bmps.core.models
 
 import java.time.LocalDate
 import bmps.core.models.SystemStatePhase.Planning
+import bmps.core.services.analysis.TrendAnalysis
+import bmps.core.services.analysis.MomentumAnalysis
+import bmps.core.services.analysis.VolumeAnalysis
+import bmps.core.services.analysis.VolatilityAnalysis
 
 sealed trait SystemStatePhase
 object SystemStatePhase {
@@ -24,7 +28,12 @@ case class SystemState(
     tradingDirection: Option[Direction] = None,
     tradingCandles: List[Candle] = List.empty,
     tradingSwingPoints: List[SwingPoint] = List.empty,
-    lastOneSecondCandle: Option[Candle] = None,
+    recentOneSecondCandles: List[Candle] = List.empty,
+
+    recentTrendAnalysis: List[TrendAnalysis] = List.empty,
+    recentMomentumAnalysis: List[MomentumAnalysis] = List.empty,
+    recentVolumeAnalysis: List[VolumeAnalysis] = List.empty,
+    recentVolatilityAnalysis: List[VolatilityAnalysis] = List.empty,
     
     orders: List[Order] = List.empty,
     contractSymbol: Option[String] = None

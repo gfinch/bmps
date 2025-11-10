@@ -3,7 +3,7 @@ import { createChart, CandlestickSeries } from 'lightweight-charts'
 import { Play, Pause, SkipBack, SkipForward, Rewind, FastForward, Scissors, Calendar } from 'lucide-react'
 import { useEventPlayback } from '../hooks/useEventPlayback.jsx'
 import { ChartRenderingService } from '../services/chartRenderingService.jsx'
-import { CandlestickRenderer, DaytimeExtremeRenderer, PlanZoneRenderer, OrderRenderer, ModelPredictionRenderer } from '../renderers/index.js'
+import { CandlestickRenderer, DaytimeExtremeRenderer, PlanZoneRenderer, OrderRenderer, ModelPredictionRenderer, TrendRenderer } from '../renderers/index.js'
 import phaseService from '../services/phaseService.jsx'
 
 export default function TradingChartPage() {
@@ -23,10 +23,8 @@ export default function TradingChartPage() {
     planZones: true,
     daytimeExtremes: true,
     orders: true,
+    trend: true,
   })
-
-  // Model prediction horizon selector state
-  const [selectedPredictionHorizon, setSelectedPredictionHorizon] = useState('none')
 
   // Clip tool state
   const [isClipToolActive, setIsClipToolActive] = useState(false)
@@ -133,6 +131,16 @@ export default function TradingChartPage() {
         })
         chartServiceRef.current.addRenderer('Order', orderRenderer)
 
+        // Create trend renderer for technical analysis indicators
+        const trendRenderer = new TrendRenderer(chart, {
+          emaColor: '#2563EB',        // Blue for EMA
+          smaColor: '#F59E0B',        // Orange for SMA  
+          shortTermColor: '#10B981',   // Green for short-term MA
+          longTermColor: '#EF4444',    // Red for long-term MA
+          lineWidth: 2
+        }, chartServiceRef.current)
+        chartServiceRef.current.addRenderer('TechnicalAnalysis', trendRenderer)
+
         // Create model prediction renderer for AI predictions
         const modelPredictionRenderer = new ModelPredictionRenderer(chart, {
           lineColor: '#2563EB',     // Blue color for all prediction lines
@@ -202,30 +210,14 @@ export default function TradingChartPage() {
       // Update orders visibility
       chartServiceRef.current.setRendererVisibility('Order', layerVisibility.orders)
 
+      // Update trend visibility 
+      chartServiceRef.current.setRendererVisibility('TechnicalAnalysis', layerVisibility.trend)
+
       console.log('Trading chart layer visibility updated:', layerVisibility)
     }
   }, [layerVisibility])
 
-  // Update model prediction horizon visibility when selection changes
-  useEffect(() => {
-    if (chartServiceRef.current) {
-      const modelRenderer = chartServiceRef.current.renderers?.get('ModelPrediction')
-      if (modelRenderer) {
-        // Hide all horizons first
-        const horizons = ['1min', '2min', '5min', '10min', '20min']
-        horizons.forEach(horizon => {
-          modelRenderer.setHorizonVisibility(horizon, false)
-        })
-        
-        // Show selected horizon if not 'none'
-        if (selectedPredictionHorizon !== 'none') {
-          modelRenderer.setHorizonVisibility(selectedPredictionHorizon, true)
-        }
-        
-        console.log('Model prediction horizon visibility updated:', selectedPredictionHorizon)
-      }
-    }
-  }, [selectedPredictionHorizon])  // Event handlers using playback service
+  // Event handlers using playback service
   const handlePlay = () => {
     playback.togglePlayPause()
     console.log(`Trading playback ${playback.isPlaying ? 'paused' : 'playing'}`)
@@ -376,21 +368,20 @@ export default function TradingChartPage() {
             <span className="text-sm font-medium text-gray-700">Orders</span>
           </label>
           
-          {/* Model Prediction Horizon Selector */}
           <label className="flex items-center space-x-2">
-            <span className="text-sm font-medium text-gray-700">Predictions:</span>
-            <select
-              value={selectedPredictionHorizon}
-              onChange={(e) => setSelectedPredictionHorizon(e.target.value)}
-              className="px-2 py-1 text-sm border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="none">None</option>
-              <option value="1min">1 min</option>
-              <option value="2min">2 min</option>
-              <option value="5min">5 min</option>
-              <option value="10min">10 min</option>
-              <option value="20min">20 min</option>
-            </select>
+            <input
+              type="checkbox"
+              checked={layerVisibility.trend}
+              onChange={(e) => {
+                const newVisibility = {
+                  ...layerVisibility,
+                  trend: e.target.checked
+                }
+                setLayerVisibility(newVisibility)
+              }}
+              className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+            />
+            <span className="text-sm font-medium text-gray-700">Trend</span>
           </label>
         </div>
       </div>

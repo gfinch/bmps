@@ -19,6 +19,8 @@ class CandlestickRenderer extends BaseRenderer {
     }
     this.currentSwingPoints = []
     this.markersPlugin = null
+    this.additionalMarkers = new Map() // Store additional markers from other renderers
+    this.currentNewYorkOffset = 0 // Store current offset for marker updates
   }
 
   initialize() {
@@ -94,13 +96,13 @@ class CandlestickRenderer extends BaseRenderer {
    * @param {number} newYorkOffset - New York offset in milliseconds
    */
   updateSwingPointMarkers(swingPointEvents, newYorkOffset = 0) {
-    if (!this.markersPlugin || !this.options.showSwingPoints) {
+    if (!this.markersPlugin) {
       return
     }
 
     this.currentSwingPoints = swingPointEvents
-    const markers = this.processSwingPointEvents(swingPointEvents, newYorkOffset)
-    this.markersPlugin.setMarkers(markers)
+    this.currentNewYorkOffset = newYorkOffset
+    this.updateAllMarkers() // Use the combined marker system
   }
 
   /**
@@ -195,6 +197,55 @@ class CandlestickRenderer extends BaseRenderer {
       .sort((a, b) => a.time - b.time)
   }
 
+  /**
+   * Add additional markers from other renderers
+   * @param {string} sourceId - Identifier for the source renderer
+   * @param {Array} markers - Array of marker objects
+   */
+  addAdditionalMarkers(sourceId, markers) {
+    this.additionalMarkers.set(sourceId, markers)
+    this.updateAllMarkers()
+    console.debug(`CandlestickRenderer: Added ${markers.length} markers from ${sourceId}`)
+  }
+
+  /**
+   * Remove additional markers from a specific source
+   * @param {string} sourceId - Identifier for the source renderer
+   */
+  removeAdditionalMarkers(sourceId) {
+    if (this.additionalMarkers.has(sourceId)) {
+      this.additionalMarkers.delete(sourceId)
+      this.updateAllMarkers()
+      console.debug(`CandlestickRenderer: Removed markers from ${sourceId}`)
+    }
+  }
+
+  /**
+   * Update all markers by combining swing points and additional markers
+   */
+  updateAllMarkers() {
+    if (!this.markersPlugin) return
+
+    const allMarkers = []
+
+    // Add swing point markers
+    if (this.options.showSwingPoints && this.currentSwingPoints.length > 0) {
+      const swingMarkers = this.processSwingPointEvents(this.currentSwingPoints, this.currentNewYorkOffset)
+      allMarkers.push(...swingMarkers)
+    }
+
+    // Add additional markers from other renderers
+    this.additionalMarkers.forEach((markers, sourceId) => {
+      allMarkers.push(...markers)
+    })
+
+    // Sort markers by time to ensure proper display order
+    allMarkers.sort((a, b) => a.time - b.time)
+
+    this.markersPlugin.setMarkers(allMarkers)
+    console.debug(`CandlestickRenderer: Updated ${allMarkers.length} total markers`)
+  }
+
   destroy() {
     if (this.markersPlugin) {
       // Clear any markers before cleaning up
@@ -211,6 +262,7 @@ class CandlestickRenderer extends BaseRenderer {
       }
     }
     this.currentSwingPoints = []
+    this.additionalMarkers.clear()
   }
 }
 

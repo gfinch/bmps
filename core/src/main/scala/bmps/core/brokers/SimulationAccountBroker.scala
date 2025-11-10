@@ -8,19 +8,23 @@ import bmps.core.models.OrderType
 trait SimulationAccountBroker extends AccountBroker {
 
     def placeOrder(order: Order, candle: Candle): Order = {
-        order.copy(status = Placed, placedTimestamp = Some(candle.endTime))
+        val ts = snapToOneMinute((candle.timestamp))
+        order.copy(status = Placed, placedTimestamp = Some(ts))
     }
     
     def fillOrder(order: Order, candle: Candle): Order = {
-        order.copy(status = Filled, filledTimestamp = Some(candle.timestamp))
+        val ts = snapToOneMinute((candle.timestamp))
+        order.copy(status = Filled, filledTimestamp = Some(ts))
     }
 
     def takeProfit(order: Order, candle: Candle): Order = {
-        order.copy(status = Profit, closeTimestamp = Some(candle.timestamp))
+        val ts = snapToOneMinute((candle.endTime))
+        order.copy(status = Profit, closeTimestamp = Some(ts))
     }
 
     def takeLoss(order: Order, candle: Candle): Order = {
-        order.copy(status = Loss, closeTimestamp = Some(candle.timestamp))
+        val ts = snapToOneMinute((candle.timestamp))
+        order.copy(status = Loss, closeTimestamp = Some(ts))
     }
 
     def exitOrder(order: Order, candle: Candle): Order = {
@@ -36,7 +40,15 @@ trait SimulationAccountBroker extends AccountBroker {
     }
 
     def cancelOrder(order: Order, candle: Candle, cancelReason: String): Order = {
-        order.copy(status = Cancelled, closeTimestamp = Some(candle.endTime), cancelReason = Some(cancelReason))
+        val ts = snapToOneMinute((candle.endTime))
+        order.copy(status = Cancelled, closeTimestamp = Some(ts), cancelReason = Some(cancelReason))
+    }
+
+    private def snapToOneMinute(timestamp: Long): Long = {
+        val oneMinuteMillis = 60000L
+        val remainder = timestamp % oneMinuteMillis
+        if (remainder == 0) timestamp
+        else timestamp + (oneMinuteMillis - remainder)
     }
 
 }

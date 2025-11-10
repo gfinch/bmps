@@ -1,5 +1,7 @@
 package bmps.core.models
 
+import java.security.KeyStore.Entry
+
 sealed trait OrderStatus
 object OrderStatus {
     case object Planned extends OrderStatus
@@ -33,6 +35,8 @@ object EntryType {
     case object SupermanOrderBlock extends EntryType
     case object JediOrderBlock extends EntryType
     case object BouncingOrderBlock extends EntryType
+    case object MomentumOrderBlock extends EntryType
+    case object TechnicalAnalysisOrderBlock extends EntryType
 }
 
 object CancelReason {

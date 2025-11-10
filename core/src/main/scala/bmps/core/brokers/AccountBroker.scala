@@ -10,6 +10,7 @@ import java.time.Duration
 import bmps.core.models.SerializableOrder
 import bmps.core.utils.TimestampUtils
 import bmps.core.models.EntryType
+import bmps.core.models.CandleDuration
 
 sealed trait BrokerType
 object BrokerType {

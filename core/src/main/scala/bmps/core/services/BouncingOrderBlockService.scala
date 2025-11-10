@@ -12,8 +12,8 @@ import java.time.Duration
 import breeze.numerics.round
 
 object BouncingOrderBlockService {
-    final val reboundMinThreshold = 0.18 //min % above recent bounce point
-    final val reboundMaxThreshold = 0.25 //max % above recent bounce point
+    final val reboundMinThreshold = 0.30 //min % above recent bounce point
+    final val reboundMaxThreshold = 0.40 //max % above recent bounce point
     final val stopLossThreshold = 0.25 - reboundMinThreshold //% below recent bounce point
     final val profitCapThreshold = reboundMinThreshold + 0.5
 
@@ -23,7 +23,7 @@ object BouncingOrderBlockService {
         val newOrder = for {
             contract <- state.contractSymbol
             lastOneMinuteCandle <- state.tradingCandles.lastOption
-            lastOneSecondCandle <- state.lastOneSecondCandle
+            lastOneSecondCandle <- state.recentOneSecondCandles.lastOption
             lastSwing <- state.tradingSwingPoints.lastOption
         } yield {
             if (!state.orders.exists(_.timestamp > lastSwing.timestamp)) {//There have been no orders since the last swing

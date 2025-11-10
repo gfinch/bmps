@@ -28,6 +28,7 @@ import bmps.core.utils.MarketCalendar
 import com.typesafe.config.Config
 import bmps.core.utils.MarketCalendar
 import bmps.core.services.OrderService
+import bmps.core.services.TechnicalAnalysisService
 
 object AppLauncher extends IOApp.Simple {
 
@@ -88,7 +89,8 @@ object AppLauncher extends IOApp.Simple {
     leadAccount = loadAccountBrokers()
     (planningSource, preparingSource, tradingSource) = loadDataSources()
 
-    orderService = new OrderService()
+    technicalAnalysisService = new TechnicalAnalysisService()
+    orderService = new OrderService(technicalAnalysisService)
 
     // populate with PhaseRunner instances, using configured AccountBrokers for TradingPhase
     runners: Map[SystemStatePhase, PhaseRunner] = Map(

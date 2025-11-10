@@ -67,7 +67,10 @@ class PhaseRunner(source: CandleSource, processor: EventGenerator) {
         }
       }.compile.drain
         .handleErrorWith { error =>
-          IO.println(s"[PhaseRunner] Stream error for phase $phase: ${error.getMessage}, restarting stream...") >>
+          IO.println(s"[PhaseRunner] Stream error for phase $phase: ${error.getMessage}") >>
+          IO.println(s"[PhaseRunner] Error class: ${error.getClass.getName}") >>
+          IO(error.printStackTrace()) >>
+          IO.println(s"[PhaseRunner] Restarting stream...") >>
           IO.sleep(scala.concurrent.duration.DurationInt(2).seconds) >>
           processCandles(stateRef, eventStore, tradingDate, phase) // Recursive retry
         }

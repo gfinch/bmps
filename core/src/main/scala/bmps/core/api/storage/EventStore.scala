@@ -66,9 +66,12 @@ class EventStore private (
    * Returns (events, isComplete).
    */
   def getEvents(tradingDate: LocalDate, phase: SystemStatePhase): IO[(List[Event], Boolean)] = {
-    storeRef.get.map { store =>
+    storeRef.get.flatMap { store =>
       val key = (tradingDate, phase)
-      store.getOrElse(key, (List.empty, false))
+      val result = store.getOrElse(key, (List.empty, false))
+      val eventCounts = result._1.groupBy(_.eventType).view.mapValues(_.size).toMap
+      // IO.println(s"Event counts for $tradingDate $phase: $eventCounts") *> 
+      IO.pure(result)
     }
   }
 
