@@ -3,13 +3,18 @@ import { createChart, CandlestickSeries } from 'lightweight-charts'
 import { Play, Pause, SkipBack, SkipForward, Rewind, FastForward, Scissors, Calendar } from 'lucide-react'
 import { useEventPlayback } from '../hooks/useEventPlayback.jsx'
 import { ChartRenderingService } from '../services/chartRenderingService.jsx'
-import { CandlestickRenderer, DaytimeExtremeRenderer, PlanZoneRenderer, OrderRenderer, ModelPredictionRenderer, TrendRenderer } from '../renderers/index.js'
+import { CandlestickRenderer, DaytimeExtremeRenderer, PlanZoneRenderer, OrderRenderer, ModelPredictionRenderer, TechnicalAnalysisRenderer, ADXRenderer } from '../renderers/index.js'
 import phaseService from '../services/phaseService.jsx'
 
 export default function TradingChartPage() {
   const chartContainerRef = useRef()
   const chartRef = useRef()
   const chartServiceRef = useRef()
+  
+  // Second chart for indicators
+  const indicatorChartContainerRef = useRef()
+  const indicatorChartRef = useRef()
+  const indicatorChartServiceRef = useRef()
   
   // Use event playback hook for trading phase
   const playback = useEventPlayback('trading')
@@ -24,6 +29,8 @@ export default function TradingChartPage() {
     daytimeExtremes: true,
     orders: true,
     trend: true,
+    keltner: true,
+    adx: true,
   })
 
   // Clip tool state
@@ -131,15 +138,24 @@ export default function TradingChartPage() {
         })
         chartServiceRef.current.addRenderer('Order', orderRenderer)
 
-        // Create trend renderer for technical analysis indicators
-        const trendRenderer = new TrendRenderer(chart, {
-          emaColor: '#2563EB',        // Blue for EMA
-          smaColor: '#F59E0B',        // Orange for SMA  
-          shortTermColor: '#10B981',   // Green for short-term MA
-          longTermColor: '#EF4444',    // Red for long-term MA
-          lineWidth: 2
+        // Create technical analysis renderer that coordinates trend and volatility analysis
+        const technicalAnalysisRenderer = new TechnicalAnalysisRenderer(chart, {
+          trend: {
+            emaColor: '#2563EB',        // Blue for EMA
+            smaColor: '#F59E0B',        // Orange for SMA  
+            shortTermColor: '#10B981',   // Green for short-term MA
+            longTermColor: '#EF4444',    // Red for long-term MA
+            lineWidth: 2
+          },
+          keltner: {
+            upperBandColor: 'rgba(168, 85, 247, 0.6)',     // Purple with good visibility
+            lowerBandColor: 'rgba(168, 85, 247, 0.6)',     // Purple with good visibility
+            centerLineColor: 'rgba(168, 85, 247, 0.4)',    // Lighter purple center line
+            lineWidth: 2,                                   // Reasonable thickness
+            showCenterLine: false                           // Hide center line for cleaner look
+          }
         }, chartServiceRef.current)
-        chartServiceRef.current.addRenderer('TechnicalAnalysis', trendRenderer)
+        chartServiceRef.current.addRenderer('TechnicalAnalysis', technicalAnalysisRenderer)
 
         // Create model prediction renderer for AI predictions
         const modelPredictionRenderer = new ModelPredictionRenderer(chart, {
@@ -160,6 +176,12 @@ export default function TradingChartPage() {
               height: chartContainerRef.current.clientHeight
             })
           }
+          if (indicatorChartContainerRef.current && indicatorChartRef.current) {
+            indicatorChartRef.current.applyOptions({ 
+              width: indicatorChartContainerRef.current.clientWidth,
+              height: indicatorChartContainerRef.current.clientHeight
+            })
+          }
         }
 
         window.addEventListener('resize', handleResize)
@@ -170,10 +192,18 @@ export default function TradingChartPage() {
             chartServiceRef.current.destroy()
             chartServiceRef.current = null
           }
+          if (indicatorChartServiceRef.current) {
+            indicatorChartServiceRef.current.destroy()
+            indicatorChartServiceRef.current = null
+          }
           if (chart) {
             chart.remove()
           }
+          if (indicatorChartRef.current) {
+            indicatorChartRef.current.remove()
+          }
           chartRef.current = null
+          indicatorChartRef.current = null
         }
       } catch (error) {
         console.error('Error creating chart:', error)
@@ -184,10 +214,200 @@ export default function TradingChartPage() {
     return cleanup
   }, [])
 
-  // Update chart when visible events change
+  // Initialize indicator chart
+  useEffect(() => {
+    if (!indicatorChartContainerRef.current || indicatorChartRef.current) return
+
+    const initIndicatorChart = () => {
+      try {
+        const container = indicatorChartContainerRef.current
+        if (!container || container.clientWidth === 0 || container.clientHeight === 0) {
+          setTimeout(initIndicatorChart, 100)
+          return
+        }
+
+        // Clear any existing content
+        container.innerHTML = ''
+
+        // Create the indicator chart
+        const indicatorChart = createChart(container, {
+          width: container.clientWidth,
+          height: container.clientHeight,
+          layout: {
+            background: { color: '#ffffff' },
+            textColor: '#333',
+          },
+          grid: {
+            vertLines: { color: '#f0f0f0' },
+            horzLines: { color: '#f0f0f0' },
+          },
+          crosshair: {
+            mode: 0, // Normal mode - crosshairs follow mouse freely
+          },
+          rightPriceScale: {
+            borderColor: '#cccccc',
+          },
+          timeScale: {
+            borderColor: '#cccccc',
+            timeVisible: true,
+            secondsVisible: false,
+          },
+        })
+
+        // Create chart rendering service for indicators
+        indicatorChartServiceRef.current = new ChartRenderingService(indicatorChart, 'trading')
+        
+        // Create ADX renderer for trend strength
+        const adxRenderer = new ADXRenderer(indicatorChart, {
+          adxColor: '#2563EB',        // Blue for ADX line
+          lineWidth: 2,
+          showThresholds: true,
+          strongTrendLine: 25,        // ADX > 25 indicates strong trend
+          veryStrongTrendLine: 50,    // ADX > 50 indicates very strong trend
+          thresholdColor: '#6B7280',  // Gray for threshold lines
+          thresholdStyle: 1           // Dashed line
+        })
+        indicatorChartServiceRef.current.addRenderer('TechnicalAnalysis', adxRenderer)
+        
+        // Store chart reference
+        indicatorChartRef.current = indicatorChart
+
+        console.log('Indicator chart initialized successfully with ADX')
+
+      } catch (error) {
+        console.error('Error creating indicator chart:', error)
+      }
+    }
+
+    const cleanup = initIndicatorChart()
+    return cleanup
+  }, [])
+
+  // Synchronize charts when both are available
+  useEffect(() => {
+    // Wait a bit for both charts to be fully initialized
+    const setupSynchronization = () => {
+      if (!chartRef.current || !indicatorChartRef.current) {
+        setTimeout(setupSynchronization, 100)
+        return
+      }
+
+      const mainChart = chartRef.current
+      const indicatorChart = indicatorChartRef.current
+
+      console.log('Setting up chart synchronization...')
+
+      let syncingTimeScale = false
+
+      // Function to calculate time offset between charts
+      const getTimeOffset = () => {
+        try {
+          const mainTimeScale = mainChart.timeScale()
+          const indicatorTimeScale = indicatorChart.timeScale()
+          
+          // Get the actual time ranges instead of logical ranges
+          const mainRange = mainTimeScale.getVisibleRange()
+          const indicatorRange = indicatorTimeScale.getVisibleRange()
+          
+          if (mainRange && indicatorRange) {
+            // Calculate the time difference in seconds between chart starts
+            const mainStartTime = mainRange.from
+            const indicatorStartTime = indicatorRange.from
+            
+            const offsetSeconds = mainStartTime - indicatorStartTime
+            
+            console.log('Chart time offset calculated:', {
+              mainStart: new Date(mainStartTime * 1000),
+              indicatorStart: new Date(indicatorStartTime * 1000),
+              offsetSeconds,
+              offsetHours: offsetSeconds / 3600
+            })
+            
+            return offsetSeconds
+          }
+        } catch (error) {
+          console.debug('Could not calculate time offset:', error)
+        }
+        return 0
+      }
+
+      // Synchronize time scales with time-based ranges
+      const handleMainTimeScaleChange = () => {
+        if (syncingTimeScale) return
+        syncingTimeScale = true
+        
+        try {
+          const mainTimeScale = mainChart.timeScale()
+          const indicatorTimeScale = indicatorChart.timeScale()
+          const mainRange = mainTimeScale.getVisibleRange()
+          
+          if (mainRange) {
+            // Use the same time range on indicator chart
+            // The charts should show the same actual time periods
+            indicatorTimeScale.setVisibleRange(mainRange)
+            console.debug('Synced main to indicator using time range')
+          }
+        } catch (error) {
+          console.debug('Main to indicator sync failed:', error)
+        }
+        
+        setTimeout(() => { syncingTimeScale = false }, 10)
+      }
+
+      const handleIndicatorTimeScaleChange = () => {
+        if (syncingTimeScale) return
+        syncingTimeScale = true
+        
+        try {
+          const mainTimeScale = mainChart.timeScale()
+          const indicatorTimeScale = indicatorChart.timeScale()
+          const indicatorRange = indicatorTimeScale.getVisibleRange()
+          
+          if (indicatorRange) {
+            // Use the same time range on main chart
+            mainTimeScale.setVisibleRange(indicatorRange)
+            console.debug('Synced indicator to main using time range')
+          }
+        } catch (error) {
+          console.debug('Indicator to main sync failed:', error)
+        }
+        
+        setTimeout(() => { syncingTimeScale = false }, 10)
+      }
+
+      // Subscribe to time scale changes
+      const mainTimeScale = mainChart.timeScale()
+      const indicatorTimeScale = indicatorChart.timeScale()
+
+      mainTimeScale.subscribeVisibleLogicalRangeChange(handleMainTimeScaleChange)
+      indicatorTimeScale.subscribeVisibleLogicalRangeChange(handleIndicatorTimeScaleChange)
+
+      console.log('Chart synchronization (time scale) setup complete')
+
+      // Return cleanup function
+      return () => {
+        try {
+          mainTimeScale.unsubscribeVisibleLogicalRangeChange(handleMainTimeScaleChange)
+          indicatorTimeScale.unsubscribeVisibleLogicalRangeChange(handleIndicatorTimeScaleChange)
+          
+          console.log('Chart synchronization cleanup complete')
+        } catch (error) {
+          console.debug('Synchronization cleanup error:', error)
+        }
+      }
+    }
+
+    const cleanup = setupSynchronization()
+    return cleanup
+  }, []) // Run when component mounts
+
+  // Update charts when visible events change
   useEffect(() => {
     if (chartServiceRef.current) {
       chartServiceRef.current.updateVisibleEvents(playback.visibleEvents, playback.currentTimestamp)
+    }
+    if (indicatorChartServiceRef.current) {
+      indicatorChartServiceRef.current.updateVisibleEvents(playback.visibleEvents, playback.currentTimestamp)
     }
   }, [playback.visibleEvents, playback.currentTimestamp])
 
@@ -195,6 +415,9 @@ export default function TradingChartPage() {
   useEffect(() => {
     if (chartServiceRef.current && playback.newYorkOffset !== null) {
       chartServiceRef.current.setNewYorkOffset(playback.newYorkOffset)
+    }
+    if (indicatorChartServiceRef.current && playback.newYorkOffset !== null) {
+      indicatorChartServiceRef.current.setNewYorkOffset(playback.newYorkOffset)
     }
   }, [playback.newYorkOffset])
 
@@ -211,10 +434,22 @@ export default function TradingChartPage() {
       chartServiceRef.current.setRendererVisibility('Order', layerVisibility.orders)
 
       // Update trend visibility 
-      chartServiceRef.current.setRendererVisibility('TechnicalAnalysis', layerVisibility.trend)
-
-      console.log('Trading chart layer visibility updated:', layerVisibility)
+      chartServiceRef.current.setRendererVisibility('TechnicalAnalysis', layerVisibility.trend || layerVisibility.keltner)
+      
+      // Update individual technical analysis sub-renderers
+      const technicalAnalysisRenderer = chartServiceRef.current.renderers.get('TechnicalAnalysis')
+      if (technicalAnalysisRenderer) {
+        technicalAnalysisRenderer.setVisibility(layerVisibility.trend, 'trend')
+        technicalAnalysisRenderer.setVisibility(layerVisibility.keltner, 'keltner')
+      }
     }
+
+    if (indicatorChartServiceRef.current) {
+      // Update ADX visibility on indicator chart
+      indicatorChartServiceRef.current.setRendererVisibility('TechnicalAnalysis', layerVisibility.adx)
+    }
+
+    console.log('Trading chart layer visibility updated:', layerVisibility)
   }, [layerVisibility])
 
   // Event handlers using playback service
@@ -309,14 +544,25 @@ export default function TradingChartPage() {
 
   return (
     <div className="flex-1 flex flex-col">
-      {/* Chart Container - fills remaining space */}
-      <div className="flex-1 min-h-0">
-        <div 
-          ref={chartContainerRef} 
-          className="w-full h-full min-h-[300px]"
-          onClick={handleChartClick}
-          style={{ cursor: isClipToolActive ? 'crosshair' : 'default' }}
-        />
+      {/* Charts Container - fills remaining space */}
+      <div className="flex-1 min-h-0 flex flex-col space-y-2">
+        {/* Main Price Chart */}
+        <div className="flex-1 min-h-0">
+          <div 
+            ref={chartContainerRef} 
+            className="w-full h-full min-h-[200px]"
+            onClick={handleChartClick}
+            style={{ cursor: isClipToolActive ? 'crosshair' : 'default' }}
+          />
+        </div>
+        
+        {/* Indicator Chart */}
+        <div className="h-48 min-h-[150px]">
+          <div 
+            ref={indicatorChartContainerRef} 
+            className="w-full h-full"
+          />
+        </div>
       </div>
 
       {/* Layer Controls - between chart and media controls */}
@@ -382,6 +628,38 @@ export default function TradingChartPage() {
               className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
             />
             <span className="text-sm font-medium text-gray-700">Trend</span>
+          </label>
+          
+          <label className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              checked={layerVisibility.keltner}
+              onChange={(e) => {
+                const newVisibility = {
+                  ...layerVisibility,
+                  keltner: e.target.checked
+                }
+                setLayerVisibility(newVisibility)
+              }}
+              className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+            />
+            <span className="text-sm font-medium text-gray-700">Keltner</span>
+          </label>
+          
+          <label className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              checked={layerVisibility.adx}
+              onChange={(e) => {
+                const newVisibility = {
+                  ...layerVisibility,
+                  adx: e.target.checked
+                }
+                setLayerVisibility(newVisibility)
+              }}
+              className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+            />
+            <span className="text-sm font-medium text-gray-700">ADX + RSI</span>
           </label>
         </div>
       </div>

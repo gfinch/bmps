@@ -174,7 +174,13 @@ class TrendRenderer extends BaseRenderer {
         ema: null,
         sma: null,
         shortTerm: null,
-        longTerm: null
+        longTerm: null,
+        adx: null // Add ADX for trend strength evaluation
+      }
+      
+      // Extract ADX value for trend strength
+      if (trend.adx != null) {
+        currentMAs.adx = Number(trend.adx)
       }
       
       // Moving averages - checking all possible property names
@@ -354,14 +360,16 @@ class TrendRenderer extends BaseRenderer {
           description: 'Golden Cross: Short MA > Long MA',
           timestamp,
           price: curr.shortTerm,
-          signal: 'bullish'
+          signal: 'bullish',
+          adx: curr.adx || null // Include ADX value for trend strength evaluation
         })
         console.debug('TrendRenderer: GOLDEN CROSS detected!', {
           time: new Date(timestamp),
           prevShort: prev.shortTerm,
           prevLong: prev.longTerm,
           currShort: curr.shortTerm,
-          currLong: curr.longTerm
+          currLong: curr.longTerm,
+          adx: curr.adx
         })
       } else if (prev.shortTerm >= prev.longTerm && curr.shortTerm < curr.longTerm) {
         crossovers.push({
@@ -369,14 +377,16 @@ class TrendRenderer extends BaseRenderer {
           description: 'Death Cross: Short MA < Long MA', 
           timestamp,
           price: curr.shortTerm,
-          signal: 'bearish'
+          signal: 'bearish',
+          adx: curr.adx || null // Include ADX value for trend strength evaluation
         })
         console.debug('TrendRenderer: DEATH CROSS detected!', {
           time: new Date(timestamp),
           prevShort: prev.shortTerm,
           prevLong: prev.longTerm,
           currShort: curr.shortTerm,
-          currLong: curr.longTerm
+          currLong: curr.longTerm,
+          adx: curr.adx
         })
       }
     }
@@ -434,10 +444,32 @@ class TrendRenderer extends BaseRenderer {
       const isBullish = crossover.signal === 'bullish'
       const isPrimary = (crossover.type.includes('golden_cross') || crossover.type.includes('death_cross')) && !crossover.type.includes('secondary')
       
+      // Check ADX trend strength to determine color
+      const hasWeakTrend = crossover.adx !== null && crossover.adx <= 25
+      const isStrongTrend = crossover.adx !== null && crossover.adx > 25
+      
+      // Color logic: Gray for weak trend (ADX ≤ 25), normal colors for strong trend
+      let markerColor
+      if (hasWeakTrend) {
+        markerColor = '#9CA3AF' // Gray for weak trend - should not trade
+      } else {
+        markerColor = isBullish ? '#FBBF24' : '#000000' // Yellow for Golden Cross, Black for Death Cross
+      }
+      
+      console.debug('TrendRenderer: Creating crossover marker', {
+        type: crossover.type,
+        signal: crossover.signal,
+        adx: crossover.adx,
+        hasWeakTrend,
+        isStrongTrend,
+        markerColor,
+        time: new Date(crossover.timestamp)
+      })
+      
       return {
         time: Math.floor((crossover.timestamp + newYorkOffset) / 1000),
         position: isBullish ? 'belowBar' : 'aboveBar',
-        color: isBullish ? '#FBBF24' : '#000000', // Yellow for Golden Cross, Black for Death Cross
+        color: markerColor,
         shape: isPrimary ? (isBullish ? 'arrowUp' : 'arrowDown') : 'circle', // Arrow direction based on signal
         text: isPrimary ? (isBullish ? 'GC' : 'DC') : (isBullish ? 'gc' : 'dc'), // Golden Cross / Death Cross
         size: isPrimary ? 1 : 0.8
