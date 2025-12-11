@@ -12,8 +12,6 @@ class TrendRenderer extends BaseRenderer {
     this.chartService = chartService
     this.options = {
       // Moving Average colors
-      emaColor: '#2563EB',        // Blue for EMA
-      smaColor: '#F59E0B',        // Orange for SMA  
       shortTermColor: '#10B981',   // Green for short-term MA
       longTermColor: '#EF4444',    // Red for long-term MA
       
@@ -24,8 +22,6 @@ class TrendRenderer extends BaseRenderer {
     }
     
     // Main chart series for moving averages
-    this.emaSeries = null
-    this.smaSeries = null
     this.shortTermSeries = null
     this.longTermSeries = null
     
@@ -38,27 +34,11 @@ class TrendRenderer extends BaseRenderer {
   }
 
   initialize() {
-    if (this.emaSeries) return // Already initialized
+    if (this.shortTermSeries) return // Already initialized
     
     console.debug('TrendRenderer: Starting initialization...')
     
     // Create moving average series on main chart
-    this.emaSeries = this.chart.addSeries(LineSeries, {
-      color: this.options.emaColor,
-      lineWidth: this.options.lineWidth,
-      title: 'EMA',
-      lastValueVisible: false,
-      priceLineVisible: false,
-    })
-    
-    this.smaSeries = this.chart.addSeries(LineSeries, {
-      color: this.options.smaColor,
-      lineWidth: this.options.lineWidth,
-      title: 'SMA',
-      lastValueVisible: false,
-      priceLineVisible: false,
-    })
-    
     this.shortTermSeries = this.chart.addSeries(LineSeries, {
       color: this.options.shortTermColor,
       lineWidth: this.options.lineWidth,
@@ -76,21 +56,19 @@ class TrendRenderer extends BaseRenderer {
     })
     
     console.debug('TrendRenderer: Initialized with moving averages', {
-      ema: !!this.emaSeries,
-      sma: !!this.smaSeries,
       shortTerm: !!this.shortTermSeries,
       longTerm: !!this.longTermSeries
     })
   }
 
   update(allEvents, currentTimestamp, newYorkOffset = 0) {
-    if (!this.emaSeries) return
+    if (!this.shortTermSeries) return
     
     console.debug('TrendRenderer: Update called', {
       totalEvents: allEvents.length,
       currentTimestamp,
       newYorkOffset,
-      hasEMASeries: !!this.emaSeries
+      hasShortTermSeries: !!this.shortTermSeries
     })
     
     // Filter for TechnicalAnalysis events
@@ -118,11 +96,8 @@ class TrendRenderer extends BaseRenderer {
     const processedData = this.processTechnicalAnalysisEvents(technicalAnalysisEvents, newYorkOffset)
     
     console.debug('TrendRenderer: Processed data', {
-      emaCount: processedData.ema.length,
-      smaCount: processedData.sma.length,
       shortTermCount: processedData.shortTerm.length,
-      longTermCount: processedData.longTerm.length,
-      sampleEMA: processedData.ema.slice(0, 3)
+      longTermCount: processedData.longTerm.length
     })
     
     // Update moving average series
@@ -136,8 +111,6 @@ class TrendRenderer extends BaseRenderer {
    */
   processTechnicalAnalysisEvents(events, newYorkOffset = 0) {
     const processedData = {
-      ema: [],
-      sma: [],
       shortTerm: [],
       longTerm: []
     }
@@ -171,8 +144,6 @@ class TrendRenderer extends BaseRenderer {
       
       // Extract current MA values for crossover detection
       const currentMAs = {
-        ema: null,
-        sma: null,
         shortTerm: null,
         longTerm: null,
         adx: null // Add ADX for trend strength evaluation
@@ -183,27 +154,7 @@ class TrendRenderer extends BaseRenderer {
         currentMAs.adx = Number(trend.adx)
       }
       
-      // Moving averages - checking all possible property names
-      if (trend.ema != null) {
-        const value = Number(trend.ema)
-        processedData.ema.push({ time, value })
-        currentMAs.ema = value
-      }
-      if (trend.exponentialMovingAverage != null) {
-        const value = Number(trend.exponentialMovingAverage)
-        processedData.ema.push({ time, value })
-        currentMAs.ema = value
-      }
-      if (trend.sma != null) {
-        const value = Number(trend.sma)
-        processedData.sma.push({ time, value })
-        currentMAs.sma = value
-      }
-      if (trend.simpleMovingAverage != null) {
-        const value = Number(trend.simpleMovingAverage)
-        processedData.sma.push({ time, value })
-        currentMAs.sma = value
-      }
+      // Moving averages
       if (trend.shortTermMA != null) {
         const value = Number(trend.shortTermMA)
         processedData.shortTerm.push({ time, value })
@@ -231,14 +182,8 @@ class TrendRenderer extends BaseRenderer {
     })
     
     console.debug('TrendRenderer: Processed data results', {
-      emaCount: processedData.ema.length,
-      smaCount: processedData.sma.length,
       shortTermCount: processedData.shortTerm.length,
-      longTermCount: processedData.longTerm.length,
-      sampleData: {
-        ema: processedData.ema.slice(0, 3),
-        sma: processedData.sma.slice(0, 3)
-      }
+      longTermCount: processedData.longTerm.length
     })
 
     // Sort all data by time
@@ -257,21 +202,10 @@ class TrendRenderer extends BaseRenderer {
     this.currentNewYorkOffset = newYorkOffset
     
     console.debug('TrendRenderer: Updating moving averages with data', {
-      emaCount: data.ema.length,
-      smaCount: data.sma.length,
       shortTermCount: data.shortTerm.length,
-      longTermCount: data.longTerm.length,
-      sampleEMA: data.ema.slice(0, 3)
+      longTermCount: data.longTerm.length
     })
     
-    if (data.ema.length > 0) {
-      this.emaSeries.setData(data.ema)
-      console.debug('TrendRenderer: Set EMA data', data.ema.length, 'points')
-    }
-    if (data.sma.length > 0) {
-      this.smaSeries.setData(data.sma)
-      console.debug('TrendRenderer: Set SMA data', data.sma.length, 'points')
-    }
     if (data.shortTerm.length > 0) {
       this.shortTermSeries.setData(data.shortTerm)
       console.debug('TrendRenderer: Set Short Term data', data.shortTerm.length, 'points')
@@ -295,14 +229,12 @@ class TrendRenderer extends BaseRenderer {
   setVisibility(visible) {
     console.debug(`TrendRenderer: setVisibility called with ${visible}`)
     
-    if (!this.emaSeries) {
-      console.debug('TrendRenderer: No EMA series found, cannot set visibility')
+    if (!this.shortTermSeries) {
+      console.debug('TrendRenderer: No series found, cannot set visibility')
       return
     }
     
     // Toggle moving averages visibility
-    this.emaSeries.applyOptions({ visible })
-    this.smaSeries.applyOptions({ visible })
     this.shortTermSeries.applyOptions({ visible })
     this.longTermSeries.applyOptions({ visible })
     
@@ -390,44 +322,6 @@ class TrendRenderer extends BaseRenderer {
         })
       }
     }
-    
-    // EMA vs SMA crossover (Secondary signal) - DISABLED
-    // Commenting out secondary crossovers to reduce noise
-    /*
-    if (curr.ema && curr.sma && prev.ema && prev.sma) {
-      if (prev.ema <= prev.sma && curr.ema > curr.sma) {
-        crossovers.push({
-          type: 'golden_cross_secondary',
-          description: 'Golden Cross: EMA > SMA',
-          timestamp,
-          price: curr.ema,
-          signal: 'bullish'
-        })
-        console.debug('TrendRenderer: Secondary golden cross detected (EMA > SMA)', {
-          time: new Date(timestamp),
-          prevEMA: prev.ema,
-          prevSMA: prev.sma,
-          currEMA: curr.ema,
-          currSMA: curr.sma
-        })
-      } else if (prev.ema >= prev.sma && curr.ema < curr.sma) {
-        crossovers.push({
-          type: 'death_cross_secondary',
-          description: 'Death Cross: EMA < SMA',
-          timestamp,
-          price: curr.ema,
-          signal: 'bearish'
-        })
-        console.debug('TrendRenderer: Secondary death cross detected (EMA < SMA)', {
-          time: new Date(timestamp),
-          prevEMA: prev.ema,
-          prevSMA: prev.sma,
-          currEMA: curr.ema,
-          currSMA: curr.sma
-        })
-      }
-    }
-    */
     
     this.previousMAs = currentMAs
     return crossovers
@@ -526,14 +420,6 @@ class TrendRenderer extends BaseRenderer {
     console.debug('TrendRenderer: Destroying renderer')
     
     // Remove main chart series
-    if (this.emaSeries) {
-      this.chart.removeSeries(this.emaSeries)
-      this.emaSeries = null
-    }
-    if (this.smaSeries) {
-      this.chart.removeSeries(this.smaSeries)
-      this.smaSeries = null
-    }
     if (this.shortTermSeries) {
       this.chart.removeSeries(this.shortTermSeries)
       this.shortTermSeries = null

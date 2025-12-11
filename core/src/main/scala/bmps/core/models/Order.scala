@@ -36,12 +36,17 @@ object EntryType {
     case object JediOrderBlock extends EntryType
     case object BouncingOrderBlock extends EntryType
     case object MomentumOrderBlock extends EntryType
-    case object TechnicalAnalysisOrderBlock extends EntryType
+    case object OverOrderBlock extends EntryType
+    case object TrendOrderBlock extends EntryType
+    case class Trendy(description: String) extends EntryType {
+        override def toString(): String = description
+    }
 }
 
 object CancelReason {
     final val FullCandleOutside: String = "A full candle fell outside the range of the order."
     final val TenMinuteWickOutside: String = "More than ten minutes have passed and the candle wicked outside the order."
+    final val TenMinutesUnfilled: String = "The order has been unfilled for more than ten minutes."
     final val EndOfDay: String = "Ten minutes until closing. All orders cancelled."
 }
 

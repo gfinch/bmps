@@ -21,6 +21,7 @@ class DaytimeExtremePrimitive {
       labelColor: '#FF6B35',
       labelSize: 12,
       labelOffset: 15, // pixels to the left of start time
+      extendAcrossChart: false, // If true, lines extend from left edge to right edge
       ...options
     }
     this.lines = []
@@ -144,13 +145,22 @@ class DaytimeExtremePaneRenderer {
       return
     }
 
-    // Get time coordinates 
-    const startX = getTimeCoordinate(line.startTime, this.chart)
-    if (startX === null) return
+    // Determine start and end X coordinates based on extendAcrossChart option
+    let startX, endX
+    
+    if (this.options.extendAcrossChart) {
+      // Extend from left edge to right edge of chart
+      startX = 0
+      endX = null // null means extend to right edge
+    } else {
+      // Use the line's time-based boundaries
+      startX = getTimeCoordinate(line.startTime, this.chart)
+      if (startX === null) return
 
-    const endX = line.endTime 
-      ? getTimeCoordinate(line.endTime, this.chart)
-      : null // null means infinite line to right edge
+      endX = line.endTime 
+        ? getTimeCoordinate(line.endTime, this.chart)
+        : null // null means infinite line to right edge
+    }
 
     // Draw the horizontal line using shared utility
     drawHorizontalLine(ctx, {
@@ -165,9 +175,14 @@ class DaytimeExtremePaneRenderer {
 
     // Draw the label using shared utility
     if (line.label) {
+      // For label positioning, use the actual startTime coordinate if available
+      const labelX = this.options.extendAcrossChart 
+        ? getTimeCoordinate(line.startTime, this.chart) || this.options.labelOffset
+        : startX
+        
       drawLabel(ctx, {
         text: line.label,
-        x: startX - this.options.labelOffset,
+        x: labelX - this.options.labelOffset,
         y: priceY,
         color: line.style.labelColor,
         size: line.style.labelSize,

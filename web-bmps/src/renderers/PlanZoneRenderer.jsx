@@ -63,10 +63,17 @@ class PlanZoneRenderer extends BaseRenderer {
     // Transform events into zone data, passing the offset
     this.planZones = deduplicatedEvents.map(event => this.transformEventToZoneData(event, newYorkOffset))
 
-    console.debug(`PlanZoneRenderer: Transformed to ${this.planZones.length} zones:`, this.planZones)
+    // Optionally filter to show only active zones (zones without endTime)
+    let zonesToDisplay = this.planZones
+    if (this.options.showOnlyActive) {
+      zonesToDisplay = this.planZones.filter(zone => zone.endTime === null)
+      console.debug(`PlanZoneRenderer: Filtering for active zones only. Total: ${this.planZones.length}, Active: ${zonesToDisplay.length}`)
+    }
 
-    // Update the primitive with new zone data
-    this.primitive.updateZones(this.planZones)
+    console.debug(`PlanZoneRenderer: Displaying ${zonesToDisplay.length} zones`)
+
+    // Update the primitive with zone data
+    this.primitive.updateZones(zonesToDisplay)
   }
 
   /**

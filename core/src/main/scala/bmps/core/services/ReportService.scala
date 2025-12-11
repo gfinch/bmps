@@ -6,6 +6,8 @@ import java.time.LocalDate
 import bmps.core.api.storage.EventStore
 import bmps.core.brokers.{AccountBroker, LeadAccountBroker}
 import bmps.core.models.{Event, EventType, SystemStatePhase, SerializableOrder}
+import bmps.core.brokers.rest.OrderState
+import bmps.core.models.OrderStatus
 
 case class DateProfitability(
   date: LocalDate,
@@ -72,7 +74,24 @@ class ReportService(
           }
           aggregatedOrders = allOrders.flatten
           report = broker.orderReport(aggregatedOrders)
-        } yield Some(report)
+        } yield {
+          printScenarioWinLoss(report.orders)
+          Some(report)
+        }
+    }
+  }
+
+  private def printScenarioWinLoss(orders: List[SerializableOrder]): Unit = {
+    val stats = orders.groupBy(_.entryType).map { case (entryType, groupOrders) =>
+      val wins = groupOrders.count(order => order.status == OrderStatus.Profit)
+      val losses = groupOrders.count(order => order.status == OrderStatus.Loss)
+      val total = wins + losses
+      val winRate = if (total > 0) (wins.toDouble / total.toDouble) * 100 else 0.0
+      (entryType, wins, losses, winRate)
+    }.toList.sortBy(-_._4) // Sort by win rate descending
+    
+    stats.foreach { case (entryType, wins, losses, winRate) =>
+      println(f"${entryType.toString()}%20s: Wins=$wins%3d, Losses=$losses%3d, WinRate=$winRate%6.2f%%")
     }
   }
   

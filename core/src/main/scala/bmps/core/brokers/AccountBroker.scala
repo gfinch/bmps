@@ -147,7 +147,8 @@ class LeadAccountBroker(val brokers: List[AccountBroker],
             cancelPlannedOrderCandleOutside(_,_),
             cancelPlacedOrderCandleOutside(_,_), 
             cancelOldPlannedOrderWickOutside(_,_),
-            cancelOldPlacedOrderWickOutside(_,_)
+            cancelOldPlacedOrderWickOutside(_,_),
+            cancelUnfilledOrderAfterTenMinutes(_,_),
         )
 
         operations.foldLeft(order) { (updatedOrder, operation) =>
@@ -298,6 +299,14 @@ class LeadAccountBroker(val brokers: List[AccountBroker],
                     if (candle.low <= order.takeProfit) cancelOrder(order, candle, reason)
                     else order
             }
+        } else order
+    }
+
+    private def cancelUnfilledOrderAfterTenMinutes(order: Order, candle: Candle): Order = {
+        if ((order.status == Placed || order.status == Planned) && 
+                order.timestamp + TenMinutes <= candle.timestamp) {
+            val reason = CancelReason.TenMinutesUnfilled
+            cancelOrder(order, candle, reason)
         } else order
     }
 }

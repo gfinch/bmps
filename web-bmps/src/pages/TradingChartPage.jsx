@@ -1,10 +1,13 @@
 import { useRef, useState, useEffect } from 'react'
 import { createChart, CandlestickSeries } from 'lightweight-charts'
-import { Play, Pause, SkipBack, SkipForward, Rewind, FastForward, Scissors, Calendar } from 'lucide-react'
+import { Play, Pause, SkipBack, SkipForward, Rewind, FastForward, Scissors, Calendar, ChevronLeft, ChevronRight } from 'lucide-react'
+import { DayPicker } from 'react-day-picker'
+import 'react-day-picker/dist/style.css'
 import { useEventPlayback } from '../hooks/useEventPlayback.jsx'
 import { ChartRenderingService } from '../services/chartRenderingService.jsx'
 import { CandlestickRenderer, DaytimeExtremeRenderer, PlanZoneRenderer, OrderRenderer, ModelPredictionRenderer, TechnicalAnalysisRenderer, ADXRenderer } from '../renderers/index.js'
 import phaseService from '../services/phaseService.jsx'
+import restApiService from '../services/restApiService.jsx'
 
 export default function TradingChartPage() {
   const chartContainerRef = useRef()
@@ -19,9 +22,12 @@ export default function TradingChartPage() {
   // Use event playback hook for trading phase
   const playback = useEventPlayback('trading')
 
-  // Get trading date from phase service (read-only)
+  // Trading date state (editable)
   const today = new Date().toISOString().split('T')[0]
-  const tradingDate = phaseService.currentConfig?.tradingDate || today
+  const [tradingDate, setTradingDate] = useState(phaseService.currentConfig?.tradingDate || today)
+  const [availableDates, setAvailableDates] = useState([])
+  const [showCalendar, setShowCalendar] = useState(false)
+  const [isLoadingDate, setIsLoadingDate] = useState(false)
 
   // Layer visibility state
   const [layerVisibility, setLayerVisibility] = useState({
@@ -35,6 +41,36 @@ export default function TradingChartPage() {
 
   // Clip tool state
   const [isClipToolActive, setIsClipToolActive] = useState(false)
+
+  // Key to force chart recreation
+  const [chartKey, setChartKey] = useState(0)
+  
+  // Track if we're manually destroying charts to prevent double cleanup
+  const isManuallyDestroyingRef = useRef(false)
+
+  // Fetch available dates with profitability when component mounts or trading date changes
+  useEffect(() => {
+    const fetchAvailableDates = async () => {
+      try {
+        const dateInfos = await restApiService.getAvailableDates(tradingDate)
+        setAvailableDates(dateInfos)
+      } catch (err) {
+        console.error('Failed to fetch available dates:', err)
+      }
+    }
+    fetchAvailableDates()
+  }, [tradingDate])
+
+  // Close calendar when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showCalendar && !event.target.closest('.calendar-container')) {
+        setShowCalendar(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showCalendar])
 
   // Initialize playback to first timestamp when page loads
   useEffect(() => {
@@ -103,7 +139,8 @@ export default function TradingChartPage() {
           lineWidth: 2,
           labelColor: '#000000',   // Black labels
           labelSize: 12,
-          labelOffset: 15
+          labelOffset: 15,
+          extendAcrossChart: true  // Extend lines across entire chart
         })
         chartServiceRef.current.addRenderer('DaytimeExtreme', daytimeExtremeRenderer)
 
@@ -115,7 +152,9 @@ export default function TradingChartPage() {
           lineWidth: 2,
           labelColor: '#374151',
           labelSize: 12,
-          labelOffset: 15
+          labelOffset: 15,
+          simpleLineMode: true,    // Trading chart uses simple horizontal lines
+          showOnlyActive: true     // Only show zones that haven't ended
         })
         chartServiceRef.current.addRenderer('PlanZone', planZoneRenderer)
 
@@ -187,23 +226,34 @@ export default function TradingChartPage() {
         window.addEventListener('resize', handleResize)
 
         return () => {
-          window.removeEventListener('resize', handleResize)
-          if (chartServiceRef.current) {
-            chartServiceRef.current.destroy()
-            chartServiceRef.current = null
+          // Skip cleanup if we're manually destroying (to prevent double cleanup)
+          if (isManuallyDestroyingRef.current) {
+            return
           }
-          if (indicatorChartServiceRef.current) {
-            indicatorChartServiceRef.current.destroy()
-            indicatorChartServiceRef.current = null
+          
+          try {
+            window.removeEventListener('resize', handleResize)
+            
+            if (chartServiceRef.current) {
+              chartServiceRef.current.destroy()
+              chartServiceRef.current = null
+            }
+            if (indicatorChartServiceRef.current) {
+              indicatorChartServiceRef.current.destroy()
+              indicatorChartServiceRef.current = null
+            }
+            if (chart) {
+              chart.remove()
+            }
+            if (indicatorChartRef.current) {
+              indicatorChartRef.current.remove()
+            }
+            chartRef.current = null
+            indicatorChartRef.current = null
+          } catch (error) {
+            // Ignore errors if charts are already disposed
+            console.debug('Chart cleanup error (likely already disposed):', error)
           }
-          if (chart) {
-            chart.remove()
-          }
-          if (indicatorChartRef.current) {
-            indicatorChartRef.current.remove()
-          }
-          chartRef.current = null
-          indicatorChartRef.current = null
         }
       } catch (error) {
         console.error('Error creating chart:', error)
@@ -212,7 +262,7 @@ export default function TradingChartPage() {
 
     const cleanup = initChart()
     return cleanup
-  }, [])
+  }, [chartKey]) // Recreate chart when chartKey changes
 
   // Initialize indicator chart
   useEffect(() => {
@@ -281,7 +331,7 @@ export default function TradingChartPage() {
 
     const cleanup = initIndicatorChart()
     return cleanup
-  }, [])
+  }, [chartKey]) // Recreate indicator chart when chartKey changes
 
   // Synchronize charts when both are available
   useEffect(() => {
@@ -386,20 +436,29 @@ export default function TradingChartPage() {
 
       // Return cleanup function
       return () => {
+        // Skip if manually destroying
+        if (isManuallyDestroyingRef.current) {
+          return
+        }
+        
         try {
-          mainTimeScale.unsubscribeVisibleLogicalRangeChange(handleMainTimeScaleChange)
-          indicatorTimeScale.unsubscribeVisibleLogicalRangeChange(handleIndicatorTimeScaleChange)
+          if (mainChart && mainTimeScale) {
+            mainTimeScale.unsubscribeVisibleLogicalRangeChange(handleMainTimeScaleChange)
+          }
+          if (indicatorChart && indicatorTimeScale) {
+            indicatorTimeScale.unsubscribeVisibleLogicalRangeChange(handleIndicatorTimeScaleChange)
+          }
           
           console.log('Chart synchronization cleanup complete')
         } catch (error) {
-          console.debug('Synchronization cleanup error:', error)
+          console.debug('Synchronization cleanup error (likely already disposed):', error)
         }
       }
     }
 
     const cleanup = setupSynchronization()
     return cleanup
-  }, []) // Run when component mounts
+  }, [chartKey]) // Re-setup synchronization when charts are recreated
 
   // Update charts when visible events change
   useEffect(() => {
@@ -499,6 +558,147 @@ export default function TradingChartPage() {
     setIsClipToolActive(!isClipToolActive)
     console.log(`Trading clip tool ${!isClipToolActive ? 'activated' : 'deactivated'}`)
   }
+
+  // Date selection handler
+  const handleDateSelect = async (date) => {
+    if (date && !isLoadingDate) {
+      const year = date.getFullYear()
+      const month = String(date.getMonth() + 1).padStart(2, '0')
+      const day = String(date.getDate()).padStart(2, '0')
+      const dateString = `${year}-${month}-${day}`
+      
+      setIsLoadingDate(true)
+      setShowCalendar(false)
+      
+      try {
+        // Set flag to prevent React cleanup from double-disposing
+        isManuallyDestroyingRef.current = true
+        
+        // Destroy existing charts completely to avoid timestamp/state issues
+        try {
+          if (chartServiceRef.current) {
+            chartServiceRef.current.destroy()
+            chartServiceRef.current = null
+          }
+        } catch (e) {
+          console.debug('Error destroying chart service:', e)
+        }
+        
+        try {
+          if (indicatorChartServiceRef.current) {
+            indicatorChartServiceRef.current.destroy()
+            indicatorChartServiceRef.current = null
+          }
+        } catch (e) {
+          console.debug('Error destroying indicator chart service:', e)
+        }
+        
+        try {
+          if (chartRef.current) {
+            chartRef.current.remove()
+            chartRef.current = null
+          }
+        } catch (e) {
+          console.debug('Error removing chart:', e)
+        }
+        
+        try {
+          if (indicatorChartRef.current) {
+            indicatorChartRef.current.remove()
+            indicatorChartRef.current = null
+          }
+        } catch (e) {
+          console.debug('Error removing indicator chart:', e)
+        }
+        
+        // Reset flag after manual cleanup
+        isManuallyDestroyingRef.current = false
+        
+        // Update trading date state
+        setTradingDate(dateString)
+        
+        // Reset everything - clears buffers, stops polling, and resets playback
+        phaseService.resetPlanning()
+        
+        // Initialize planning phase with new date - this will auto-progress through
+        // planning -> preparing -> trading phases, loading all necessary events
+        await phaseService.initializePlanning({ tradingDate: dateString })
+        
+        // Force charts to recreate by updating key
+        setChartKey(prev => prev + 1)
+        
+        // Wait for charts to recreate and all phases to complete, then fast forward
+        setTimeout(() => {
+          // Check if we have events before fast forwarding
+          const status = phaseService.getStatus()
+          console.log('Phase status after load:', {
+            tradingEventCount: status.tradingEventCount,
+            planningEventCount: status.planningEventCount,
+            currentPhase: status.currentPhase
+          })
+          
+          // Fast forward to the end
+          playback.fastForward()
+          setIsLoadingDate(false)
+        }, 500) // Wait briefly for charts to recreate
+        
+        console.log(`Loaded all phases for ${dateString}, recreated charts, and fast-forwarding to end`)
+      } catch (error) {
+        console.error('Failed to load trading data for new date:', error)
+        setIsLoadingDate(false)
+      }
+    }
+  }
+
+  // Get sorted list of available date strings for navigation
+  const availableDateStrings = availableDates
+    .map(dateInfo => dateInfo.date)
+    .sort()
+
+  // Navigate to previous available date
+  const goToPreviousDate = () => {
+    const currentIndex = availableDateStrings.indexOf(tradingDate)
+    if (currentIndex > 0) {
+      const prevDate = availableDateStrings[currentIndex - 1]
+      const [year, month, day] = prevDate.split('-').map(Number)
+      handleDateSelect(new Date(year, month - 1, day))
+    }
+  }
+
+  // Navigate to next available date
+  const goToNextDate = () => {
+    const currentIndex = availableDateStrings.indexOf(tradingDate)
+    if (currentIndex >= 0 && currentIndex < availableDateStrings.length - 1) {
+      const nextDate = availableDateStrings[currentIndex + 1]
+      const [year, month, day] = nextDate.split('-').map(Number)
+      handleDateSelect(new Date(year, month - 1, day))
+    }
+  }
+
+  // Check if we can navigate
+  const canGoPrevious = availableDateStrings.indexOf(tradingDate) > 0
+  const canGoNext = availableDateStrings.indexOf(tradingDate) < availableDateStrings.length - 1
+
+  // Convert available dates to Date objects and categorize by profitability
+  const profitableDates = []
+  const unprofitableDates = []
+  const neutralDates = []
+  
+  availableDates.forEach(dateInfo => {
+    const [year, month, day] = dateInfo.date.split('-').map(Number)
+    const dateObj = new Date(year, month - 1, day) // month is 0-indexed
+    
+    if (dateInfo.profitable === true) {
+      profitableDates.push(dateObj)
+    } else if (dateInfo.profitable === false) {
+      unprofitableDates.push(dateObj)
+    } else {
+      neutralDates.push(dateObj)
+    }
+  })
+
+  // Convert trading date string to Date object for DayPicker
+  const selectedDate = new Date(tradingDate + 'T00:00:00')
 
   const handleChartClick = (event) => {
     if (!isClipToolActive || !chartRef.current) return
@@ -667,19 +867,111 @@ export default function TradingChartPage() {
       {/* Media Controls and Trading Date Display - fixed at bottom */}
       <div className="flex-shrink-0 py-3 border-t border-gray-200">
         <div className="flex items-center justify-between px-4">
-          {/* Left: Trading Date Display (Read-only) */}
+          {/* Left: Trading Date Display (Interactive Calendar) */}
           <div className="flex items-center space-x-3">
             <label className="flex items-center space-x-2 text-sm font-medium text-gray-700">
               <Calendar className="w-4 h-4" />
               <span>Trading Date:</span>
             </label>
-            <input
-              type="date"
-              value={tradingDate}
-              readOnly
-              className="px-3 py-2 border border-gray-300 rounded-md text-sm bg-gray-50 cursor-not-allowed"
-              title="Trading date is read-only in Trading phase"
-            />
+            
+            {/* Previous Date Button */}
+            <button
+              onClick={goToPreviousDate}
+              disabled={!canGoPrevious || isLoadingDate}
+              className="p-2 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Previous date"
+            >
+              <ChevronLeft className="w-4 h-4 text-gray-700" />
+            </button>
+
+            {/* Date Picker */}
+            <div className="relative calendar-container">
+              <button
+                onClick={() => setShowCalendar(!showCalendar)}
+                disabled={isLoadingDate}
+                className="px-3 py-2 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <span className="text-gray-900">{isLoadingDate ? 'Loading...' : tradingDate}</span>
+              </button>
+              {showCalendar && (
+                <div className="absolute bottom-full mb-2 z-50 bg-white border border-gray-300 rounded-lg shadow-lg p-3">
+                  <DayPicker
+                    mode="single"
+                    selected={selectedDate}
+                    onSelect={handleDateSelect}
+                    modifiers={{
+                      profitable: profitableDates,
+                      unprofitable: unprofitableDates,
+                      neutral: neutralDates
+                    }}
+                    modifiersClassNames={{
+                      profitable: 'profitable-date',
+                      unprofitable: 'unprofitable-date',
+                      neutral: 'neutral-date'
+                    }}
+                    styles={{
+                      caption: { color: '#374151' },
+                      day: { margin: '2px' }
+                    }}
+                  />
+                  <style>
+                    {`
+                      .profitable-date {
+                        background-color: #22c55e !important;
+                        color: white !important;
+                        font-weight: bold !important;
+                        border-radius: 4px !important;
+                      }
+                      .profitable-date:hover {
+                        background-color: #16a34a !important;
+                      }
+                      .unprofitable-date {
+                        background-color: #ef4444 !important;
+                        color: white !important;
+                        font-weight: bold !important;
+                        border-radius: 4px !important;
+                      }
+                      .unprofitable-date:hover {
+                        background-color: #dc2626 !important;
+                      }
+                      .neutral-date {
+                        background-color: #eab308 !important;
+                        color: white !important;
+                        font-weight: bold !important;
+                        border-radius: 4px !important;
+                      }
+                      .neutral-date:hover {
+                        background-color: #ca8a04 !important;
+                      }
+                    `}
+                  </style>
+                  <div className="mt-2 pt-2 border-t border-gray-200 text-xs text-gray-600 space-y-1">
+                    <div className="flex items-center space-x-2">
+                      <div className="w-3 h-3 bg-green-500 rounded"></div>
+                      <span>Profitable days ({profitableDates.length})</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-3 h-3 bg-red-500 rounded"></div>
+                      <span>Unprofitable days ({unprofitableDates.length})</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-3 h-3 bg-yellow-500 rounded"></div>
+                      <span>Neutral/No trades ({neutralDates.length})</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Next Date Button */}
+            <button
+              onClick={goToNextDate}
+              disabled={!canGoNext || isLoadingDate}
+              className="p-2 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Next date"
+            >
+              <ChevronRight className="w-4 h-4 text-gray-700" />
+            </button>
           </div>
 
           {/* Center: Playback Controls */}

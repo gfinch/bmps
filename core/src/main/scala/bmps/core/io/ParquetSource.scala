@@ -6,17 +6,24 @@ import java.sql.DriverManager
 import bmps.core.models._
 import bmps.core.models.CandleDuration.OneHour
 import bmps.core.models.CandleDuration.OneMinute
+import bmps.core.models.CandleDuration.OneSecond
 import java.time.Instant
 
-class ParquetSource(duration: CandleDuration) extends DataSource {
+class ParquetSource(durations: Set[CandleDuration]) extends DataSource {
 
-  private lazy val path = duration match {
-    case OneHour => "core/src/main/resources/backtest/es-1h_bk.parquet"
-    case OneMinute => "core/src/main/resources/backtest/es-1m_bk.parquet"
+  def this(duration: CandleDuration) = this(Set(duration))
+
+  private def getPath(duration: CandleDuration): String = duration match {
+    case OneHour => "core/src/main/resources/databento/es-1h.parquet"
+    case OneMinute => "core/src/main/resources/databento/es-1m.parquet"
+    case OneSecond => "core/src/main/resources/databento/es-1s.parquet"
     case _ => throw new IllegalArgumentException(s"$duration not supported")
   }
 
+  private val paths = durations.map(getPath).toList
+
   private def timeframeToDuration(tf: String): CandleDuration = tf match {
+    case "1s"           => CandleDuration.OneSecond
     case "1m"           => CandleDuration.OneMinute
     case "1h" | "60m"   => CandleDuration.OneHour
     case _              => throw new IllegalArgumentException(s"$tf not supported.")
@@ -33,10 +40,29 @@ class ParquetSource(duration: CandleDuration) extends DataSource {
    */
   def candlesInRangeStream(startMs: Long, endMs: Long): Stream[IO, Candle] = {
     def buildQuery(startMs: Long, endMs: Long): IO[String] = IO.blocking {
-      val safePath = path.replace("'", "''")
+      val safePaths = paths.map(p => s"'${p.replace("'", "''")}'").mkString("[", ", ", "]")
       // Timestamps are stored as int64 UTC millis, so we can compare directly
       val whereClause = s"timestamp >= $startMs AND timestamp <= $endMs"
-      s"SELECT * FROM read_parquet('$safePath') WHERE $whereClause"
+      
+      // Sort by endTime to match DatabentoSource behavior
+      // timestamp is start time, so we add duration in ms
+      // Tie-breaker: smaller duration first (e.g. 1s before 1m)
+      val orderByClause = """
+        (timestamp + CASE timeframe 
+          WHEN '1s' THEN 1000 
+          WHEN '1m' THEN 60000 
+          WHEN '1h' THEN 3600000 
+          ELSE 0 
+        END),
+        CASE timeframe
+          WHEN '1s' THEN 1
+          WHEN '1m' THEN 2
+          WHEN '1h' THEN 3
+          ELSE 4
+        END
+      """
+      
+      s"SELECT * FROM read_parquet($safePaths) WHERE $whereClause ORDER BY $orderByClause"
     }
 
     // Map a ResultSet row to Candle

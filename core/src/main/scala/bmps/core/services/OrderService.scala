@@ -15,8 +15,11 @@ import java.time.Duration
 import bmps.core.models.Candle
 import bmps.core.models.ContractType
 import bmps.core.models.CandleDuration
+import bmps.core.models.OrderType
+import bmps.core.utils.TimestampUtils
 
 class OrderService(val technicalAnalysisService: TechnicalAnalysisService) {
+    lazy val techAnalysisOrderService: TechnicalAnalysisOrderService = new TechnicalAnalysisOrderService()
 
     lazy val secondBySecondProcessors = Seq(
         technicalAnalysisService.processOneSecondState(_),
@@ -26,6 +29,7 @@ class OrderService(val technicalAnalysisService: TechnicalAnalysisService) {
 
     lazy val minuteByMinuteProcessors = Seq(
         technicalAnalysisService.processOneMinuteState(_),
+        techAnalysisOrderService.processOneMinuteState(_),
         // EngulfingOrderBlockService.processState(_),
         // FairValueGapOrderBlockService.processState(_)
     )
@@ -35,17 +39,21 @@ class OrderService(val technicalAnalysisService: TechnicalAnalysisService) {
     }
 
     def buildOrders(state: SystemState, candle: Candle): SystemState = {
-        if (!state.orders.exists(_.isActive)) { //only create orders if none other are active
-            val processors = if (candle.duration == CandleDuration.OneSecond) secondBySecondProcessors else minuteByMinuteProcessors
-            processors.foldLeft(state) { (lastState, nextProcess) => nextProcess(lastState) }
-        } else {
-            state
-        }
+        val processors = if (candle.duration == CandleDuration.OneSecond) secondBySecondProcessors else minuteByMinuteProcessors
+        processors.foldLeft(state) { (lastState, nextProcess) => nextProcess(lastState) }
     }
     
+    //Allows single order to be placed
     def findOrderToPlace(state: SystemState, candle: Candle): Option[Order] = {
         state.orders.find { order => 
-            order.status == OrderStatus.PlaceNow || (order.status == OrderStatus.Planned && shouldPlaceOrder(order, state, candle))
+            (order.status == OrderStatus.PlaceNow || order.status == OrderStatus.Planned) && shouldPlaceOrder(order, state, candle)
+        }
+    }
+
+    //Allows multiple orders to be placed
+    def findOrdersToPlace(state: SystemState, candle: Candle): List[Order] = {
+        state.orders.filter { order =>
+            order.status == OrderStatus.PlaceNow || (order.status == OrderStatus.Planned && priceInProperPosition(order, candle))
         }
     }
 
@@ -58,7 +66,16 @@ class OrderService(val technicalAnalysisService: TechnicalAnalysisService) {
             } else if (order.entryType == EntryType.EngulfingOrderBlock) {
                 EngulfingOrderBlockService.shouldPlaceOrder(order, state, candle)
             } else true
-            (activeOrders == 0 && isOrderReady)
+            (activeOrders == 0 && isOrderReady && priceInProperPosition(order, candle))
+        }
+    }
+
+    private def priceInProperPosition(order: Order, candle: Candle): Boolean = {
+        order.orderType match {
+            case OrderType.Long => 
+                candle.close >= order.entryPoint
+            case OrderType.Short => 
+                candle.close <= order.entryPoint
         }
     }
 }

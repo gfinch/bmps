@@ -26,6 +26,8 @@ class PlanZonePrimitive {
       labelColor: '#374151',
       labelSize: 12,
       labelOffset: 15, // pixels to the left of start time
+      simpleLineMode: false, // If true, render as simple horizontal lines across chart
+      showOnlyActive: false, // If true, only show zones without endTime
       ...options
     }
     this.zones = []
@@ -141,88 +143,128 @@ class PlanZonePaneRenderer {
   }
 
   drawPlanZone(ctx, zone, scope) {
-    // Get time coordinates
-    const startX = getTimeCoordinate(zone.startTime, this.chart)
-    if (startX === null) return
-
-    const endX = zone.endTime 
-      ? getTimeCoordinate(zone.endTime, this.chart)
-      : null // null means infinite (draw to right edge)
-
-    // Get price coordinates
-    const maxY = getPriceCoordinate(zone.maxLevel, this.series, this.chart)
-    const minY = getPriceCoordinate(zone.minLevel, this.series, this.chart)
-
-    if (maxY === null || minY === null) {
-      console.warn('Could not convert zone prices to coordinates:', zone)
-      return
-    }
-
     // Determine if this is a demand or supply zone
     const isDemandZone = zone.type === 'demand' || zone.zoneType === 'demand'
     
-    // Draw the primary line (solid green)
-    const primaryY = isDemandZone ? maxY : minY
-    const primaryLevel = isDemandZone ? zone.maxLevel : zone.minLevel
-    
-    drawHorizontalLine(ctx, {
-      startX,
-      endX,
-      y: primaryY,
-      color: isDemandZone ? this.options.demandColor : this.options.supplyColor,
-      width: this.options.lineWidth,
-      lineDash: 'solid',
-      canvasWidth: scope.mediaSize.width
-    })
+    if (this.options.simpleLineMode) {
+      // Simple line mode: Single horizontal line across entire chart
+      // Demand zones: red line at top level, Supply zones: green line at bottom level
+      const priceLevel = isDemandZone ? zone.maxLevel : zone.minLevel
+      const lineY = getPriceCoordinate(priceLevel, this.series, this.chart)
 
-    // Draw the secondary line (dashed gray)
-    const secondaryY = isDemandZone ? minY : maxY
-    const secondaryLevel = isDemandZone ? zone.minLevel : zone.maxLevel
-    
-    drawHorizontalLine(ctx, {
-      startX,
-      endX,
-      y: secondaryY,
-      color: this.options.grayColor,
-      width: this.options.lineWidth,
-      lineDash: 'dashed',
-      canvasWidth: scope.mediaSize.width
-    })
+      if (lineY === null) {
+        console.warn('Could not convert zone price to coordinate:', zone)
+        return
+      }
 
-    // Draw vertical lines at the sides (dashed gray)
-    // Left side
-    drawVerticalLine(ctx, {
-      x: startX,
-      startY: Math.min(maxY, minY),
-      endY: Math.max(maxY, minY),
-      color: this.options.grayColor,
-      width: this.options.lineWidth,
-      lineDash: 'dashed'
-    })
+      // Determine line color: Demand zones = red, Supply zones = green
+      const lineColor = isDemandZone ? this.options.supplyColor : this.options.demandColor
+      
+      // Draw horizontal line across entire chart
+      drawHorizontalLine(ctx, {
+        startX: 0, // Start from left edge
+        endX: null, // null means extend to right edge
+        y: lineY,
+        color: lineColor,
+        width: this.options.lineWidth,
+        lineDash: 'solid',
+        canvasWidth: scope.mediaSize.width
+      })
 
-    // Right side (only if there's an end time)
-    if (endX !== null) {
+      // Draw label if present
+      if (zone.label) {
+        const startX = getTimeCoordinate(zone.startTime, this.chart)
+        if (startX !== null) {
+          drawLabel(ctx, {
+            text: zone.label,
+            x: startX - this.options.labelOffset,
+            y: lineY,
+            color: this.options.labelColor,
+            size: this.options.labelSize,
+            align: 'right',
+            baseline: 'middle'
+          })
+        }
+      }
+    } else {
+      // Box mode: Draw rectangular zones with solid/dashed lines
+      const startX = getTimeCoordinate(zone.startTime, this.chart)
+      if (startX === null) return
+
+      const endX = zone.endTime 
+        ? getTimeCoordinate(zone.endTime, this.chart)
+        : null // null means infinite (draw to right edge)
+
+      // Get price coordinates
+      const maxY = getPriceCoordinate(zone.maxLevel, this.series, this.chart)
+      const minY = getPriceCoordinate(zone.minLevel, this.series, this.chart)
+
+      if (maxY === null || minY === null) {
+        console.warn('Could not convert zone prices to coordinates:', zone)
+        return
+      }
+      
+      // Draw the primary line (solid green/red)
+      const primaryY = isDemandZone ? maxY : minY
+      
+      drawHorizontalLine(ctx, {
+        startX,
+        endX,
+        y: primaryY,
+        color: isDemandZone ? this.options.demandColor : this.options.supplyColor,
+        width: this.options.lineWidth,
+        lineDash: 'solid',
+        canvasWidth: scope.mediaSize.width
+      })
+
+      // Draw the secondary line (dashed gray)
+      const secondaryY = isDemandZone ? minY : maxY
+      
+      drawHorizontalLine(ctx, {
+        startX,
+        endX,
+        y: secondaryY,
+        color: this.options.grayColor,
+        width: this.options.lineWidth,
+        lineDash: 'dashed',
+        canvasWidth: scope.mediaSize.width
+      })
+
+      // Draw vertical lines at the sides (dashed gray)
+      // Left side
       drawVerticalLine(ctx, {
-        x: endX,
+        x: startX,
         startY: Math.min(maxY, minY),
         endY: Math.max(maxY, minY),
         color: this.options.grayColor,
         width: this.options.lineWidth,
         lineDash: 'dashed'
       })
-    }
 
-    // Draw label on primary line
-    if (zone.label) {
-      drawLabel(ctx, {
-        text: zone.label,
-        x: startX - this.options.labelOffset,
-        y: primaryY,
-        color: this.options.labelColor,
-        size: this.options.labelSize,
-        align: 'right',
-        baseline: 'middle'
-      })
+      // Right side (only if there's an end time)
+      if (endX !== null) {
+        drawVerticalLine(ctx, {
+          x: endX,
+          startY: Math.min(maxY, minY),
+          endY: Math.max(maxY, minY),
+          color: this.options.grayColor,
+          width: this.options.lineWidth,
+          lineDash: 'dashed'
+        })
+      }
+
+      // Draw label on primary line
+      if (zone.label) {
+        drawLabel(ctx, {
+          text: zone.label,
+          x: startX - this.options.labelOffset,
+          y: primaryY,
+          color: this.options.labelColor,
+          size: this.options.labelSize,
+          align: 'right',
+          baseline: 'middle'
+        })
+      }
     }
   }
 }

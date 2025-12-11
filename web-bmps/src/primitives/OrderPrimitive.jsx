@@ -137,10 +137,22 @@ class OrderPaneRenderer {
 
   /**
    * Convert entry type to abbreviated label
-   * @param {string} entryType - The entry type from the order
-   * @returns {string} The abbreviated label
+   * @param {string|object} entryType - The entry type from the order (can be string or object with description)
+   * @returns {string} The abbreviated label or description
    */
   getEntryTypeLabel(entryType) {
+    // If entryType has a Trendy property with description, use the description
+    if (entryType && typeof entryType === 'object' && entryType.Trendy?.description) {
+      return entryType.Trendy.description
+    }
+    
+    // If entryType is directly an object with a description, use it
+    if (entryType && typeof entryType === 'object' && entryType.description) {
+      return entryType.description
+    }
+    
+    // Otherwise, convert string entry type to abbreviated label
+    const entryTypeString = typeof entryType === 'string' ? entryType : ''
     const entryTypeMap = {
       'EngulfingOrderBlock': 'EOB',
       'FairValueGapOrderBlock': 'FVG',
@@ -152,9 +164,9 @@ class OrderPaneRenderer {
       'XGBoostOrderBlock': 'XGB',
       'BouncingOrderBlock': 'BOB',
       'MomentumOrderBlock': 'MOM',
-      'TechnicalAnalysisOrderBlock': 'TAB'
+      'TrendOrderBlock': 'TAB'
     }
-    return entryTypeMap[entryType] || entryType
+    return entryTypeMap[entryTypeString] || entryTypeString
   }
 
   setChartContext(chart, series) {

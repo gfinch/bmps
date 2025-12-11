@@ -22,6 +22,8 @@ case class MomentumAnalysis(
     def rsiOverbought: Boolean = rsi > 70.0
     def rsiOversold: Boolean = rsi < 30.0
     def rsiNeutral: Boolean = rsi >= 30.0 && rsi <= 70.0
+
+    lazy val iRsi: Double = 100.0 - rsi
     
     // Williams %R interpretation (inverted scale: 0 to -100)
     def williamsROverbought: Boolean = williamsR > -20.0

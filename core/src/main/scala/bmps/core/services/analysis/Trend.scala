@@ -36,8 +36,8 @@ case class TrendAnalysis(
     }
     
     // MA crossover signals
-    def isGoldenCross: Boolean = shortTermMA > longTermMA
-    def isDeathCross: Boolean = shortTermMA < longTermMA
+    def isGoldenCross: Boolean = shortTermMA >= longTermMA
+    def isDeathCross: Boolean = shortTermMA <= longTermMA
     def maCrossoverStrength: Double = math.abs(shortTermMA - longTermMA) / longTermMA
 }
 

@@ -1,0 +1,377 @@
+package bmps.core.services
+
+import bmps.core.models.SystemState
+import bmps.core.models.Order
+import bmps.core.models.ExtremeType
+import bmps.core.services.analysis.TrendAnalysis
+import bmps.core.models.OrderType
+import bmps.core.models.EntryType.Trendy
+import bmps.core.models.OrderStatus
+import bmps.core.utils.TimestampUtils
+
+class TechnicalAnalysisOrderService {
+    def processOneMinuteState(state: SystemState): SystemState = {
+        val lastCandle = state.tradingCandles.last
+        if (state.orders.exists(_.isActive) || TimestampUtils.isNearTradingClose(lastCandle.timestamp)) {
+        // if (TimestampUtils.isNearTradingClose(lastCandle.timestamp)) {
+            state
+        } else {
+            val orders = createOrders(state: SystemState)
+            state.copy(orders = state.orders ++ orders)
+        }
+    }
+
+    def createOrders(state: SystemState): List[Order] = {
+        if (state.tradingCandles.length < 10) List.empty
+        else {
+            val activeOrders = state.orders.filter(_.isActive).map(_.entryType.toString())
+            val activeScenarios = winningCombinations.filterNot(s => { //allScenarios
+                val desc = buildScenarioDescription(s)
+                activeOrders.contains(desc)
+            })
+
+            val newOrders = for {
+                scenario <- activeScenarios
+            } yield {
+                if (scenario.forall(n => applyScenario(n, scenario, state))) {
+                    val newOrder = buildOrder(state, scenario)
+                    Some(newOrder)
+                    // safetyChecks(state, newOrder)
+                } else None
+            }
+
+            newOrders.flatten.take(1)
+        }
+    }
+
+    def buildOrder(state: SystemState, scenario: List[Int]): Order = {
+        val someAtrs = atrs(state, 2.0).toFloat
+        val lastCandle = state.tradingCandles.last
+        val (low, high, orderType) = if (state.recentTrendAnalysis.last.isUptrend) {
+            (lastCandle.close - someAtrs, lastCandle.close, OrderType.Long)
+        } else (lastCandle.close, lastCandle.close + someAtrs, OrderType.Short)
+        val entryType = Trendy(buildScenarioDescription(scenario))
+        Order(low, high, lastCandle.timestamp, orderType, entryType, state.contractSymbol.get, status = OrderStatus.PlaceNow)
+    }
+
+    def buildScenarioDescription(scenario: List[Int]) = scenario.mkString(",")
+
+    val rules = Map(
+        1 -> "MustBeOversoldOrBought",
+        2 -> "MustNotBeOversoldOrBought",
+        3 -> "MustBeNearingSummitOrFloor",
+        4 -> "MustNotBeNearingSummitOrFloor",
+        5 -> "CrossNow",
+        6 -> "CrossTwoMinutesAgo",
+        7 -> "CrossThreeMinutesAgo", 
+        8 -> "CrossFiveMinutesAgo",
+        9 -> "CrossSevenMinutesAgo",
+        10 -> "CrossTenMinutesAgo",
+        11 -> "HasIncreasingADX",
+        12 -> "HasDecreasingADX",
+        13 -> "SpreadToTen",
+        14 -> "SpreadToTwenty",
+        15 -> "SpreadToThirty",
+        16 -> "SpreadToForty",
+        17 -> "SpreadToFifty",
+        18 -> "AlreadyIntersected",
+        19 -> "IntersectingNextMinute",
+        20 -> "IntersectingTwoMinutes",
+        21 -> "IntersectingFiveMinutes"
+    )
+
+    val boughtGroup = List(1, 2)
+    val summitGroup = List(3, 4)
+    val crossGroup = List(5, 6, 7, 8, 9, 10)
+    val adxGroup = List(11, 12)
+    val spreadGroup = List(13, 14, 15, 16, 17)
+    val intersectGroup = List(18, 19, 20, 21)
+
+    val crossOnly = crossGroup.map(List(_))
+    val crossAndBought = crossGroup.flatMap(c => boughtGroup.map(b => List(c, b)))
+    val crossAndSummit = crossGroup.flatMap(c => summitGroup.map(b => List(c, b)))
+    val crossAndAdx = crossGroup.flatMap(c => adxGroup.map(b => List(c, b)))
+    val crossAndAdxAndBought = 
+        for {
+            c <- crossGroup
+            a <- adxGroup
+            b <- boughtGroup
+        } yield List(c, a, b)
+    val crossAndAdxAndSummit = 
+        for {
+            c <- crossGroup
+            a <- adxGroup
+            b <- summitGroup
+        } yield List(c, a, b)
+    val spreadOnly = 
+        for {
+            a <- crossGroup
+            b <- spreadGroup
+        } yield List(a, b)
+    val spreadAndIntersect = 
+        for {
+            a <- crossGroup
+            c <- spreadGroup
+            b <- intersectGroup
+        } yield List(a, c, b)
+    val spreadIntersectAndBought = 
+        for {
+            a <- crossGroup
+            c <- spreadGroup
+            b <- intersectGroup
+            d <- boughtGroup
+        } yield List(a, c, b, d)
+    val spreadIntersectAndSummit = 
+        for {
+            a <- crossGroup
+            c <- spreadGroup
+            b <- intersectGroup
+            d <- summitGroup
+        } yield List(a, c, b, d)
+    val spreadIntersectAdx = 
+        for {
+            a <- crossGroup
+            c <- spreadGroup
+            b <- intersectGroup
+            d <- adxGroup
+        } yield List(a, c, b, d)
+
+    lazy val allScenarios = (crossOnly ++ crossAndBought ++ crossAndSummit ++ crossAndAdx ++ crossAndAdxAndBought ++ crossAndAdxAndSummit ++
+        spreadOnly ++ spreadAndIntersect ++ spreadIntersectAndBought ++ spreadIntersectAndSummit ++ spreadIntersectAdx)
+    // .filter { scenario =>
+    //         winningCombinations.contains(scenario.toSet)
+    // }
+
+    def applyScenario(id: Int, siblings: List[Int], state: SystemState): Boolean = {
+        id match {
+            case 1 => isOverbought(state) || isOversold(state)
+            case 2 => !(isOverbought(state) || isOversold(state))
+            case 3 => nearingSummit(state, 1.0) || nearingFloor(state, 1.0)
+            case 4 => !(nearingSummit(state, 1.0) || nearingFloor(state, 1.0))
+            case 5 => false //wasDeathCrossNMinutesAgo(state, 0) || wasGoldenCrossNMinutesAgo(state, 0) ##This generated a lot of orders that were not winners.
+            case 6 => wasDeathCrossNMinutesAgo(state, 2) || wasGoldenCrossNMinutesAgo(state, 2)
+            case 7 => wasDeathCrossNMinutesAgo(state, 3) || wasGoldenCrossNMinutesAgo(state, 3)
+            case 8 => wasDeathCrossNMinutesAgo(state, 5) || wasGoldenCrossNMinutesAgo(state, 5)
+            case 9 => wasDeathCrossNMinutesAgo(state, 7) || wasGoldenCrossNMinutesAgo(state, 7)
+            case 10 => wasDeathCrossNMinutesAgo(state, 10) || wasGoldenCrossNMinutesAgo(state, 10)
+            case 11 => hasIncreasingADX(state, 3)
+            case 12 => !hasIncreasingADX(state, 3)
+            case 13 => hasSpread(state, siblings, 10)
+            case 14 => hasSpread(state, siblings, 20)
+            case 15 => hasSpread(state, siblings, 30)
+            case 16 => hasSpread(state, siblings, 40)
+            case 17 => hasSpread(state, siblings, 50)
+            case 18 => isIntersecting(state, siblings, 0)
+            case 19 => isIntersecting(state, siblings, 1)
+            case 20 => isIntersecting(state, siblings, 2)
+            case 21 => isIntersecting(state, siblings, 5)
+        }
+    }
+
+    //~~~~~~~~~~~
+
+    def isOversold(state: SystemState): Boolean = {
+        val momentumAnalysis = state.recentMomentumAnalysis.takeRight(3)
+        momentumAnalysis.exists(_.rsiOversold)
+    }
+
+    def isOverbought(state: SystemState): Boolean = {
+        val momentumAnalysis = state.recentMomentumAnalysis.takeRight(3)
+        momentumAnalysis.exists(_.rsiOverbought)
+    }
+
+    def peakRed(state: SystemState): Double = {
+        val highestRed = state.daytimeExtremes.filter(_.extremeType == ExtremeType.High).map(_.level).max
+        val highestToday = state.tradingCandles.map(_.high).max
+        math.max(highestRed, highestToday)
+    }
+
+    def lowGreen(state: SystemState): Double = {
+        val lowestGreen = state.daytimeExtremes.filter(_.extremeType == ExtremeType.Low).map(_.level).min
+        val lowestToday = state.tradingCandles.map(_.low).min
+        math.min(lowestGreen, lowestToday)
+    }
+
+    def nearingSummit(state: SystemState, useAtrs: Double): Boolean = {
+        val lastClose = state.tradingCandles.last.close
+        val someAtrs = atrs(state, useAtrs) * 2 //Assume 2x profit??
+        val peak = peakRed(state)
+        lastClose < peak && (lastClose + someAtrs) > peak
+    }
+    
+    def nearingFloor(state: SystemState, useAtrs: Double): Boolean = {
+        val lastClose = state.tradingCandles.last.close
+        val someAtrs = atrs(state, useAtrs) * 2 //Assume 2x profit??
+        val peakGreen = lowGreen(state)
+        lastClose > peakGreen && (lastClose - someAtrs) < peakGreen
+    }
+
+    def wasDeathCrossNMinutesAgo(state: SystemState, n: Int): Boolean = {
+        val lastNPlusOneMinutesAgo = state.recentTrendAnalysis.takeRight(n + 1)
+        val nPlusOneMinutesAgo = lastNPlusOneMinutesAgo.head
+        nPlusOneMinutesAgo.isDeathCross == false &&
+            lastNPlusOneMinutesAgo.tail.forall(_.isDeathCross == true)
+    }
+
+    def wasGoldenCrossNMinutesAgo(state: SystemState, n: Int): Boolean = {
+        val lastNPlusOneMinutesAgo = state.recentTrendAnalysis.takeRight(n + 1)
+        val nPlusOneMinutesAgo = lastNPlusOneMinutesAgo.head
+        nPlusOneMinutesAgo.isGoldenCross == false &&
+            lastNPlusOneMinutesAgo.tail.forall(_.isGoldenCross == true)
+    }
+
+    def hasIncreasingADX(state: SystemState, n: Int): Boolean = {
+        val lastNTrend = state.recentTrendAnalysis.takeRight(n)
+        val point1 = lastNTrend.head.adx
+        val point2 = lastNTrend.last.adx
+        slope(0, point1, n, point2) > 0
+    }
+
+    def hasSpread(state: SystemState, siblings: List[Int], threshold: Int): Boolean = {
+        val ago = minutesAgo(siblings)
+        if (ago > 2 && (wasGoldenCrossNMinutesAgo(state, ago) || wasDeathCrossNMinutesAgo(state, ago))) {
+            buildSpreads(state, ago).map { case (firstSpread, lastSpread) => 
+                val spreadChange = lastSpread - firstSpread
+                spreadChange > threshold
+            }.getOrElse(false)
+        } else false
+    }
+
+    def buildSpreads(state: SystemState, ago: Int): Option[(Double, Double)] = {
+        val trendPoints = state.recentTrendAnalysis.takeRight(ago + 1)
+        if (trendPoints.size > 2) {
+            val firstSpread = calculateTrendStrength(state, ago)
+            val lastSpread = calculateTrendStrength(state)
+            Some(firstSpread, lastSpread)
+        } else None
+    }
+
+    def isIntersecting(state: SystemState, siblings: List[Int], within: Int): Boolean = {
+        val ago = minutesAgo(siblings)
+        buildSpreads(state, ago).map { case (firstSpread, lastSpread) =>
+            val spreadSlope = slope(0, firstSpread, ago, lastSpread)
+            val expected = futurePoint(spreadSlope, 0, lastSpread, within.toLong)
+            if (wasGoldenCrossNMinutesAgo(state, ago)) {
+                val recentIRsi = state.recentMomentumAnalysis.takeRight(ago + 1).map(_.iRsi)
+                val rsiSlope = slope(0, recentIRsi.head, ago, recentIRsi.last)
+                val rsiExpected = futurePoint(rsiSlope, 0, recentIRsi.last, within.toLong)
+                rsiExpected < expected
+            } else if (wasDeathCrossNMinutesAgo(state, ago)) {
+                val recentRsi = state.recentMomentumAnalysis.takeRight(ago + 1).map(_.rsi)
+                val rsiSlope = slope(0, recentRsi.head, ago, recentRsi.last)
+                val rsiExpected = futurePoint(rsiSlope, 0, recentRsi.last, within.toLong)
+                rsiExpected < expected
+            } else false
+        }.getOrElse(false)
+    }
+
+    def minutesAgo(siblings: List[Int]): Int = {
+        if (siblings.contains(5)) 0
+        else if (siblings.contains(6)) 2
+        else if (siblings.contains(7)) 3
+        else if (siblings.contains(8)) 5
+        else if (siblings.contains(9)) 7
+        else if (siblings.contains(10)) 10
+        else 0
+    }
+
+    def safetyChecks(state: SystemState, order: Order): Option[Order] = {
+        val trendStrengthNow = calculateTrendStrength(state, 0)
+        val trendStrength2MinAgo = calculateTrendStrength(state, 2)
+        val strongTrend = trendStrengthNow > 10.0 && trendStrengthNow > trendStrength2MinAgo
+
+        val insideLimit = order.orderType match {
+            case OrderType.Long => order.takeProfit < peakRed(state)
+            case OrderType.Short => order.takeProfit > lowGreen(state)
+        }
+
+        val isInEarlyOpen = TimestampUtils.isInEarlyOpen(order.timestamp)
+        val isInQuiet = TimestampUtils.isInQuiet(order.timestamp)
+
+        if ((isInQuiet && insideLimit) || (!isInEarlyOpen && !isInQuiet)) {
+            if (strongTrend) Some(order) else None
+        } else None
+    }
+
+    private def slope(t1: Long, y1: Double, t2: Long, y2: Double): Double = {
+        (y2 - y1) / (t2 - t1).toDouble
+    }
+
+    private def futurePoint(slope: Double, t1: Long, y1: Double, t3: Long): Double = {
+        y1 + slope * (t3 - t1)
+    }
+
+    private def atrs(state: SystemState, quantity: Double): Double = {
+        state.recentVolatilityAnalysis.last.trueRange.atr * quantity
+    }
+
+    def calculateTrendStrength(state: SystemState, minutesAgo: Int = 0): Double = {
+        require(minutesAgo >= 0, "minutesAgo must be non-negative")
+
+        val requiredSize = minutesAgo + 1
+
+        if (state.recentTrendAnalysis.length < requiredSize || 
+            state.recentVolatilityAnalysis.length < requiredSize) {
+            return 0.0
+        }
+
+        // Get the analysis from N minutes ago
+        // takeRight(minutesAgo + 1) gets the last N+1 elements, then head gets the oldest
+        val trendAnalysis = if (minutesAgo == 0) {
+            state.recentTrendAnalysis.last
+        } else {
+            state.recentTrendAnalysis.takeRight(minutesAgo + 1).head
+        }
+
+        val volatilityAnalysis = if (minutesAgo == 0) {
+            state.recentVolatilityAnalysis.last
+        } else {
+            state.recentVolatilityAnalysis.takeRight(minutesAgo + 1).head
+        }
+
+        val keltnerChannels = volatilityAnalysis.keltnerChannels
+
+        // Calculate MA spread (how far apart short and long MAs are)
+        val maSpread = math.abs(trendAnalysis.shortTermMA - trendAnalysis.longTermMA)
+
+        // Calculate absolute Keltner channel width
+        val channelWidth = math.abs(keltnerChannels.upperBand - keltnerChannels.lowerBand) * 0.5
+
+        // Avoid division by zero
+        if (channelWidth == 0.0) {
+            return 0.0
+        }
+
+        // Ratio of MA spread to channel width
+        val rawStrength = maSpread / channelWidth
+
+        // Clamp between 0.0 and 1.0
+        math.max(0.0, math.min(1.0, rawStrength)) * 100
+    }
+
+    val winningCombinations = List(
+        List(8,13,21,12),
+        List(9,11,3),
+        List(10,17,21,12),
+        List(7,17,21,11),
+        List(8,12,3),
+        List(10,15),
+        List(10,14,21,11),
+        List(10,12,3),
+        List(6,11,3),
+        List(8,15,21,12),
+        List(9,13,21,12),
+        List(8,13,21,11),
+        List(9,12,4),
+        List(10,15,21,11),
+        List(7,14,21,11),
+        List(8,17,21,11),
+        List(7,16,21,11),
+        List(10,13),
+        List(10,12,4),
+        List(7,11,3),
+        List(9,13)
+    ) 
+
+
+}

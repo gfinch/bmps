@@ -44,8 +44,15 @@ class SimpleTradingEventGenerator(leadAccount: LeadAccountBroker, orderService: 
                 state.recentOneSecondCandles.tail :+ candle
             } else state.recentOneSecondCandles :+ candle
         )
+
+        val withUpdatedOrderState = adjustOrderState(newState, candle)
+        val withPlacedOrdersState = placeOrders(withUpdatedOrderState, candle)
+        val withTechAnalysis = technicalAnalysisService.processOneSecondState(withPlacedOrdersState)
+
+        val changedOrders = withTechAnalysis.orders.filterNot(state.orders.contains)
+        val orderEvents = changedOrders.map(Event.fromOrder(_, leadAccount.riskPerTrade))
         
-        (technicalAnalysisService.processOneSecondState(newState), List.empty[Event])
+        (withTechAnalysis, orderEvents)
     }
 
     def processOneMinute(state: SystemState, candle: Candle): (SystemState, List[Event]) = {
@@ -54,16 +61,23 @@ class SimpleTradingEventGenerator(leadAccount: LeadAccountBroker, orderService: 
         val (swings, directionOption) = swingService.computeSwings(updatedCandles)
         val newDirection = directionOption.getOrElse(state.swingDirection)
         val withSwings = state.copy(tradingCandles = updatedCandles, tradingSwingPoints = swings, swingDirection = newDirection)
+
+        //Order processing
+        val withNewOrders = orderService.buildOrders(withSwings, candle)
+        val withUpdatedOrderState = adjustOrderState(withNewOrders, candle)
+        val withPlacedOrders = placeOrders(withUpdatedOrderState, candle)
+        // val withPlacedOrders = technicalAnalysisService.processOneMinuteState(withSwings)
         
         //Event processing
-        val newSwingPoints = withSwings.tradingSwingPoints.drop(state.tradingSwingPoints.length)
+        val newSwingPoints = withPlacedOrders.tradingSwingPoints.drop(state.tradingSwingPoints.length)
         val swingEvents = newSwingPoints.map(Event.fromSwingPoint)
 
-        val withTechAnalysis = technicalAnalysisService.processOneMinuteState(withSwings)
-        val techncialAnalysisEvent = buildTechnicalAnalysisEvent(withTechAnalysis)
+        val techncialAnalysisEvent = buildTechnicalAnalysisEvent(withPlacedOrders)
+        val changedOrders = withPlacedOrders.orders.filterNot(state.orders.contains)
+        val orderEvents = changedOrders.map(Event.fromOrder(_, leadAccount.riskPerTrade))
 
-        val allEvents = swingEvents ++ techncialAnalysisEvent
-        (withTechAnalysis, allEvents)
+        val allEvents = swingEvents ++ techncialAnalysisEvent ++ orderEvents
+        (withPlacedOrders, allEvents)
     }
 
     private def buildTechnicalAnalysisEvent(state: SystemState): Option[Event] = {
@@ -85,11 +99,18 @@ class SimpleTradingEventGenerator(leadAccount: LeadAccountBroker, orderService: 
     }
     
     private def placeOrders(state: SystemState, candle: Candle): SystemState = {
-        val placedOrders = orderService.findOrderToPlace(state, candle: Candle).map(leadAccount.placeOrder(_, candle)) match {
-            case Some(placedOrder) =>
-                state.orders.map(order => if (order.timestamp == placedOrder.timestamp) placedOrder else order)
-            case None =>
-                state.orders
+        // val placedOrders = orderService.findOrderToPlace(state, candle: Candle).map(leadAccount.placeOrder(_, candle)) match {
+        //     case Some(placedOrder) =>
+        //         state.orders.map(order => if (order.timestamp == placedOrder.timestamp) placedOrder else order)
+        //     case None =>
+        //         state.orders
+        // }
+        // state.copy(orders = placedOrders)
+        val ordersToPlace = orderService.findOrdersToPlace(state, candle)
+        val placedOrders = state.orders.map { order => 
+            if (ordersToPlace.contains(order)) {
+                leadAccount.placeOrder(order, candle)
+            } else order
         }
         state.copy(orders = placedOrders)
     }

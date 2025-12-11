@@ -11,6 +11,7 @@ object TimestampUtils {
     final lazy val LondonZone = ZoneId.of("Europe/London")
     final lazy val TokyoZone = ZoneId.of("Asia/Tokyo")
     final lazy val TenMinutes = Duration.ofMinutes(10).toMillis()
+    final lazy val TwoMinutes = Duration.ofMinutes(2).toMillis()
 
     def nanosToMillis(nanos: Long): Long = nanos / 1_000_000L
     def millisToNanos(millis: Long): Long = millis * 1_000_000L
@@ -48,6 +49,14 @@ object TimestampUtils {
 
     def newYorkClose(localDate: LocalDate) = {
         localDate.atTime(16, 0).atZone(NewYorkZone).toInstant.toEpochMilli
+    }
+
+    def newYorkVeryUncertain(localDate: LocalDate) = { //After volatile opening - 9:35 am
+        localDate.atTime(9, 35).atZone(NewYorkZone).toInstant().toEpochMilli
+    }
+
+    def newYorkQuiet(localDate: LocalDate) = { //After volatile opening - 10:00 am
+        localDate.atTime(10, 0).atZone(NewYorkZone).toInstant().toEpochMilli
     }
 
     def londonOpen(localDate: LocalDate) = {
@@ -90,7 +99,17 @@ object TimestampUtils {
 
     def isNearTradingClose(timestamp: Long): Boolean = {
         val tradingDate = toNewYorkLocalDate(timestamp)
-        timestamp >= newYorkClose(tradingDate) - TenMinutes
+        timestamp >= newYorkClose(tradingDate) - TwoMinutes
+    }
+
+    def isInEarlyOpen(timestamp: Long): Boolean = {
+        val tradingDate = toNewYorkLocalDate(timestamp)
+        timestamp <= newYorkVeryUncertain(tradingDate)
+    }
+
+    def isInQuiet(timestamp: Long): Boolean = {
+        val tradingDate = toNewYorkLocalDate(timestamp)
+        timestamp > newYorkQuiet(tradingDate)
     }
 
     def toNewYorkTimeString(timestamp: Long): String = {

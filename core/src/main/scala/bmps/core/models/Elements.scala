@@ -78,6 +78,8 @@ case class Candle(
     lazy val bodyHeight = if (isBullish) close - open else open - close
     lazy val wickHeight = if (isBullish) high - close else close - low
     lazy val wickToBodyRatio = wickHeight / bodyHeight
+    lazy val lowerWick = if (isBullish) open - low else close - low
+    lazy val upperWick = if (isBullish) high - close else high - open
 
     def engulfs(other: Candle): Boolean = bodyHeight > other.bodyHeight
     def isOpposite(other: Candle): Boolean = isBullish && other.isBearish || isBearish && other.isBullish

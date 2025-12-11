@@ -66,11 +66,10 @@ object AppLauncher extends IOApp.Simple {
           new DatabentoSource(Set(CandleDuration.OneSecond, CandleDuration.OneMinute))
         )
       case "ParquetSource" => 
-        val oneMinuteSource = new ParquetSource(CandleDuration.OneMinute)
         (
-          new ParquetSource(CandleDuration.OneHour), 
-          oneMinuteSource,
-          oneMinuteSource,
+          new ParquetSource(Set[CandleDuration](CandleDuration.OneHour)), 
+          new ParquetSource(Set[CandleDuration](CandleDuration.OneMinute)),
+          new ParquetSource(Set[CandleDuration](CandleDuration.OneSecond, CandleDuration.OneMinute)),
         )
       case _ => 
         throw new IllegalArgumentException(s"$dataSource not supported.")

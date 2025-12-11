@@ -170,7 +170,7 @@ class PhaseService {
     eventBufferManager.clearPhase('planning')
     eventBufferManager.clearPhase('trading')
     eventPlaybackService.reset()
-    restApiService.stopPolling()
+    restApiService.stopAllPolling()
   }
 
   /**

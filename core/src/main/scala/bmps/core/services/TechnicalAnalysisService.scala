@@ -12,13 +12,19 @@ import bmps.core.brokers.rest.OrderState
 import bmps.core.models.OrderStatus
 import bmps.core.utils.MarketCalendar
 import bmps.core.utils.TimestampUtils
+import bmps.core.models.Direction
+import bmps.core.api.storage.EventStore.create
+import bmps.core.models.ExtremeType
+import bmps.core.services.analysis.TrendAnalysis
+import bmps.core.brokers.AccountBroker
+import bmps.core.models.OrderStatus.Profit
+import bmps.core.models.OrderStatus.Loss
 
 class TechnicalAnalysisService(trend: Trend = new Trend(),
                                momentum: Momentum = new Momentum(),
                                volume: Volume = new Volume(),
-                               volatility: Volatility = new Volatility()) {
-
-    var bestSignal: Option[BuyingSignal] = None
+                               volatility: Volatility = new Volatility(),
+                               useAtrs: Double = 2.0) {
 
     def processOneSecondState(state: SystemState): SystemState = {
         val lastCandle = state.recentOneSecondCandles.last
@@ -35,7 +41,7 @@ class TechnicalAnalysisService(trend: Trend = new Trend(),
             
             // Update system state with new volume analysis
             state.copy(
-                recentVolumeAnalysis = state.recentVolumeAnalysis.take(19) :+ volumeAnalysis // Keep last 20 analyses
+                recentVolumeAnalysis = state.recentVolumeAnalysis.takeRight(19) :+ volumeAnalysis // Keep last 20 analyses
             )
         } else {
             state
@@ -55,9 +61,9 @@ class TechnicalAnalysisService(trend: Trend = new Trend(),
         val volatilityAnalysis = volatility.doVolatilityAnalysis(state.tradingCandles)
         
         // Update system state with all new analyses
-        val recentTrendAnalysis = state.recentTrendAnalysis.take(19) :+ trendAnalysis
-        val recentMomentumAnalysis = state.recentMomentumAnalysis.take(19) :+ momentumAnalysis
-        val recentVolatilityAnalysis = state.recentVolatilityAnalysis.take(19) :+ volatilityAnalysis
+        val recentTrendAnalysis = state.recentTrendAnalysis.takeRight(19) :+ trendAnalysis
+        val recentMomentumAnalysis = state.recentMomentumAnalysis.takeRight(19) :+ momentumAnalysis
+        val recentVolatilityAnalysis = state.recentVolatilityAnalysis.takeRight(19) :+ volatilityAnalysis
 
         val stateWithAnalysis = state.copy(
             recentTrendAnalysis = recentTrendAnalysis,
@@ -67,339 +73,492 @@ class TechnicalAnalysisService(trend: Trend = new Trend(),
         
         if (stateWithAnalysis.orders.exists(_.isActive) || TimestampUtils.isNearTradingClose(lastCandle.timestamp)) stateWithAnalysis
         else buildOrders(stateWithAnalysis)
+        stateWithAnalysis
     }
 
     private def buildOrders(state: SystemState): SystemState = {
-        val lastCandle = state.tradingCandles.last
-        val scoreTrend = trend.trendReversalSignal(state.recentTrendAnalysis, lastCandle.close)
-        val scoreMomentum = momentum.buyingOpportunityScore(state.recentMomentumAnalysis)
-        val scoreVolume = volume.volumeTradingSignal(state.recentVolumeAnalysis, lastCandle.close)
-        val scoreVolatility = volatility.volatilityTradingSignal(state.recentVolatilityAnalysis, lastCandle.close)
-
-        // Calculate composite buying signal
-        val buyingSignal = calculateBuyingSignal(scoreTrend, scoreMomentum, scoreVolume, scoreVolatility, state)
-        
-        // Update best signal if this one is stronger
-        // bestSignal match {
-        //     case None => bestSignal = Some(buyingSignal)
-        //     case Some(current) => 
-        //         if (buyingSignal.strength * buyingSignal.confidence > current.strength * current.confidence) {
-        //             println(buyingSignal)
-        //             bestSignal = Some(buyingSignal)
-        //         }
-        // }
-        
-        if (Set("STRONG_BUY", "BUY", "WEAK_BUY").contains(buyingSignal.recommendation)) {
-            val newOrder = buyingSignal.direction match {
-                case OrderType.Long => 
-                    val low = roundToNearestQuarter(buyingSignal.stopLoss).toFloat
-                    val entry = roundToNearestQuarter(buyingSignal.entryPrice).toFloat
-                    Order(low, entry, lastCandle.timestamp, buyingSignal.direction,
-                        EntryType.TechnicalAnalysisOrderBlock, state.contractSymbol.get, status = OrderStatus.PlaceNow)
-                case OrderType.Short => 
-                    val low = roundToNearestQuarter(buyingSignal.entryPrice).toFloat
-                    val entry = roundToNearestQuarter(buyingSignal.stopLoss).toFloat
-                    Order(low, entry, lastCandle.timestamp, buyingSignal.direction,
-                        EntryType.TechnicalAnalysisOrderBlock, state.contractSymbol.get, status = OrderStatus.PlaceNow)
-            }
-            state.copy(orders = state.orders :+ newOrder)
+        if (state.recentMomentumAnalysis.length > 3 && !state.orders.exists(_.isActive)) {
+            createOrder(state).map { order => 
+                state.copy(orders = state.orders :+ order)
+            }.getOrElse(state)
         } else state
     }
 
-    def roundToNearestQuarter(value: Double): Double = {
-        (math.round(value * 4.0) / 4.0)
+    private def createOrder(state: SystemState): Option[Order] = {
+        createMomentumOrder(state)
+        // .orElse(createTrendOrder(state))
+        // createTrendOrder((state))
+        // .orElse(createOverOrder(state))
     }
-    
-    // Case class to hold buying decision results
-    case class BuyingSignal(
-        strength: Double,      // 0.0-1.0: Signal strength
-        confidence: Double,    // 0.0-1.0: Confidence in signal
-        recommendation: String, // Action recommendation
-        direction: OrderType,     // "LONG" or "SHORT"
-        entryPrice: Double,    // Suggested entry price
-        stopLoss: Double,      // Calculated stop loss price
-        atrStopDistance: Double, // ATR-based stop distance
-        breakdown: Map[String, Double], // Individual score contributions
-        reasoning: List[String] // Human-readable reasoning
-    ) {
-       override def toString(): String = {
-            s"""
-                |╔═══════════════════════════════════════════════════════════════════════════════╗
-                |║                           BUYING SIGNAL ANALYSIS                              ║
-                |╠═══════════════════════════════════════════════════════════════════════════════╣
-                |║ Recommendation: ${recommendation.padTo(20, ' ')}                              ║
-                |║ Direction:      ${direction.toString.padTo(20, ' ')}                          ║
-                |║ Signal Strength: ${f"$strength%.2f".padTo(19, ' ')} Confidence: ${f"$confidence%.2f"}  ║
-                |╠═══════════════════════════════════════════════════════════════════════════════╣
-                |║ Entry Price:    $$${f"$entryPrice%.2f".padTo(18, ' ')}                        ║
-                |║ Stop Loss:      $$${f"$stopLoss%.2f".padTo(18, ' ')}                          ║
-                |║ ATR Distance:   $$${f"$atrStopDistance%.2f".padTo(18, ' ')}                   ║
-                |╠═══════════════════════════════════════════════════════════════════════════════╣
-                |║ COMPONENT BREAKDOWN:                                                          ║
-                |║   Trend:        ${f"${breakdown("trend")}%.2f".padTo(20, ' ')}                ║
-                |║   Momentum:     ${f"${breakdown("momentum")}%.2f".padTo(20, ' ')}             ║
-                |║   Volume:       ${f"${breakdown("volume")}%.2f".padTo(20, ' ')}               ║
-                |║   Volatility:   ${f"${breakdown("volatility")}%.2f".padTo(20, ' ')}           ║
-                |║   Composite:    ${f"${breakdown("composite")}%.2f".padTo(20, ' ')}            ║
-                |║   Adjusted:     ${f"${breakdown("adjusted")}%.2f".padTo(20, ' ')}             ║
-                |╠═══════════════════════════════════════════════════════════════════════════════╣
-                |║ REASONING:                                                                    ║
-                |${reasoning.map(r => s"║   • $r".padTo(80, ' ') + "║").mkString("\n")}
-                |╚═══════════════════════════════════════════════════════════════════════════════╝
-                |""".stripMargin
-        }
-    }
-    
-    private def calculateBuyingSignal(scoreTrend: Double, scoreMomentum: Double, 
-                                    scoreVolume: Double, scoreVolatility: Double,
-                                    state: SystemState): BuyingSignal = {
-        
-        // 1. ADAPTIVE WEIGHTING based on market conditions
-        val weights = calculateAdaptiveWeights(scoreTrend, scoreMomentum, scoreVolume, scoreVolatility, state)
-        
-        // 2. WEIGHTED COMPOSITE SCORE
-        val compositeScore = (
-            scoreTrend * weights("trend") +
-            scoreMomentum * weights("momentum") + 
-            scoreVolume * weights("volume") +
-            scoreVolatility * weights("volatility")
-        )
-        
-        // 3. CONFLUENCE ANALYSIS (how many signals agree) - Less punitive
-        val strongSignals = List(scoreTrend, scoreMomentum, scoreVolume, scoreVolatility).count(_ >= 0.6)
-        val confluenceFactor = strongSignals match {
-            case 4 => 1.2  // All agree - boost signal
-            case 3 => 1.15 // Strong majority - better boost
-            case 2 => 1.05 // Split decision - small boost
-            case 1 => 0.95 // Weak consensus - small reduction
-            case 0 => 0.85 // No strong signals - moderate reduction (was 0.5)
-        }
-        
-        // 4. RISK ADJUSTMENT based on market volatility
-        val currentVolatility = state.recentVolatilityAnalysis.lastOption
-            .map(_.overallVolatility).getOrElse("Medium")
-        val riskAdjustment = currentVolatility match {
-            case "Low" => 1.1    // Low vol = higher confidence
-            case "Medium" => 1.0 // Normal conditions
-            case "High" => 0.8   // High vol = reduce confidence
-            case _ => 1.0
-        }
-        
-        // 5. DIRECTION ANALYSIS
-        val direction = determineDirection(scoreTrend, scoreMomentum, scoreVolume, scoreVolatility, state)
-        
-        // 6. ENTRY PRICE & STOP LOSS CALCULATION
+
+    private def createTrendOrder(state: SystemState): Option[Order] = {
         val lastCandle = state.tradingCandles.last
-        val entryPrice = lastCandle.close.toDouble
-        val (stopLoss, atrDistance) = calculateStopLoss(entryPrice, direction, state)
-        
-        // 7. FINAL CALCULATIONS
-        val adjustedScore = math.min(compositeScore * confluenceFactor * riskAdjustment, 1.0)
-        val confidence = calculateConfidence(scoreTrend, scoreMomentum, scoreVolume, scoreVolatility, strongSignals)
-        val recommendation = determineRecommendation(adjustedScore, confidence)
-        
-        // 8. REASONING
-        val reasoning = buildReasoning(scoreTrend, scoreMomentum, scoreVolume, scoreVolatility, 
-                                     strongSignals, currentVolatility, weights, direction, stopLoss)
-        
-        BuyingSignal(
-            strength = adjustedScore,
-            confidence = confidence,
-            recommendation = recommendation,
-            direction = direction,
-            entryPrice = entryPrice,
-            stopLoss = stopLoss,
-            atrStopDistance = atrDistance,
-            breakdown = Map(
-                "trend" -> scoreTrend,
-                "momentum" -> scoreMomentum,
-                "volume" -> scoreVolume,
-                "volatility" -> scoreVolatility,
-                "composite" -> compositeScore,
-                "adjusted" -> adjustedScore
-            ),
-            reasoning = reasoning
-        )
-    }
-    
-    private def calculateAdaptiveWeights(scoreTrend: Double, scoreMomentum: Double,
-                                       scoreVolume: Double, scoreVolatility: Double,
-                                       state: SystemState): Map[String, Double] = {
-        
-        // Base weights (default balanced approach)
-        var trendWeight = 0.30     // Trend is king for direction
-        var momentumWeight = 0.25  // Momentum for entry timing
-        var volumeWeight = 0.25    // Volume for confirmation
-        var volatilityWeight = 0.20 // Volatility for risk/timing
-        
-        // ADAPTIVE ADJUSTMENTS based on market conditions:
-        
-        // 1. In trending markets, increase trend weight
-        if (scoreTrend >= 0.7) {
-            trendWeight += 0.1
-            momentumWeight -= 0.05
-            volumeWeight -= 0.05
-        }
-        
-        // 2. In choppy/sideways markets, favor momentum and volume more aggressively
-        if (scoreTrend < 0.3) {
-            momentumWeight += 0.15  // Increased boost
-            volumeWeight += 0.15    // Increased boost  
-            trendWeight -= 0.25     // More aggressive reduction
-            volatilityWeight -= 0.05
-        }
-        
-        // 3. In high volatility, increase volatility consideration
-        val currentVolatility = state.recentVolatilityAnalysis.lastOption
-            .map(_.overallVolatility).getOrElse("Medium")
-        if (currentVolatility == "High") {
-            volatilityWeight += 0.1
-            trendWeight -= 0.05
-            momentumWeight -= 0.05
-        }
-        
-        // 4. When volume is exceptionally strong, boost its weight
-        if (scoreVolume >= 0.8) {
-            volumeWeight += 0.1
-            trendWeight -= 0.05
-            momentumWeight -= 0.05
-        }
-        
-        // Normalize to ensure weights sum to 1.0
-        val total = trendWeight + momentumWeight + volumeWeight + volatilityWeight
-        Map(
-            "trend" -> trendWeight / total,
-            "momentum" -> momentumWeight / total,
-            "volume" -> volumeWeight / total,
-            "volatility" -> volatilityWeight / total
-        )
-    }
-    
-    private def calculateConfidence(scoreTrend: Double, scoreMomentum: Double,
-                                  scoreVolume: Double, scoreVolatility: Double,
-                                  strongSignals: Int): Double = {
-        val scores = List(scoreTrend, scoreMomentum, scoreVolume, scoreVolatility)
-        
-        // Calculate standard deviation of scores (low = high confidence)
-        val mean = scores.sum / scores.length
-        val variance = scores.map(score => math.pow(score - mean, 2)).sum / scores.length
-        val stdDev = math.sqrt(variance)
-        
-        // High confidence when:
-        // 1. Low standard deviation (scores agree)
-        // 2. Multiple strong signals
-        // 3. Scores are not in middle range (decisive)
-        
-        val agreementFactor = 1.0 - stdDev // Higher when scores agree
-        val strengthFactor = strongSignals / 4.0 // Higher with more strong signals
-        val decisivenessFactor = scores.map(s => if (s < 0.3 || s > 0.7) 1.0 else 0.5).sum / 4.0
-        
-        val confidence = (agreementFactor * 0.4 + strengthFactor * 0.4 + decisivenessFactor * 0.2)
-        math.min(math.max(confidence, 0.0), 1.0)
-    }
-    
-    private def determineRecommendation(strength: Double, confidence: Double): String = {
-        val combinedScore = strength * confidence
-        
-        combinedScore match {
-            case s if s >= 0.65 => "STRONG_BUY"  // Lowered from 0.75
-            case s if s >= 0.50 => "BUY"         // Lowered from 0.60  
-            case s if s >= 0.35 => "WEAK_BUY"    // Lowered from 0.45
-            case s if s >= 0.25 => "HOLD"        // Lowered from 0.30
-            case _ => "AVOID"
+        val entryPrice = state.recentTrendAnalysis.last.shortTermMA.toFloat
+        val someAtrs = atrs(state, useAtrs)
+        ruleIsGoldenOrDeathCross(state) match {
+            case Some(OrderType.Long) =>
+                val low = entryPrice - someAtrs
+                Some(Order(low.toFloat, entryPrice, lastCandle.timestamp, OrderType.Long, 
+                      EntryType.TrendOrderBlock, state.contractSymbol.get))
+            case Some(OrderType.Short) => 
+                val high = entryPrice + someAtrs
+                Some(Order(entryPrice, high.toFloat, lastCandle.timestamp, OrderType.Short, 
+                      EntryType.TrendOrderBlock, state.contractSymbol.get))
+            case None => None
         }
     }
-    
-    private def determineDirection(scoreTrend: Double, scoreMomentum: Double,
-                                 scoreVolume: Double, scoreVolatility: Double,
-                                 state: SystemState): OrderType = {
-        // Analyze trend direction from recent trend analysis
-        val recentTrend = state.recentTrendAnalysis.lastOption
-        val trendDirection = recentTrend.map { t =>
-            if (t.isUptrend) "Uptrend"
-            else if (t.isDowntrend) "Downtrend"  
-            else "Sideways"
-        }.getOrElse("Unknown")
-        
-        // Get momentum bias (oversold favors long, overbought favors short)
-        val recentMomentum = state.recentMomentumAnalysis.lastOption
-        val momentumBias = recentMomentum.map { m =>
-            if (m.rsiOversold || m.stochastics.isOversold || m.williamsROversold || m.cciOversold) "LONG"
-            else if (m.rsiOverbought || m.stochastics.isOverbought || m.williamsROverbought || m.cciOverbought) "SHORT"
-            else "NEUTRAL"
-        }.getOrElse("NEUTRAL")
-        
-        // Primary decision based on trend direction and momentum
-        (trendDirection, momentumBias) match {
-            case ("Uptrend", "LONG") => OrderType.Long    // Strong uptrend + oversold = buy dip
-            case ("Uptrend", _) => OrderType.Long         // Follow uptrend
-            case ("Downtrend", "SHORT") => OrderType.Short // Strong downtrend + overbought = short rally
-            case ("Downtrend", _) => OrderType.Short      // Follow downtrend
-            case (_, "LONG") if scoreMomentum >= 0.6 => OrderType.Long // Strong momentum oversold signal
-            case (_, "SHORT") if scoreMomentum >= 0.6 => OrderType.Short // Strong momentum overbought signal
-            case _ => OrderType.Long // Default to long bias in uncertain conditions
+
+    private def createOverOrder(state: SystemState): Option[Order] = {
+        val lastCandle = state.tradingCandles.last
+        val someAtrs = atrs(state, 2.0)
+        ruleIsMomentumOverboughtOrOversold(state) match {
+            case Some(OrderType.Long) =>
+                val entryPrice = lastCandle.low
+                val low = entryPrice - someAtrs
+                Some(Order(low.toFloat, entryPrice, lastCandle.timestamp, OrderType.Long, 
+                      EntryType.OverOrderBlock, state.contractSymbol.get))
+            case Some(OrderType.Short) => 
+                val entryPrice = lastCandle.high
+                val high = entryPrice + someAtrs
+                Some(Order(entryPrice, high.toFloat, lastCandle.timestamp, OrderType.Short, 
+                      EntryType.OverOrderBlock, state.contractSymbol.get))
+            case None => None
         }
     }
-    
-    private def calculateStopLoss(entryPrice: Double, direction: OrderType, state: SystemState): (Double, Double) = {
-        // Get ATR from volatility analysis
-        val currentVolatility = state.recentVolatilityAnalysis.lastOption
-        val atr = currentVolatility.map(_.trueRange.atr).getOrElse(entryPrice * 0.02) // Fallback to 2% if no ATR
-        
-        // Use 2 ATRs for stop loss distance (configurable)
-        val atrMultiplier = 2.0
-        val stopDistance = atr * atrMultiplier
-        
-        val stopLoss = direction match {
-            case OrderType.Long => entryPrice - stopDistance  // Stop below entry for long
-            case OrderType.Short => entryPrice + stopDistance // Stop above entry for short
-            case _ => entryPrice - stopDistance       // Default to long
+
+    private def createMomentumOrder(state: SystemState): Option[Order] = {
+        val lastCandle = state.tradingCandles.last
+        val entryPrice = lastCandle.close
+        val someAtrs = atrs(state, useAtrs)
+        ruleHasStrongMomentum(state) match {
+            case Some(OrderType.Long) =>
+                val low = entryPrice - someAtrs
+                Some(Order(low.toFloat, entryPrice, lastCandle.timestamp, OrderType.Long, 
+                      EntryType.MomentumOrderBlock, state.contractSymbol.get, 
+                      status = OrderStatus.PlaceNow))
+            case Some(OrderType.Short) => 
+                val high = entryPrice + someAtrs
+                Some(Order(entryPrice, high.toFloat, lastCandle.timestamp, OrderType.Short, 
+                      EntryType.MomentumOrderBlock, state.contractSymbol.get,
+                      status = OrderStatus.PlaceNow))
+            case None => None
         }
-        
-        (stopLoss, stopDistance)
+    }
+
+    private def isGoldenCross(state: SystemState): Boolean = {
+        val trendAnalysis = state.recentTrendAnalysis.last
+        val priorTrendAnalysis = state.recentTrendAnalysis.init.last
+        trendAnalysis.isGoldenCross && !priorTrendAnalysis.isGoldenCross
+    }
+
+    private def isDeathCross(state: SystemState): Boolean = {
+        val trendAnalysis = state.recentTrendAnalysis.last
+        val priorTrendAnalysis = state.recentTrendAnalysis.init.last
+        trendAnalysis.isDeathCross && !priorTrendAnalysis.isDeathCross
+    }
+
+    private def isStrongUpTrend(state: SystemState): Boolean = {
+        val lastCandle = state.tradingCandles.last
+        val trendAnalysis = state.recentTrendAnalysis.last
+        val volatilityAnalysis = state.recentVolatilityAnalysis.last
+        //Either the adx needs to be strong 
+        //Or the move on the candle pushes out of the keltner channel
+        trendAnalysis.adx > 25.0 || 
+            (lastCandle.isBullish &&
+             lastCandle.low < volatilityAnalysis.keltnerChannels.upperBand &&
+             lastCandle.close > volatilityAnalysis.keltnerChannels.upperBand)
+    }
+
+    private def isStrongDownTrend(state: SystemState): Boolean = {
+        val lastCandle = state.tradingCandles.last
+        val trendAnalysis = state.recentTrendAnalysis.last
+        val volatilityAnalysis = state.recentVolatilityAnalysis.last
+        trendAnalysis.adx > 25.0 || 
+            (lastCandle.isBearish &&
+             lastCandle.high > volatilityAnalysis.keltnerChannels.lowerBand &&
+             lastCandle.close < volatilityAnalysis.keltnerChannels.lowerBand)
+    }
+
+    private def isMovingBullish(state: SystemState): Boolean = {
+        val lastCandle = state.tradingCandles.last
+        val priorCandle = state.tradingCandles.init.last
+        lastCandle.isBullish && !priorCandle.isBearish
+    }
+
+    private def isMovingBearish(state: SystemState): Boolean = {
+        val lastCandle = state.tradingCandles.last
+        val priorCandle = state.tradingCandles.init.last
+        lastCandle.isBearish && !priorCandle.isBullish
+    }
+
+    private def isSlowingTrend(state: SystemState): Boolean = {
+        val lastThreeTrends = state.recentTrendAnalysis.takeRight(3)
+        val firstTrend = lastThreeTrends.head
+        val lastTrend = lastThreeTrends.last
+        lastTrend.adx < 35.0 && lastTrend.adx < firstTrend.adx
+    }
+
+    private def ruleIsGoldenOrDeathCross(state: SystemState): Option[OrderType] = {
+        if (isGoldenCross(state) && isStrongUpTrend(state) && isMovingBullish(state) && !isSlowingTrend(state)) {
+            Some(OrderType.Long)
+        } else if (isDeathCross(state) && isStrongDownTrend(state) && isMovingBearish(state) && !isSlowingTrend(state)) {
+            Some(OrderType.Short)
+        }
+        else None
+    }
+
+    private def isOversold(state: SystemState): Boolean = {
+        val momentumAnalysis = state.recentMomentumAnalysis.takeRight(3)
+        momentumAnalysis.exists(_.rsiOversold)
+    }
+
+    private def isOverbought(state: SystemState): Boolean = {
+        val momentumAnalysis = state.recentMomentumAnalysis.takeRight(3)
+        momentumAnalysis.exists(_.rsiOverbought)
+    }
+
+    private def isNewYorkQuiet(state: SystemState): Boolean = {
+        val lastCandle = state.tradingCandles.last
+        val tradingDay = state.tradingDay
+        lastCandle.timestamp > TimestampUtils.newYorkQuiet(tradingDay)
+    }
+
+    private def isEngulfing(state: SystemState): Boolean = {
+        // val momentumAnalysis = state.recentMomentumAnalysis.last
+        val lastCandle = state.tradingCandles.last
+        val priorCandle = state.tradingCandles.init.last
+        lastCandle.engulfs(priorCandle) && lastCandle.isOpposite(priorCandle)
+        // candles.exists(lastCandle.engulfs)
+        // candles.forall(lastCandle.engulfs)
+    }
+
+    private def isUpward(state: SystemState): Boolean = {
+        state.tradingCandles.last.direction == Direction.Up
+    }
+
+    private def isDownward(state: SystemState): Boolean = {
+        state.tradingCandles.last.direction == Direction.Down
+    }
+
+    private def hasTrendStrength(state: SystemState): Boolean = {
+        state.recentTrendAnalysis.last.adx >= 40.0
+    }
+
+    private def ruleIsMomentumOverboughtOrOversold(state: SystemState): Option[OrderType] = {
+        val lastCandle = state.tradingCandles.last
+
+        if (isOversold(state) && isNewYorkQuiet(state) && 
+            isEngulfing(state) && isUpward(state)) {
+            Some(OrderType.Long)
+        } else if (isOverbought(state) && isNewYorkQuiet(state) && 
+                   isEngulfing(state) && isDownward(state)) {
+            Some(OrderType.Short)
+        } else None
+    }
+
+    private def isSpreadADXCrossing(state: SystemState): Option[Direction] = {
+        val keltnerChannel = state.recentVolatilityAnalysis.last.keltnerChannels
+        val trendAnalysis = state.recentTrendAnalysis.last
+        val keltnerSpread = math.abs(keltnerChannel.lowerBand - keltnerChannel.upperBand)
+        val maSpread = math.abs(trendAnalysis.longTermMA - trendAnalysis.shortTermMA)
+        val rawStrength = maSpread / keltnerSpread
+        val clamped = math.max(0.0, math.min(1.0, rawStrength)) * 100 //scale to match adx scale.
+        val adx = trendAnalysis.adx
+        if (clamped > adx && adx <= 50.0 && trendAnalysis.isUptrend) Some(Direction.Up)
+        else if (clamped > adx && adx <= 50.0 && trendAnalysis.isDowntrend) Some(Direction.Down)
+        else None
+    }
+
+    private def strengthOfTrendAfterCross(state: SystemState, lastFiveTrend: List[TrendAnalysis]): Double = {
+        val keltnerChannel = state.recentVolatilityAnalysis.last.keltnerChannels
+        val trendPoints  = lastFiveTrend.tail
+        val firstInTrend = trendPoints.head
+        val lastInTrend  = trendPoints.last
+
+        val firstSpread  = math.abs(firstInTrend.shortTermMA - firstInTrend.longTermMA)
+        val lastSpread   = math.abs(lastInTrend.shortTermMA  - lastInTrend.longTermMA)
+
+        val spreadChange = lastSpread - firstSpread
+        val maxSpreadChange = math.abs(keltnerChannel.channelWidth * 0.5) //Half channel growth is max
+
+        val rawStrength   = spreadChange / maxSpreadChange
+        math.max(0.0, math.min(1.0, rawStrength))
+    }
+
+    private def strengthOfTrendAfterGoldenCross(state: SystemState): Double = {
+        val lastestTrend = state.recentTrendAnalysis.takeRight(6)
+        val first         = lastestTrend.head
+        val nextFive      = lastestTrend.tail
+
+        if (!first.isGoldenCross && lastestTrend.tail.forall(_.isGoldenCross)) {
+            strengthOfTrendAfterCross(state, nextFive)
+        } else 0.0
+    }
+
+    private def strengthOfTrendAfterDeathCross(state: SystemState): Double = {
+        val lastestTrend = state.recentTrendAnalysis.takeRight(6)
+        val first         = lastestTrend.head
+        val nextFive      = lastestTrend.tail
+
+        if (!first.isDeathCross && lastestTrend.tail.forall(_.isDeathCross)) {
+            strengthOfTrendAfterCross(state, nextFive)
+        } else 0.0
     }
     
-    private def buildReasoning(scoreTrend: Double, scoreMomentum: Double, 
-                             scoreVolume: Double, scoreVolatility: Double,
-                             strongSignals: Int, volatility: String,
-                             weights: Map[String, Double], direction: OrderType, 
-                             stopLoss: Double): List[String] = {
-        val reasons = scala.collection.mutable.ListBuffer[String]()
-        
-        // Analyze individual components
-        if (scoreTrend >= 0.6) reasons += "Positive trend signals detected"
-        else if (scoreTrend <= 0.3) reasons += "Weak trend conditions"
-        
-        if (scoreMomentum >= 0.6) reasons += "Favorable momentum indicators"
-        else if (scoreMomentum <= 0.3) reasons += "Poor momentum conditions"
-        
-        if (scoreVolume >= 0.6) reasons += "Strong volume confirmation"
-        else if (scoreVolume <= 0.3) reasons += "Weak volume support"
-        
-        if (scoreVolatility >= 0.6) reasons += "Volatility supports entry timing"
-        else if (scoreVolatility <= 0.3) reasons += "Volatility conditions unfavorable"
-        
-        // Confluence analysis
-        strongSignals match {
-            case 4 => reasons += "All four pillars align - high conviction setup"
-            case 3 => reasons += "Strong consensus across most indicators"
-            case 2 => reasons += "Mixed signals - moderate confidence"
-            case 1 => reasons += "Limited support from indicators"
-            case 0 => reasons += "No strong supporting signals"
+    private def theTrendIsYourFriend(state: SystemState): Option[Direction] = {
+        // if (strengthOfTrendAfterGoldenCross(state) > 0.25) Some(Direction.Up)
+        // else if (strengthOfTrendAfterDeathCross(state) > 0.25) Some(Direction.Down)
+        // else None
+        isSpreadADXCrossing(state)
+    }
+
+    private def nearingSummit(state: SystemState): Boolean = {
+        val lastClose = state.tradingCandles.last.close
+        val someAtrs = atrs(state, useAtrs) * 2 //Assume 2x profit??
+        val peakRed = state.daytimeExtremes.filter(_.extremeType == ExtremeType.High).map(_.level).max
+        lastClose < peakRed && (lastClose + someAtrs) > peakRed
+    }
+
+    private def nearingFloor(state: SystemState): Boolean = {
+        val lastClose = state.tradingCandles.last.close
+        val someAtrs = atrs(state, useAtrs) * 2 //Assume 2x profit??
+        val peakGreen = state.daytimeExtremes.filter(_.extremeType == ExtremeType.Low).map(_.level).min
+        lastClose > peakGreen && (lastClose - someAtrs) < peakGreen
+    }
+
+    private def hasReachedLimit(state: SystemState): Boolean = {
+        val total = state.orders.foldLeft(0.0) { (r, c) =>
+            val runningTotal = c.status match {
+                case Profit => r + 1.0
+                case Loss => r - 0.5
+                case _ => r
+            }
+            if (runningTotal >= 2.0) 2.0
+            else if (runningTotal <= -1.0) -1.0
+            else runningTotal
         }
+
+        if (total >= 2.0 || total <= -1.0) true else false
+    }
+
+    private def wasDeathCrossNMinutesAgo(state: SystemState, n: Int): Boolean = {
+        val lastNPlusOneMinutesAgo = state.recentTrendAnalysis.takeRight(n + 1)
+        val nPlusOneMinutesAgo = lastNPlusOneMinutesAgo.head
+        nPlusOneMinutesAgo.isDeathCross == false &&
+            lastNPlusOneMinutesAgo.tail.forall(_.isDeathCross == true)
+    }
+
+    private def wasGoldenCrossNMinutesAgo(state: SystemState, n: Int): Boolean = {
+        val lastNPlusOneMinutesAgo = state.recentTrendAnalysis.takeRight(n + 1)
+        val nPlusOneMinutesAgo = lastNPlusOneMinutesAgo.head
+        nPlusOneMinutesAgo.isGoldenCross == false &&
+            lastNPlusOneMinutesAgo.tail.forall(_.isGoldenCross == true)
+    }
+
+    private def spreadKeltnerRatioNMinutesAgo(state: SystemState, n: Int): Double = {
+        val volatility = state.recentVolatilityAnalysis.takeRight(n + 1).head
+        val trend = state.recentTrendAnalysis.takeRight(n + 1).head
+        val keltnerChannel = volatility.keltnerChannels
+        val keltnerSpread = math.abs(keltnerChannel.lowerBand - keltnerChannel.upperBand)
+        val maSpread = math.abs(trend.longTermMA - trend.shortTermMA)
+        val rawStrength = maSpread / keltnerSpread
+        val clamped = math.max(0.0, math.min(1.0, rawStrength)) * 100 //scale to 0 to 100.
+        clamped
+    }
+    
+    private def willRSISpreadCrossBearish(state: SystemState): Boolean = {
+        val minutesAgo = 4
+        if (wasDeathCrossNMinutesAgo(state, minutesAgo)) {
+            val rsiNow = state.recentMomentumAnalysis.last.rsi
+            val rsiHistory = state.recentMomentumAnalysis.takeRight(10)
+            
+            // Find the maximum RSI in recent history
+            val maxRsiIdx = rsiHistory.zipWithIndex.maxBy(_._1.rsi)._2
+            val rsiAtMax = rsiHistory(maxRsiIdx).rsi
+            val timeSinceMax = rsiHistory.length - maxRsiIdx - 1
+            
+            // Calculate RSI slope from the peak to now
+            val rsiSlope = (rsiNow - rsiAtMax) / (timeSinceMax + 0.0000001)
+            
+            // Calculate spread values and slope from minutesAgo to now
+            val spreadNMinutesAgo = spreadKeltnerRatioNMinutesAgo(state, minutesAgo)
+            val spreadNow = spreadKeltnerRatioNMinutesAgo(state, 0)
+            val spreadSlope = (spreadNow - spreadNMinutesAgo) / minutesAgo
+            
+            // Find intersection time (from now = time 0)
+            // RSI trendline: rsi(t) = rsiNow + rsiSlope * t
+            // Spread line: spread(t) = spreadNow + spreadSlope * t
+            // At intersection: rsiNow + rsiSlope * t = spreadNow + spreadSlope * t
+            // Solving for t: t = (spreadNow - rsiNow) / (rsiSlope - spreadSlope)
+            
+            val slopeDiff = rsiSlope - spreadSlope
+            val timeOfIntersection = (spreadNow - rsiNow) / (slopeDiff + 0.0000001)
+            timeOfIntersection <= 4.0
+        } else false
+    }
+
+    private def willRSISpreadCrossBullish(state: SystemState): Boolean = {
+        val minutesAgo = 4
+        if (wasGoldenCrossNMinutesAgo(state, minutesAgo)) {
+            val rsiNow = state.recentMomentumAnalysis.last.iRsi
+            val rsiHistory = state.recentMomentumAnalysis.takeRight(10)
+            
+            // Find the maximum RSI in recent history
+            val maxRsiIdx = rsiHistory.zipWithIndex.maxBy(_._1.iRsi)._2
+            val rsiAtMax = rsiHistory(maxRsiIdx).iRsi
+            val timeSinceMax = rsiHistory.length - maxRsiIdx - 1
+            
+            // Calculate RSI slope from the peak to now
+            val rsiSlope = (rsiNow - rsiAtMax) / (timeSinceMax + 0.0000001)
+            
+            // Calculate spread values and slope from minutesAgo to now
+            val spreadNMinutesAgo = spreadKeltnerRatioNMinutesAgo(state, minutesAgo)
+            val spreadNow = spreadKeltnerRatioNMinutesAgo(state, 0)
+            val spreadSlope = (spreadNow - spreadNMinutesAgo) / minutesAgo
+            
+            // Find intersection time (from now = time 0)
+            // RSI trendline: rsi(t) = rsiNow + rsiSlope * t
+            // Spread line: spread(t) = spreadNow + spreadSlope * t
+            // At intersection: rsiNow + rsiSlope * t = spreadNow + spreadSlope * t
+            // Solving for t: t = (spreadNow - rsiNow) / (rsiSlope - spreadSlope)
+            
+            val slopeDiff = rsiSlope - spreadSlope
+            val timeOfIntersection = (spreadNow - rsiNow) / (slopeDiff + 0.0000001)
+            timeOfIntersection <= 4.0
+        } else false
+    }
+
+    private def momentumConvergenceScoreBullish(state: SystemState): Boolean = {
+        val minutesAgo = 4
+        val threshold = 0.5
+        if (wasGoldenCrossNMinutesAgo(state, minutesAgo)) {
+            // Current values
+            val rsiNow = state.recentMomentumAnalysis.last.rsi
+            val spreadNow = spreadKeltnerRatioNMinutesAgo(state, 0)
+            
+            // Historical values
+            val rsiThen = state.recentMomentumAnalysis.takeRight(minutesAgo + 1).head.rsi
+            val spreadThen = spreadKeltnerRatioNMinutesAgo(state, minutesAgo)
+            
+            // Calculate rates of change (velocity)
+            val rsiVelocity = (rsiNow - rsiThen) / minutesAgo
+            val spreadVelocity = (spreadNow - spreadThen) / minutesAgo
+            
+            // Both must be increasing (positive velocity) for bullish
+            if (rsiVelocity <= 0 || spreadVelocity <= 0) return false
+            
+            // Normalize current strength to 0-1
+            val rsiScore = math.max(0.0, math.min(1.0, (rsiNow - 30.0) / 40.0))
+            val spreadScore = spreadNow / 100.0
+            
+            // Calculate how much they're converging (getting closer together)
+            val gapNow = math.abs(rsiScore - spreadScore)
+            val gapThen = math.abs((rsiThen - 30.0) / 40.0 - spreadThen / 100.0)
+            val isConverging = gapNow < gapThen  // Gap is closing
+            
+            // Only trigger if BOTH are moving up AND converging
+            if (!isConverging) return false
+            
+            // Final score: both must be strong AND aligned
+            val minStrength = math.min(rsiScore, spreadScore)
+            val convergence = 1.0 - gapNow
+            val score = minStrength * convergence
+            
+            score > threshold
+        } else false
+    }
+
+    private def momentumConvergenceScoreBearish(state: SystemState): Boolean = {
+        val minutesAgo = 4
+        val threshold = 0.5
+        if (wasDeathCrossNMinutesAgo(state, minutesAgo)) {
+            // Current values
+            val rsiNow = state.recentMomentumAnalysis.last.rsi
+            val spreadNow = spreadKeltnerRatioNMinutesAgo(state, 0)
+            
+            // Historical values
+            val rsiThen = state.recentMomentumAnalysis.takeRight(minutesAgo + 1).head.rsi
+            val spreadThen = spreadKeltnerRatioNMinutesAgo(state, minutesAgo)
+            
+            // For bearish: Use inverted RSI (100 - rsi) so high values = strong bearish momentum
+            val iRsiNow = 100.0 - rsiNow
+            val iRsiThen = 100.0 - rsiThen
+            
+            // Calculate rates of change (velocity)
+            val rsiVelocity = (iRsiNow - iRsiThen) / minutesAgo
+            val spreadVelocity = (spreadNow - spreadThen) / minutesAgo
+            
+            // Both must be increasing (positive velocity) for bearish
+            if (rsiVelocity <= 0 || spreadVelocity <= 0) return false
+            
+            // Normalize to 0-1 scale
+            val rsiScore = math.max(0.0, math.min(1.0, (iRsiNow - 30.0) / 40.0))
+            val spreadScore = spreadNow / 100.0
+            
+            // Calculate how much they're converging (getting closer together)
+            val gapNow = math.abs(rsiScore - spreadScore)
+            val gapThen = math.abs((iRsiThen - 30.0) / 40.0 - spreadThen / 100.0)
+            val isConverging = gapNow < gapThen  // Gap is closing
+            
+            // Only trigger if BOTH are moving down AND converging
+            if (!isConverging) return false
+            
+            // Final score: both must be strong AND aligned
+            val minStrength = math.min(rsiScore, spreadScore)
+            val convergence = 1.0 - gapNow
+            val score = minStrength * convergence
+            
+            score > threshold
+        } else false
+    }
+
+    private def isMaintainingMomentum(state: SystemState, direction: Direction): Boolean = {
+        val lastCandle = state.tradingCandles.last
+        val recentCandles = state.tradingCandles.takeRight(3)
+        val recentMomentum = state.recentMomentumAnalysis.takeRight(3)
         
-        // Market condition context
-        volatility match {
-            case "High" => reasons += "High volatility environment - increased caution"
-            case "Low" => reasons += "Low volatility supports stable entry"
-            case _ => reasons += "Normal volatility conditions"
+        direction match {
+            case Direction.Down => 
+                val noStrongRejection = lastCandle.lowerWick < (lastCandle.bodyHeight * 1.5)
+                val notMakingHigherLows = if (recentCandles.length >= 3) {
+                    val lows = recentCandles.map(_.low)
+                    !(lows(2) > lows(0) && lows(1) > lows(0))
+                } else true
+                
+                noStrongRejection && notMakingHigherLows
+                
+            case Direction.Up =>
+                val noStrongRejection = lastCandle.upperWick < (lastCandle.bodyHeight * 1.5)
+                val notMakingLowerHighs = if (recentCandles.length >= 3) {
+                    val highs = recentCandles.map(_.high)
+                    !(highs(2) < highs(0) && highs(1) < highs(0))
+                } else true
+                
+                noStrongRejection && notMakingLowerHighs
+                
+            case _ => false
         }
-        
-        // Direction and risk management
-        reasons += s"Recommended direction: $direction"
-        reasons += f"Stop loss set at: $$${stopLoss}%.2f (ATR-based risk management)"
-        
-        reasons.toList
+    }
+
+    private def ruleHasStrongMomentum(state: SystemState): Option[OrderType] = {
+        // if (!hasReachedLimit(state)) {
+            // willRSISpreadCrossBearish(state) match {
+            //     case Some(Direction.Up) if !nearingSummit(state) => Some(OrderType.Long)
+            //     case Some(Direction.Down) if !nearingFloor(state) => Some(OrderType.Short)
+            //     case _ => None
+            // }
+        // } else None
+        if (willRSISpreadCrossBearish(state) && !nearingFloor(state) && 
+                isMaintainingMomentum(state, Direction.Down)) {
+            Some(OrderType.Short)
+        } else if (willRSISpreadCrossBullish(state) && !nearingSummit(state) && 
+                isMaintainingMomentum(state, Direction.Up)) {
+            Some(OrderType.Long)
+        } else None
+    }
+
+    private def atrs(state: SystemState, quantity: Double): Double = {
+        state.recentVolatilityAnalysis.last.trueRange.atr * quantity
     }
 
 }

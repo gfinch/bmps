@@ -199,14 +199,9 @@ class OrderRenderer extends BaseRenderer {
       }
     }
 
-    // Extract entryType from nested object structure like {EngulfingOrderBlock: {}}, {FairValueGapOrderBlock: {}}, etc.
-    let entryType = 'EngulfingOrderBlock' // default
-    if (order.entryType) {
-      const entryTypeKeys = Object.keys(order.entryType)
-      if (entryTypeKeys.length > 0) {
-        entryType = entryTypeKeys[0] // Take the first key (EngulfingOrderBlock, FairValueGapOrderBlock, etc.)
-      }
-    }
+    // Preserve the entire entryType object structure to keep nested data like Trendy.description
+    // The structure is like {EngulfingOrderBlock: {}}, {Trendy: {description: "..."}} etc.
+    let entryType = order.entryType || 'EngulfingOrderBlock' // default
     
     const orderData = {
       id: `order-${actualEvent.timestamp}`,
