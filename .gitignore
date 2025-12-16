@@ -28,3 +28,8 @@ venv/
 # Temporary files
 *.tmp
 *.parquet
+
+# Large data files
+py-bmps/1m-candles.csv
+console/strategy_analysis_full.csv
+core/src/main/resources/databento/*.zip
