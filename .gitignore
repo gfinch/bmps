@@ -33,3 +33,6 @@ venv/
 py-bmps/1m-candles.csv
 console/strategy_analysis_full.csv
 core/src/main/resources/databento/*.zip
+
+# Backtest data
+core/src/main/resources/backtest/
