@@ -8,6 +8,9 @@ import bmps.core.models.OrderType
 import bmps.core.models.EntryType.Trendy
 import bmps.core.models.OrderStatus
 import bmps.core.utils.TimestampUtils
+import bmps.core.models.OrderStatus.Profit
+import java.time.Duration
+import java.sql.Timestamp
 
 class TechnicalAnalysisOrderService {
     def processOneMinuteState(state: SystemState): SystemState = {
@@ -35,8 +38,8 @@ class TechnicalAnalysisOrderService {
             } yield {
                 if (scenario.forall(n => applyScenario(n, scenario, state))) {
                     val newOrder = buildOrder(state, scenario)
-                    Some(newOrder)
-                    // safetyChecks(state, newOrder)
+                    // Some(newOrder)
+                    safetyChecks(state, newOrder)
                 } else None
             }
 
@@ -181,15 +184,27 @@ class TechnicalAnalysisOrderService {
     }
 
     def peakRed(state: SystemState): Double = {
-        val highestRed = state.daytimeExtremes.filter(_.extremeType == ExtremeType.High).map(_.level).max
-        val highestToday = state.tradingCandles.map(_.high).max
+        val highestRed = state.daytimeExtremes.filter(_.extremeType == ExtremeType.High).map(_.level.toDouble).reduceOption(_ max _).getOrElse(Double.MinValue)
+        val highestToday = state.tradingCandles.map(_.high.toDouble).reduceOption(_ max _).getOrElse(Double.MinValue)
         math.max(highestRed, highestToday)
     }
 
     def lowGreen(state: SystemState): Double = {
-        val lowestGreen = state.daytimeExtremes.filter(_.extremeType == ExtremeType.Low).map(_.level).min
-        val lowestToday = state.tradingCandles.map(_.low).min
+        val lowestGreen = state.daytimeExtremes.filter(_.extremeType == ExtremeType.Low).map(_.level.toDouble).reduceOption(_ min _).getOrElse(Double.MaxValue)
+        val lowestToday = state.tradingCandles.map(_.low.toDouble).reduceOption(_ min _).getOrElse(Double.MaxValue)
         math.min(lowestGreen, lowestToday)
+    }
+
+    def peakRedHours(state: SystemState, hours: Int): Double = {
+        state.tradingCandles
+            .filter(_.timestamp >= state.tradingCandles.last.timestamp - Duration.ofHours(hours).toMillis()) //Max from last three hours
+            .map(_.high.toDouble).reduceOption(_ max _).getOrElse(Double.MinValue)
+    }
+
+    def lowGreenHours(state: SystemState, hours: Int): Double = {
+        state.tradingCandles
+            .filter(_.timestamp >= state.tradingCandles.last.timestamp - Duration.ofHours(hours).toMillis()) //Min from last three hours
+            .map(_.low.toDouble).reduceOption(_ min _).getOrElse(Double.MaxValue)
     }
 
     def nearingSummit(state: SystemState, useAtrs: Double): Boolean = {
@@ -275,22 +290,102 @@ class TechnicalAnalysisOrderService {
         else 0
     }
 
+    //NO safety checks = $56k / $170k
+    //InsideLimit only = $70k / $177k
+    //InQuiet && InLimit && early = $22k
+    //Strong Trend only = $34k
+    //Up trend only = $43k
+    //>10 trend only = $
+    //>-3 run, = $-4k
+    //>-6 run, = $30k
+    //<3 run, $63k
+    //<6 run, $56k
+    //drawdown -2 from max = $-94k
+    //drawdown -2 from max >=3 = $63k
+    //drawdown - 2 from max >=3 = $72k
+    //max < 3 and inside limit = $75k / $185k
+    //    - with limited winners = $66k / $228k ***
+    //    - don't order in same direction = $53k / $157k
+    //    - within hour = $56k / $184k
+    //------ doubled total and max
+    //drawdown - 2 from max 6 or limit 6 and inside limit = $57k
+    //limit 1, drawdown -3 and inside limit = $35k
+
+    //early open and inside limit = $28k
+    //later morning and inside limit = -$8k
+    //early afternoon = $25k
+    //closing = $42k / $85k <-- fake, there are end of day trades that aren't real
+    //------ fixed closing profit calculation defect :(
+    //closing = $18k
+    //baseline = $44k / $168k 
+    //>>> baseline + exclude late morning = $65k / $182k *** new best after defect fix.
+    //above + inlimithours = $42k
+    //above + 1.5 atrs = $44k
+    //above + 1.75 atrs = $51k
+    //above + 1.9 atrs = $57k
+    //above + 2.2 atrs = $39k
+
     def safetyChecks(state: SystemState, order: Order): Option[Order] = {
-        val trendStrengthNow = calculateTrendStrength(state, 0)
-        val trendStrength2MinAgo = calculateTrendStrength(state, 2)
-        val strongTrend = trendStrengthNow > 10.0 && trendStrengthNow > trendStrength2MinAgo
+        // val trendStrengthNow = calculateTrendStrength(state, 0)
+        // val trendStrength2MinAgo = calculateTrendStrength(state, 2)
+        // val strongTrend = trendStrengthNow > 10.0
+        // val increasingTrend = trendStrengthNow > trendStrength2MinAgo
 
         val insideLimit = order.orderType match {
             case OrderType.Long => order.takeProfit < peakRed(state)
             case OrderType.Short => order.takeProfit > lowGreen(state)
         }
 
-        val isInEarlyOpen = TimestampUtils.isInEarlyOpen(order.timestamp)
-        val isInQuiet = TimestampUtils.isInQuiet(order.timestamp)
+        // val insideLimitHours = order.orderType match {
+        //     case OrderType.Long => order.takeProfit < peakRedHours(state, 3)
+        //     case OrderType.Short => order.takeProfit > lowGreenHours(state, 3)
+        // }
 
-        if ((isInQuiet && insideLimit) || (!isInEarlyOpen && !isInQuiet)) {
-            if (strongTrend) Some(order) else None
-        } else None
+        // val isInEarlyOpen = TimestampUtils.isInEarlyOpen(order.timestamp)
+        // val isInQuiet = TimestampUtils.isInQuiet(order.timestamp)
+
+        val (running, max) = state.orders.foldLeft(0, 0) { case ((r, x), c) =>
+            c.status match {
+                case OrderStatus.Profit => 
+                    val total = r + 2
+                    val max = if (total > x) total else x
+                    (total, max)
+                case OrderStatus.Loss => (r - 1, x)
+                case _ => (r, x)
+            }
+        }
+
+        // val lastWinnerOrLoser = state.orders.filter(o => o.status == OrderStatus.Profit || o.status == OrderStatus.Loss).lastOption
+        // val lastIsLoser = lastWinnerOrLoser.map(_.status == OrderStatus.Loss).getOrElse(false)
+        // val isSameDirection = lastWinnerOrLoser.map(_.direction == order.direction).getOrElse(false)
+        // val isWithinOneHour = lastWinnerOrLoser.map(_.timestamp + Duration.ofHours(1).toMillis > order.timestamp).getOrElse(false)
+        // val lastIsLoserSameDirection = lastIsLoser && isSameDirection
+        // val lastIsLoserSameDirectionOneHour = lastIsLoserSameDirection && isWithinOneHour
+
+        // val isEarlyOpen = TimestampUtils.isInHour(order.timestamp, 9, 10)
+        val isLaterMorning = TimestampUtils.isInHour(order.timestamp, 10, 12)
+        // val isEarlyAfternoon = TimestampUtils.isInHour(order.timestamp, 12, 15)
+        // val isClosing = TimestampUtils.isInHour(order.timestamp, 15, 16)
+
+        // if (isClosing && insideLimit) Some(order) else None
+
+        // if ((isInQuiet && insideLimit) || (!isInEarlyOpen && !isInQuiet)) {
+        //     if (strongTrend) Some(order) else None
+        // } else None
+
+        // if ((isInQuiet && insideLimit) || (!isInEarlyOpen && !isInQuiet)) {
+        //     Some(order)
+        // } else None
+
+        // if (strongTrend) Some(order) else None
+
+        // if (insideLimit) Some(order) else None
+        // if (strongTrend) Some(order) else None
+        // if ((max < 6 || (max - running) != 2) && insideLimit) Some(order) else None
+        // if (running < 1 && running >= -3 && insideLimit) Some(order) else None
+        if (max < 6 && insideLimit && !isLaterMorning) Some(order) else None //**** <<< winner so far
+
+        // Some(order)
     }
 
     private def slope(t1: Long, y1: Double, t2: Long, y2: Double): Double = {
@@ -350,24 +445,24 @@ class TechnicalAnalysisOrderService {
     }
 
     val winningCombinations = List(
-        List(8,13,21,12),
+        // List(8,13,21,12), aa
         List(9,11,3),
         List(10,17,21,12),
         List(7,17,21,11),
         List(8,12,3),
         List(10,15),
-        List(10,14,21,11),
+        // List(10,14,21,11), aa
         List(10,12,3),
-        List(6,11,3),
+        List(6,11,3), //bb
         List(8,15,21,12),
         List(9,13,21,12),
-        List(8,13,21,11),
+        List(8,13,21,11), //bb
         List(9,12,4),
         List(10,15,21,11),
         List(7,14,21,11),
         List(8,17,21,11),
         List(7,16,21,11),
-        List(10,13),
+        // List(10,13), aa
         List(10,12,4),
         List(7,11,3),
         List(9,13)

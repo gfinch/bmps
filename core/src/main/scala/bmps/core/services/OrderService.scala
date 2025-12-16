@@ -18,7 +18,7 @@ import bmps.core.models.CandleDuration
 import bmps.core.models.OrderType
 import bmps.core.utils.TimestampUtils
 
-class OrderService(val technicalAnalysisService: TechnicalAnalysisService) {
+class OrderService(val technicalAnalysisService: TechnicalAnalysisService, val mlStrategyService: MLStrategyService) {
     lazy val techAnalysisOrderService: TechnicalAnalysisOrderService = new TechnicalAnalysisOrderService()
 
     lazy val secondBySecondProcessors = Seq(
@@ -30,6 +30,7 @@ class OrderService(val technicalAnalysisService: TechnicalAnalysisService) {
     lazy val minuteByMinuteProcessors = Seq(
         technicalAnalysisService.processOneMinuteState(_),
         techAnalysisOrderService.processOneMinuteState(_),
+        // mlStrategyService.processOneMinuteState(_)
         // EngulfingOrderBlockService.processState(_),
         // FairValueGapOrderBlockService.processState(_)
     )

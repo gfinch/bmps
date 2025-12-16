@@ -29,6 +29,9 @@ import com.typesafe.config.Config
 import bmps.core.utils.MarketCalendar
 import bmps.core.services.OrderService
 import bmps.core.services.TechnicalAnalysisService
+import bmps.core.services.MLStrategyService
+import bmps.core.brokers.rest.InferenceBroker
+import okhttp3.OkHttpClient
 
 object AppLauncher extends IOApp.Simple {
 
@@ -89,7 +92,9 @@ object AppLauncher extends IOApp.Simple {
     (planningSource, preparingSource, tradingSource) = loadDataSources()
 
     technicalAnalysisService = new TechnicalAnalysisService()
-    orderService = new OrderService(technicalAnalysisService)
+    inferenceBroker = new InferenceBroker("http://localhost:8001")
+    mlStrategyService = new MLStrategyService(inferenceBroker)
+    orderService = new OrderService(technicalAnalysisService, mlStrategyService)
 
     // populate with PhaseRunner instances, using configured AccountBrokers for TradingPhase
     runners: Map[SystemStatePhase, PhaseRunner] = Map(

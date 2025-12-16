@@ -229,17 +229,27 @@ export default function ResultsPage() {
         return
       }
 
-            // Calculate cumulative P&L
+            // Calculate cumulative P&L with unique timestamps
       let cumulativePnL = 0
-      const pnlData = completedOrders.map(order => {
+      let lastTime = 0
+      const pnlData = []
+
+      completedOrders.forEach(order => {
         const status = typeof order.status === 'object' ? Object.keys(order.status)[0] : order.status
         const pnl = status === 'Profit' ? order.potential : -order.atRisk
         cumulativePnL += pnl
         
-        return {
-          time: utcMsToNewYorkSeconds(order.closeTimestamp),
-          value: cumulativePnL
+        let time = utcMsToNewYorkSeconds(order.closeTimestamp)
+        // Ensure time is strictly greater than the last time
+        if (time <= lastTime) {
+          time = lastTime + 1
         }
+        lastTime = time
+        
+        pnlData.push({
+          time,
+          value: cumulativePnL
+        })
       })
 
       // Add starting point at 0 at market open (9:30 AM NY time)
@@ -251,7 +261,12 @@ export default function ResultsPage() {
         
         // Convert market open time to NY timezone seconds
         const marketOpenMs = marketOpenDate.getTime()
-        const marketOpenSeconds = utcMsToNewYorkSeconds(marketOpenMs)
+        let marketOpenSeconds = utcMsToNewYorkSeconds(marketOpenMs)
+        
+        // Ensure market open is before the first trade
+        if (marketOpenSeconds >= pnlData[0].time) {
+          marketOpenSeconds = pnlData[0].time - 1
+        }
         
         pnlData.unshift({ time: marketOpenSeconds, value: 0 })
       }
@@ -274,8 +289,16 @@ export default function ResultsPage() {
 
         baselineSeriesRef.current.setData(pnlData)
 
-        // Fit content
-        chartRef.current.timeScale().fitContent()
+        // Fit content if data is small, otherwise scroll to end with fixed spacing
+        if (pnlData.length < 500) {
+          chartRef.current.timeScale().fitContent()
+        } else {
+          chartRef.current.timeScale().applyOptions({
+            barSpacing: 6,
+            rightOffset: 50,
+          })
+          chartRef.current.timeScale().scrollToPosition(0, false)
+        }
       } catch (e) {
         console.error('Error creating chart series:', e)
       }

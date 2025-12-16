@@ -1,0 +1,34 @@
+{
+    "long": {
+        "threshold": 0.7,
+        "features": [
+            "minutesSinceGoldenCross",
+            "trendStrength",
+            "trendStrengthSlope3",
+            "rsi",
+            "rsiSlope3",
+            "longCrossoverGap",
+            "isGreen",
+            "closeLocation",
+            "volatilityRatio"
+        ],
+        "target": "longProfit1_5ATR",
+        "scale_pos_weight": 1.4894579640601282
+    },
+    "short": {
+        "threshold": 0.7,
+        "features": [
+            "minutesSinceDeathCross",
+            "trendStrength",
+            "trendStrengthSlope3",
+            "rsi",
+            "rsiSlope3",
+            "shortCrossoverGap",
+            "isGreen",
+            "closeLocation",
+            "volatilityRatio"
+        ],
+        "target": "shortProfit1_5ATR",
+        "scale_pos_weight": 1.4992233276967242
+    }
+}

@@ -32,8 +32,8 @@ services:
       # - ./data:/app/data:ro
       
       # Optional: Mount model files if they're not baked into the image
-      - ./py-bmps/models:/app/py-bmps/models:ro
-      - ./py-bmps/config:/app/py-bmps/config:ro
+      # - ./py-bmps/models:/app/py-bmps/models:ro
+      # - ./py-bmps/config:/app/py-bmps/config:ro
     networks:
       - bmps-network
     restart: unless-stopped

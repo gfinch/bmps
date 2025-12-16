@@ -78,14 +78,18 @@ class DatabentoSource(durations: Set[CandleDuration]) extends DataSource {
    * Uses the symbology.resolve endpoint to map ES.n.0 to the actual front month contract (e.g., ESZ4).
    * Uses the last trading day before today since historical data may not be available for today yet.
    */
-  override lazy val currentContractSymbol: String = {
-    val lastTradingDay = MarketCalendar.getTradingDaysBack(LocalDate.now(), 1)
-    println(s"[DatabentoSource] Using last trading day: $lastTradingDay")
+  override lazy val currentContractSymbol = resolveCurrentContractSymbol(0)
+
+  private def resolveCurrentContractSymbol(daysBack: Int = 0): String = {
+    val tradingDay = MarketCalendar.getTradingDaysBack(LocalDate.now(), daysBack)
+    println(s"[DatabentoSource] Using trading day: $tradingDay")
     
-    resolveSymbol(mostLiquidSymbol, lastTradingDay) match {
+    resolveSymbol(mostLiquidSymbol, tradingDay) match {
       case Some(symbol) => 
         println(s"[DatabentoSource] Resolved $mostLiquidSymbol to $symbol")
         symbol
+      case None if daysBack == 0 =>
+        resolveCurrentContractSymbol(daysBack + 1) //No data for today yet, try yesterday
       case None =>
         throw new RuntimeException(s"Failed to resolve symbol $mostLiquidSymbol to raw symbol")
     }

@@ -63,7 +63,8 @@ case class Order(low: Float,
                     filledTimestamp: Option[Long] = None,
                     closeTimestamp: Option[Long] = None,
                     cancelReason: Option[String] = None,
-                    accountId: Option[String] = None) {
+                    accountId: Option[String] = None,
+                    closedAt: Option[Float] = None) {
 
     import OrderType._
     import OrderStatus._
@@ -158,8 +159,10 @@ object SerializableOrder extends DetermineContracts {
     def fromOrder(order: Order, riskPerTrade: Double): SerializableOrder = {
         val (contract, contracts) = determineContracts(order, riskPerTrade)
         val (atRisk, potential) = {
-            val profitPoints = math.abs(order.takeProfit - order.entryPoint)
-            val lossPoints = math.abs(order.stopLoss - order.entryPoint)
+            val takeProfit = order.closedAt.getOrElse(order.takeProfit)
+            val stopLoss = order.closedAt.getOrElse(order.stopLoss)
+            val profitPoints = math.abs(takeProfit - order.entryPoint)
+            val lossPoints = math.abs(stopLoss - order.entryPoint)
             if (contract.startsWith("M")) {
                 (lossPoints * MicroDollarsPerPoint * contracts, profitPoints * MicroDollarsPerPoint * contracts)
             } else {

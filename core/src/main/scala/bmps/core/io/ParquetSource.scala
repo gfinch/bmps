@@ -14,9 +14,9 @@ class ParquetSource(durations: Set[CandleDuration]) extends DataSource {
   def this(duration: CandleDuration) = this(Set(duration))
 
   private def getPath(duration: CandleDuration): String = duration match {
-    case OneHour => "core/src/main/resources/databento/es-1h.parquet"
-    case OneMinute => "core/src/main/resources/databento/es-1m.parquet"
-    case OneSecond => "core/src/main/resources/databento/es-1s.parquet"
+    case OneHour => "/Users/gf26229/personal/bmps/core/src/main/resources/databento/es-1h.parquet"
+    case OneMinute => "/Users/gf26229/personal/bmps/core/src/main/resources/databento/es-1m.parquet"
+    case OneSecond => "/Users/gf26229/personal/bmps/core/src/main/resources/databento/es-1s.parquet"
     case _ => throw new IllegalArgumentException(s"$duration not supported")
   }
 

@@ -112,6 +112,13 @@ object TimestampUtils {
         timestamp > newYorkQuiet(tradingDate)
     }
 
+    def isInHour(timestamp: Long, startHour: Int, endHour: Int): Boolean = {
+        val tradingDate = toNewYorkLocalDate(timestamp)
+        val startTime = tradingDate.atTime(startHour, 0).atZone(NewYorkZone).toInstant.toEpochMilli
+        val endTime = tradingDate.atTime(endHour, 0).atZone(NewYorkZone).toInstant.toEpochMilli
+        startTime <= timestamp && timestamp <= endTime
+    }
+
     def toNewYorkTimeString(timestamp: Long): String = {
         val instant = Instant.ofEpochMilli(timestamp)
         val zonedDateTime = instant.atZone(NewYorkZone)

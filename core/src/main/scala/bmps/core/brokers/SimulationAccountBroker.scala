@@ -5,6 +5,7 @@ import bmps.core.models.OrderStatus._
 import bmps.core.models.Candle
 import bmps.core.models.OrderType
 import bmps.core.models.CandleDuration
+import bmps.core.utils.TimestampUtils
 
 trait SimulationAccountBroker extends AccountBroker {
 
@@ -20,12 +21,14 @@ trait SimulationAccountBroker extends AccountBroker {
 
     def takeProfit(order: Order, candle: Candle): Order = {
         val ts = snapToOneMinute(candle)
-        order.copy(status = Profit, closeTimestamp = Some(ts))
+        val closedAt = if (TimestampUtils.isNearTradingClose(candle.timestamp)) Some(candle.close) else None
+        order.copy(status = Profit, closeTimestamp = Some(ts), closedAt = closedAt)
     }
 
     def takeLoss(order: Order, candle: Candle): Order = {
         val ts = snapToOneMinute(candle)
-        order.copy(status = Loss, closeTimestamp = Some(ts))
+        val closedAt = if (TimestampUtils.isNearTradingClose(candle.timestamp)) Some(candle.close) else None
+        order.copy(status = Loss, closeTimestamp = Some(ts), closedAt = closedAt)
     }
 
     def exitOrder(order: Order, candle: Candle): Order = {
