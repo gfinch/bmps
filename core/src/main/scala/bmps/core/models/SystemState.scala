@@ -36,5 +36,6 @@ case class SystemState(
     recentVolatilityAnalysis: List[VolatilityAnalysis] = List.empty,
     
     orders: List[Order] = List.empty,
-    contractSymbol: Option[String] = None
+    contractSymbol: Option[String] = None,
+    recentOrders: List[Order] = List.empty
 )

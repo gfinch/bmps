@@ -21,13 +21,24 @@ import bmps.core.utils.TimestampUtils
 import bmps.core.brokers.rest.OrderState
 import bmps.core.models.OrderStatus
 import bmps.core.models.TechnicalAnalysis
+import bmps.core.io.OrderSink
 
-class SimpleTradingEventGenerator(leadAccount: LeadAccountBroker, orderService: OrderService, swingService: SwingService = new SwingService(5, 0.5f)) extends EventGenerator {
+class SimpleTradingEventGenerator(leadAccount: LeadAccountBroker, 
+                                  orderService: OrderService, 
+                                  orderSink: OrderSink,
+                                  swingService: SwingService = new SwingService(5, 0.5f)) extends EventGenerator {
     require(leadAccount.brokerCount >= 1, "Must have at least one account broker defined.")
     val technicalAnalysisService = orderService.technicalAnalysisService
 
     def initialize(state: SystemState, options: Map[String, String] = Map.empty): SystemState = {
-        state.copy(systemStatePhase = SystemStatePhase.Trading)
+        val tradingState = state.copy(systemStatePhase = SystemStatePhase.Trading)
+        // orderSink.loadPastOrders(tradingState, 10)
+        orderSink.loadAllPastOrders(tradingState)
+    }
+
+    override def finalize(state: SystemState): (SystemState, List[Event]) = {
+        orderSink.saveOrders(state)
+        super.finalize(state)
     }
 
     def process(state: SystemState, candle: Candle): (SystemState, List[Event]) = {
@@ -134,7 +145,7 @@ class TradingSource(dataSource: DataSource) extends CandleSource {
 }
 
 object TradingPhaseBuilder {
-    def build(leadAccount: LeadAccountBroker, dataSource: DataSource, orderService: OrderService) = {
-        new PhaseRunner(new TradingSource(dataSource), new SimpleTradingEventGenerator(leadAccount, orderService))
+    def build(leadAccount: LeadAccountBroker, dataSource: DataSource, orderService: OrderService, orderSink: OrderSink) = {
+        new PhaseRunner(new TradingSource(dataSource), new SimpleTradingEventGenerator(leadAccount, orderService, orderSink))
     }
 }

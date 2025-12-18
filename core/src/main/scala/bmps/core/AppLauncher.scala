@@ -32,6 +32,9 @@ import bmps.core.services.TechnicalAnalysisService
 import bmps.core.services.MLStrategyService
 import bmps.core.brokers.rest.InferenceBroker
 import okhttp3.OkHttpClient
+import bmps.core.io.CSVFileOrderSink
+import bmps.core.io.OrderSink
+import bmps.core.services.TechnicalAnalysisOrderService
 
 object AppLauncher extends IOApp.Simple {
 
@@ -79,6 +82,11 @@ object AppLauncher extends IOApp.Simple {
     }
   }
 
+  private lazy val orderSink: OrderSink = {
+    val sinkPath = config.getString("bmps.core.order-sink")
+    new CSVFileOrderSink(sinkPath)
+  }
+
   /** Create the shared pieces and return resources that include a running
     * REST API server on port 8081 for phase control and event retrieval.
     */
@@ -92,16 +100,16 @@ object AppLauncher extends IOApp.Simple {
     (planningSource, preparingSource, tradingSource) = loadDataSources()
 
     technicalAnalysisService = new TechnicalAnalysisService()
-    inferenceBroker = new InferenceBroker("http://localhost:8001")
-    mlStrategyService = new MLStrategyService(inferenceBroker)
-    orderService = new OrderService(technicalAnalysisService, mlStrategyService)
+    techAnalysisOrderService = new TechnicalAnalysisOrderService()
+    orderService = new OrderService(technicalAnalysisService, techAnalysisOrderService)
 
     // populate with PhaseRunner instances, using configured AccountBrokers for TradingPhase
     runners: Map[SystemStatePhase, PhaseRunner] = Map(
       SystemStatePhase.Planning -> PlanningPhaseBuilder.build(planningSource),
       SystemStatePhase.Preparing -> PreparingPhaseBuilder.build(preparingSource),
-      SystemStatePhase.Trading -> TradingPhaseBuilder.build(leadAccount, tradingSource, orderService)
+      SystemStatePhase.Trading -> TradingPhaseBuilder.build(leadAccount, tradingSource, orderService, orderSink)
     )
+
     controller = new PhaseController(stateRef, eventStore, runners, sem)
     // Create report service
     reportService = new ReportService(eventStore, leadAccount)

@@ -64,7 +64,8 @@ case class Order(low: Float,
                     closeTimestamp: Option[Long] = None,
                     cancelReason: Option[String] = None,
                     accountId: Option[String] = None,
-                    closedAt: Option[Float] = None) {
+                    closedAt: Option[Float] = None,
+                    riskMultiplier: Option[Float] = None) {
 
     import OrderType._
     import OrderStatus._
@@ -96,6 +97,24 @@ case class Order(low: Float,
 
     lazy val isActive = (status == OrderStatus.Placed || status == OrderStatus.PlaceNow || status == OrderStatus.Filled)
     lazy val direction: Direction = if (orderType == OrderType.Long) Direction.Up else Direction.Down
+
+    lazy val isProfitOrLoss = (status == OrderStatus.Profit || status == OrderStatus.Loss)
+    lazy val exitPrice = closedAt.getOrElse {
+        status match {
+            case OrderStatus.Profit => takeProfit
+            case OrderStatus.Loss   => stopLoss
+            case _ => throw new IllegalStateException("Order not closed")
+        }
+    }
+
+    lazy val realizedR: Float = {
+        val unclamped = orderType match {
+            case OrderType.Long  => (exitPrice - entryPoint) / atRiskPoints
+            case OrderType.Short => (entryPoint - exitPrice) / atRiskPoints
+        }
+
+        math.max(-1.2f, math.min(unclamped, profitMultiplier + 0.2f))
+    }
 }
 
 case class SerializableOrder(low: Float, 
@@ -132,12 +151,14 @@ object Order {
 }
 
 trait DetermineContracts{
-    final val mesContractCutoff = 30
+    final val mesContractCutoff = 10
 
-    protected def determineContracts(order: Order, riskPerTrade: Double): (String, Int) = {
+    protected def determineContracts(order: Order, riskPerTrade: Double, riskMultiplier: Float): (String, Int) = {
         require(order.atRiskPerContract > 0, "atRiskPerContract must be positive")
         require(riskPerTrade > 0, "riskPerTrade must be positive")
-        val mesContracts: Int = Math.floor(riskPerTrade / order.atRiskPerContract).toInt
+        require(riskMultiplier > 0, "riskMultiplier must be positive")
+        val finalRiskPerTrade = riskPerTrade * riskMultiplier
+        val mesContracts: Int = Math.floor(finalRiskPerTrade / order.atRiskPerContract).toInt
 
         val (contractType, contracts) = if (mesContracts >= mesContractCutoff) {
             (ContractType.ES, Math.round(mesContracts.toDouble / 10.0).toInt)
@@ -155,18 +176,27 @@ trait DetermineContracts{
 object SerializableOrder extends DetermineContracts {
     final val MicroDollarsPerPoint = 5.0
     final val MiniDollarsPerPoint = 50.0
+    final val FeePerESContract = 2.88 * 2
+    final val FeePerMESContract = 0.95 * 2
 
     def fromOrder(order: Order, riskPerTrade: Double): SerializableOrder = {
-        val (contract, contracts) = determineContracts(order, riskPerTrade)
+        val riskMultiplier = order.riskMultiplier.getOrElse(1.0f)
+        val (contract, contracts) = determineContracts(order, riskPerTrade, riskMultiplier)
         val (atRisk, potential) = {
             val takeProfit = order.closedAt.getOrElse(order.takeProfit)
             val stopLoss = order.closedAt.getOrElse(order.stopLoss)
             val profitPoints = math.abs(takeProfit - order.entryPoint)
             val lossPoints = math.abs(stopLoss - order.entryPoint)
             if (contract.startsWith("M")) {
-                (lossPoints * MicroDollarsPerPoint * contracts, profitPoints * MicroDollarsPerPoint * contracts)
+                val rawLoss = lossPoints * MicroDollarsPerPoint * contracts
+                val rawProfit = profitPoints * MicroDollarsPerPoint * contracts
+                val fees = FeePerMESContract * contracts
+                (rawLoss + fees, rawProfit - fees)
             } else {
-                (lossPoints * MiniDollarsPerPoint * contracts, profitPoints * MiniDollarsPerPoint * contracts)
+                val rawLoss = lossPoints * MiniDollarsPerPoint * contracts
+                val rawProfit = profitPoints * MiniDollarsPerPoint * contracts
+                val fees = FeePerMESContract * contracts
+                (rawLoss + fees, rawProfit - fees)
             }
         }
 

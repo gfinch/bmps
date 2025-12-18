@@ -11,8 +11,10 @@ import bmps.core.utils.TimestampUtils
 import bmps.core.models.OrderStatus.Profit
 import java.time.Duration
 import java.sql.Timestamp
+import bmps.core.models.SerializableOrder
+import bmps.core.models.OrderStatus.Loss
 
-class TechnicalAnalysisOrderService {
+class TechnicalAnalysisOrderService(initialCapital: Double = 18000.0) {
     def processOneMinuteState(state: SystemState): SystemState = {
         val lastCandle = state.tradingCandles.last
         if (state.orders.exists(_.isActive) || TimestampUtils.isNearTradingClose(lastCandle.timestamp)) {
@@ -32,29 +34,33 @@ class TechnicalAnalysisOrderService {
                 val desc = buildScenarioDescription(s)
                 activeOrders.contains(desc)
             })
-
+            val riskMultiplier = computeRiskMultiplier(state)
+            
             val newOrders = for {
                 scenario <- activeScenarios
             } yield {
                 if (scenario.forall(n => applyScenario(n, scenario, state))) {
-                    val newOrder = buildOrder(state, scenario)
+                    val newOrder = buildOrder(state, scenario, riskMultiplier)
                     // Some(newOrder)
                     safetyChecks(state, newOrder)
                 } else None
             }
 
             newOrders.flatten.take(1)
+            
         }
     }
 
-    def buildOrder(state: SystemState, scenario: List[Int]): Order = {
+    def buildOrder(state: SystemState, scenario: List[Int], riskMultiplier: Float): Order = {
         val someAtrs = atrs(state, 2.0).toFloat
         val lastCandle = state.tradingCandles.last
         val (low, high, orderType) = if (state.recentTrendAnalysis.last.isUptrend) {
             (lastCandle.close - someAtrs, lastCandle.close, OrderType.Long)
         } else (lastCandle.close, lastCandle.close + someAtrs, OrderType.Short)
         val entryType = Trendy(buildScenarioDescription(scenario))
-        Order(low, high, lastCandle.timestamp, orderType, entryType, state.contractSymbol.get, status = OrderStatus.PlaceNow)
+        Order(low, high, lastCandle.timestamp, orderType, entryType, state.contractSymbol.get, 
+              status = OrderStatus.PlaceNow,
+              riskMultiplier = Some(riskMultiplier))
     }
 
     def buildScenarioDescription(scenario: List[Int]) = scenario.mkString(",")
@@ -290,6 +296,42 @@ class TechnicalAnalysisOrderService {
         else 0
     }
 
+    def computeRiskMultiplier(state: SystemState): Float = {
+        val orders = state.orders.filter(_.isProfitOrLoss)
+        val pastOrders = state.recentOrders ++ orders
+        val approximateAccountValue = pastOrders.foldLeft(initialCapital) { (r, c) =>
+            val risk = riskPerTrade(r)
+            r + valueOfOrder(c, risk)
+        }
+        val finalRisk = riskPerTrade(approximateAccountValue)
+        val valueBasedMultiplier = finalRisk.toFloat / 1000.0f
+        val lastWinIndex = pastOrders.reverse.indexWhere(_.status == OrderStatus.Profit)
+        lastWinIndex match {
+            case -1 => valueBasedMultiplier
+            case 0 => valueBasedMultiplier
+            case 1 => valueBasedMultiplier * 2.0f
+            case 2 => valueBasedMultiplier * 4.0f
+            case n => (valueBasedMultiplier * math.pow(0.5, n - 2)).toFloat
+        }
+    }
+
+    private def riskPerTrade(runningTotal: Double): Double = {
+        // if (runningTotal < 30000.0) 300.0
+        if (runningTotal < 50000.0) 500.0
+        else if (runningTotal < 100000.0) 1000.0
+        else math.floor(runningTotal / 100000.0) * 1000.0
+    }
+
+    private def valueOfOrder(order: Order, riskPerTrade: Double): Double = {
+        require(order.isProfitOrLoss, "This order is not closed.")
+        val serializedOrder = SerializableOrder.fromOrder(order, riskPerTrade)
+        order.status match {
+            case Loss => serializedOrder.atRisk * -1
+            case Profit => serializedOrder.potential
+            case _ => throw new IllegalStateException(s"Unexpected order statue: ${order.status}")
+        }
+    }
+
     //NO safety checks = $56k / $170k
     //InsideLimit only = $70k / $177k
     //InQuiet && InLimit && early = $22k
@@ -453,10 +495,10 @@ class TechnicalAnalysisOrderService {
         List(10,15),
         // List(10,14,21,11), aa
         List(10,12,3),
-        List(6,11,3), //bb
+        List(6,11,3),
         List(8,15,21,12),
         List(9,13,21,12),
-        List(8,13,21,11), //bb
+        List(8,13,21,11),
         List(9,12,4),
         List(10,15,21,11),
         List(7,14,21,11),

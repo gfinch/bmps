@@ -151,7 +151,8 @@ class TradovateAccountBroker(val accountId: String,
     private def doPlaceOrder(order: Order, candle: Candle): (PlaceOsoResponse, Order) = {
         require(order.status == OrderStatus.Planned || order.status == OrderStatus.PlaceNow, "Attempting to place an order that was already placed.")
         require(tradovateOrders.get(order.timestamp).isEmpty, "Attempting to place an order that was already placed on Tradovate.")
-        val (contract, contracts) = determineContracts(order, riskPerTrade)
+        val riskMultiplier = order.riskMultiplier.getOrElse(1.0f)
+        val (contract, contracts) = determineContracts(order, riskPerTrade, riskMultiplier)
         val plannedOrder = PlannedOrder(
             entry = order.entryPoint, 
             stopLoss = order.stopLoss, 

@@ -85,7 +85,7 @@ trait AccountBroker {
         } else 0.0
         
         // Calculate total P&L
-        val totalPnL = (winning * averageWinDollars) - (losing * averageLossDollars) - totalFees
+        val totalPnL = (winning * averageWinDollars) - (losing * averageLossDollars)
         
         // Calculate win rates by order type
         val winRates = completedOrders.groupBy(_.entryType).map { case (entryType, orders) =>
