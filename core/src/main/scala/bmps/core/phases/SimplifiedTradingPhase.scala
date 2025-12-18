@@ -42,7 +42,10 @@ class SimpleTradingEventGenerator(leadAccount: LeadAccountBroker,
     }
 
     def process(state: SystemState, candle: Candle): (SystemState, List[Event]) = {
-        candle.duration match {
+        if (candle.timestamp <= state.tradingCandles.last.timestamp) {
+            //Candles came out of order, so discard. Cna happen during catchup.
+            (state, List.empty[Event])
+        } else candle.duration match {
             case CandleDuration.OneSecond => processOneSecond(state, candle)
             case CandleDuration.OneMinute => processOneMinute(state, candle)
             case _ => (state, List.empty[Event])

@@ -306,7 +306,8 @@ class TechnicalAnalysisOrderService(initialCapital: Double = 18000.0) {
         val finalRisk = riskPerTrade(approximateAccountValue)
         val valueBasedMultiplier = finalRisk.toFloat / 1000.0f
         val lastWinIndex = pastOrders.reverse.indexWhere(_.status == OrderStatus.Profit)
-        lastWinIndex match {
+        val finalIndex = if (lastWinIndex == -1) pastOrders.size else lastWinIndex
+        finalIndex match {  
             case -1 => valueBasedMultiplier
             case 0 => valueBasedMultiplier
             case 1 => valueBasedMultiplier * 2.0f
