@@ -23,6 +23,7 @@ class OrderService(val technicalAnalysisService: TechnicalAnalysisService,
 
     val simpleTrendOrderService = new SimpleTrendOrderService()
     val zoneTrendOrderService = new ZoneTrendOrderService()
+    // val combinedOrderService = new CombinedOrderService()
 
     lazy val secondBySecondProcessors = Seq(
         technicalAnalysisService.processOneSecondState(_),
@@ -32,7 +33,9 @@ class OrderService(val technicalAnalysisService: TechnicalAnalysisService,
 
     lazy val minuteByMinuteProcessors = Seq(
         technicalAnalysisService.processOneMinuteState(_),
+        // combinedOrderService.processOneMinuteState(_),
         zoneTrendOrderService.processOneMinuteState(_),
+        techAnalysisOrderService.processOneMinuteState(_),
         // simpleTrendOrderService.processOneMinuteState(_),
         // techAnalysisOrderService.processOneMinuteState(_),
         // mlStrategyService.processOneMinuteState(_)

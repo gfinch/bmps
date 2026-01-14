@@ -91,7 +91,11 @@ object AppLauncher extends IOApp.Simple {
 
   private lazy val orderSink: OrderSink = {
     val sinkPath = config.getString("bmps.core.order-sink")
-    new CSVFileOrderSink(sinkPath)
+    val finalPath = if (sinkPath.startsWith("file://")) {
+      val randomNum = scala.util.Random.nextInt(100000)
+      sinkPath.replace(".csv", s"_$randomNum.csv")
+    } else sinkPath
+    new CSVFileOrderSink(finalPath)
   }
 
   /** Create the shared pieces and return resources that include a running

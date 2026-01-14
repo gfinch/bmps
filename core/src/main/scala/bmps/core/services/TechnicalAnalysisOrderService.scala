@@ -151,6 +151,17 @@ class TechnicalAnalysisOrderService(initialCapital: Double = 18000.0) {
     //         winningCombinations.contains(scenario.toSet)
     // }
 
+    //Besties:
+    /**
+      *       7,11,3: Wins= 15, Losses= 13, WinRate= 53.57%
+             10,12,3: Wins=  7, Losses=  8, WinRate= 46.67%
+              9,11,3: Wins=  5, Losses=  6, WinRate= 45.45%
+              6,11,3: Wins= 14, Losses= 19, WinRate= 42.42%
+             10,12,4: Wins=103, Losses=148, WinRate= 41.04%
+          7,14,21,11: Wins=252, Losses=404, WinRate= 38.41%
+          9,13,21,12: Wins= 83, Losses=134, WinRate= 38.25%
+      */
+
     def applyScenario(id: Int, siblings: List[Int], state: SystemState): Boolean = {
         id match {
             case 1 => isOverbought(state) || isOversold(state)
@@ -487,28 +498,38 @@ class TechnicalAnalysisOrderService(initialCapital: Double = 18000.0) {
         math.max(0.0, math.min(1.0, rawStrength)) * 100
     }
 
+    /**
+      *       7,11,3: Wins= 15, Losses= 13, WinRate= 53.57%
+             10,12,3: Wins=  7, Losses=  8, WinRate= 46.67%
+              9,11,3: Wins=  5, Losses=  6, WinRate= 45.45%
+              6,11,3: Wins= 14, Losses= 19, WinRate= 42.42%
+             10,12,4: Wins=103, Losses=148, WinRate= 41.04%
+          7,14,21,11: Wins=252, Losses=404, WinRate= 38.41%
+          9,13,21,12: Wins= 83, Losses=134, WinRate= 38.25%
+      */
+
     val winningCombinations = List(
         // List(8,13,21,12), aa
-        List(9,11,3),
-        List(10,17,21,12),
-        List(7,17,21,11),
-        List(8,12,3),
-        List(10,15),
+        List(9,11,3), //>
+        // List(10,17,21,12),
+        // List(7,17,21,11),
+        // List(8,12,3),
+        // List(10,15),
         // List(10,14,21,11), aa
-        List(10,12,3),
-        List(6,11,3),
-        List(8,15,21,12),
-        List(9,13,21,12),
-        List(8,13,21,11),
-        List(9,12,4),
-        List(10,15,21,11),
-        List(7,14,21,11),
-        List(8,17,21,11),
-        List(7,16,21,11),
+        List(10,12,3), //>
+        List(6,11,3), //>
+        // List(8,15,21,12),
+        List(9,13,21,12), //>
+        // List(8,13,21,11),
+        // List(9,12,4),
+        // List(10,15,21,11),
+        List(7,14,21,11), //>
+        // List(8,17,21,11),
+        // List(7,16,21,11),
         // List(10,13), aa
-        List(10,12,4),
-        List(7,11,3),
-        List(9,13)
+        List(10,12,4), //>
+        List(7,11,3), //>
+        // List(9,13)
     ) 
 
 

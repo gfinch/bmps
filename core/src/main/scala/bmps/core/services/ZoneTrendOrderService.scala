@@ -10,6 +10,11 @@ import bmps.core.models.EntryType
 import bmps.core.brokers.rest.OrderState
 import bmps.core.models.OrderStatus
 import bmps.core.utils.TimestampUtils
+import cats.instances.order
+import bmps.core.models.Direction
+import bmps.core.services.Zones.movingForMinutes
+import bmps.core.models.EntryType.Trendy
+import java.time.Duration
 
 object ZoneId {
     val NewLow = 0
@@ -52,6 +57,32 @@ object Zones {
         val rawStrength = maSpread / channelWidth
         val clampedStrength = math.max(0.0, math.min(1.0, rawStrength))
         clampedStrength * 100.0 // Scale to 0-100
+    }
+
+    def movingForMinutes(state: SystemState, direction: Direction, n: Int): Boolean = {
+        if (state.tradingCandles.size < n) false
+        else {
+            val lastNCandles = state.tradingCandles.takeRight(n)
+            val lastWick = if (direction == Direction.Up) lastNCandles.last.upperWick 
+                else lastNCandles.last.lowerWick
+            
+            lastNCandles.forall(_.direction == direction) &&
+                lastNCandles.last.bodyHeight > lastWick
+        }
+    }
+
+    def lastOrderFromZone(state: SystemState, zoneId: Int): Boolean = {
+        val now = state.tradingCandles.last.timestamp
+        state.orders.filter(o => inTheLastHour(o, now)).lastOption.exists { order => 
+            order.entryType match {
+                case Trendy(description) => description.contains(s"ZoneId:$zoneId")
+                case _ => false
+            }
+        }
+    }
+
+    def inTheLastHour(order: Order, now: Long): Boolean = {
+        now - order.timestamp < Duration.ofHours(1).toMillis()
     }
 }
 
@@ -120,41 +151,28 @@ class ZoneTrendOrderService(
         if (state.orders.exists(_.isActive) || state.recentTrendAnalysis.size < 5) state else {
             val currentCandle = state.tradingCandles.last
             val zones = Zones.fromState(state)
-            zones.print(currentCandle)
-            zones.logMinute(currentCandle, state)
+            // zones.print(currentCandle)
+            // zones.logMinute(currentCandle, state)
             zones.zoneId(currentCandle) match {
-                case ZoneId.NewHigh => state
-                case ZoneId.Short =>
-                    if (Zones.isDeathCrossMinutesAgo(state, 0) && !hasFailingOrderInZone(state, ZoneId.Short)) {
-                        addOrder(OrderType.Short, currentCandle, zones, 0, state)
+                case ZoneId.NewHigh => //state
+                    if (movingForMinutes(state, Direction.Up, 3) && !Zones.lastOrderFromZone(state, ZoneId.NewHigh)) {
+                        addOrder(OrderType.Long, currentCandle, zones, 0, state, 2.0, 1.0)
+                        // addOrder(OrderType.Short, currentCandle, zones, 0, state, 3.0)
                     } else state
-                case ZoneId.MidHigh | ZoneId.MidLow => 
-                    if (
-                        Zones.isDeathCrossMinutesAgo(state, 0) &&
-                        Zones.trendStrengthNMinutesAgo(state, 3) > 15.0
-                    ) {
-                        addOrder(OrderType.Short, currentCandle, zones, 0, state)
-                    } else if (
-                        Zones.isDeathCrossMinutesAgo(state, 3) &&
-                        Zones.trendStrengthNMinutesAgo(state, 0) > 15.0
-                    ) {
-                        addOrder(OrderType.Short, currentCandle, zones, 1, state)
-                    } else if (
-                        Zones.isGoldenCrossMinutesAgo(state, 0) &&
-                        Zones.trendStrengthNMinutesAgo(state, 3) > 15.0
-                    ) {
-                        addOrder(OrderType.Long, currentCandle, zones, 0, state)
-                    } else if (
-                        Zones.isGoldenCrossMinutesAgo(state, 3) &&
-                        Zones.trendStrengthNMinutesAgo(state, 0) > 15.0
-                    ) {
-                        addOrder(OrderType.Long, currentCandle, zones, 1, state)
-                    } else state
-                case ZoneId.Long =>
-                    if (Zones.isGoldenCrossMinutesAgo(state, 0) && !hasFailingOrderInZone(state, ZoneId.Long)) {
-                        addOrder(OrderType.Long, currentCandle, zones, 0, state)
-                    } else state
+                case ZoneId.Short if Zones.isDeathCrossMinutesAgo(state, 0) && movingForMinutes(state, Direction.Down, 3) =>
+                    addOrder(OrderType.Short, currentCandle, zones, 0, state, 3.0, 2.0)
+                case ZoneId.MidHigh if Zones.isGoldenCrossMinutesAgo(state, 0) && Zones.trendStrengthNMinutesAgo(state, 3) > 15.0 => 
+                    addOrder(OrderType.Long, currentCandle, zones, 0, state, 1.0, 2.0)
+                case ZoneId.MidLow if Zones.isDeathCrossMinutesAgo(state, 0) && Zones.trendStrengthNMinutesAgo(state, 3) > 15.0 =>
+                    addOrder(OrderType.Short, currentCandle, zones, 0, state, 1.0, 2.0)
+                case ZoneId.Long if Zones.isGoldenCrossMinutesAgo(state, 0) && movingForMinutes(state, Direction.Up, 3) =>
+                    addOrder(OrderType.Long, currentCandle, zones, 0, state, 3.0, 2.0)
                 case ZoneId.NewLow => state
+                    // if (movingForMinutes(state, Direction.Down, 3) && !Zones.lastOrderFromZone(state, ZoneId.NewLow)) {
+                    //     addOrder(OrderType.Short, currentCandle, zones, 0, state, 2.0)
+                    //     // addOrder(OrderType.Long, currentCandle, zones, 0, state, 2.0)
+                    // } else state
+                case _ => state
             }
         }
     }
@@ -184,6 +202,13 @@ class ZoneTrendOrderService(
         state.orders.count(_.status == OrderStatus.Loss)
     }
 
+    private def consecutiveLosers(state: SystemState): Int = {
+        val allOrders = state.recentOrders ++ state.orders
+        val losingOrders = allOrders.filter(_.isProfitOrLoss)
+            .reverse.takeWhile(_.status == OrderStatus.Loss)
+        losingOrders.size
+    }
+
     private def isEndOfDay(state: SystemState): Boolean = {
         TimestampUtils.isNearTradingClose(state.tradingCandles.last.timestamp)
     }
@@ -192,41 +217,80 @@ class ZoneTrendOrderService(
         state.recentVolatilityAnalysis.last.trueRange.atr * quantity
     }
 
+    private def adjustRisk(newTotal: Double, threshold: Int, currentRisk: Double): Double = {
+        val fullLossMultiplier = (0 to threshold).map(n => Math.pow(2, n)).sum.toInt
+        val ultimateRisk = fullLossMultiplier * currentRisk * 1
+        
+        if (newTotal < ultimateRisk) {
+            currentRisk
+        } else {
+            newTotal / (3 * fullLossMultiplier)
+        }
+    }
+
+    private def calculateRiskMultiplier(state: SystemState): Double = {
+        val rawLosses = consecutiveLosers(state)
+        val martingaleThreshold = state.martingaleThreshold
+        val martingale = (0 to rawLosses).foldLeft(-1) { 
+            case (e, c) =>
+                if (c < martingaleThreshold) e + 1
+                else if (c == martingaleThreshold) e
+                else if (c > martingaleThreshold && e > 0) e - 1
+                else e
+        }
+
+        val risk = Math.pow(2, martingale).toFloat * state.baseRisk
+        println(s"Losses: $rawLosses + Threshold: $martingaleThreshold --> Martin: $martingale --> Risk: $risk")
+
+        risk
+    }
+
     def addOrder(orderType: OrderType, lastCandle: Candle, zones: Zones, 
-                 subId: Int, state: SystemState): SystemState = {
-        if (hasNWinnersToday(state, 1) || hasNLosersToday(state, 4) || isEndOfDay(state)) {
+                 subId: Int, state: SystemState, atrQty: Double, multQty: Double): SystemState = {
+        if (isEndOfDay(state)) {
             state
         } else {
+            val threshold = state.martingaleThreshold
             val zoneId = zones.zoneId(lastCandle)
-            val losses = countLosersToday(state)
-            val riskMultiplier = Math.pow(2, losses).toFloat
+
+            val rawLosses = consecutiveLosers(state)
+            val highProbOrders = false //rawLosses > state.martingaleThreshold
+            val riskMultiplier = 1.0 //calculateRiskMultiplier(state)
+
             val (low, high) = orderType match {
                 case OrderType.Short if zoneId == ZoneId.Short => 
                     (lastCandle.close, zones.high + bufferTicks)
-                case OrderType.Short if zoneId == ZoneId.MidHigh || zoneId == ZoneId.MidLow =>  
-                    val atrs = calcAtrs(state, 1.0).toFloat
+                case OrderType.Short if zoneId == ZoneId.MidHigh || zoneId == ZoneId.MidLow || zoneId == ZoneId.NewLow =>  
+                    val atrs = calcAtrs(state, atrQty).toFloat
                     (lastCandle.close, lastCandle.close + atrs)
-                case OrderType.Long if zoneId == ZoneId.MidLow || zoneId == ZoneId.MidHigh => 
-                    val atrs = calcAtrs(state, 1.0).toFloat
+                case OrderType.Long if zoneId == ZoneId.MidLow || zoneId == ZoneId.MidHigh || zoneId == ZoneId.NewHigh => 
+                    val atrs = calcAtrs(state, atrQty).toFloat
                     (lastCandle.close - atrs, lastCandle.close)
                 case OrderType.Long if zoneId == ZoneId.Long =>
                     (zones.low - bufferTicks, lastCandle.close)
                 case _ => throw new IllegalArgumentException("Unexpected order state.")
             }
 
-            val newOrder = Order(
-                low,
-                high,
-                lastCandle.timestamp,
-                orderType,
-                EntryType.Trendy(s"ZoneId:$zoneId.$subId"),
-                state.contractSymbol.get,
-                status = OrderStatus.PlaceNow,
-                profitMultiplier = 1.0f,
-                riskMultiplier = Some(riskMultiplier)
-            )
+            if (!highProbOrders || (zoneId != ZoneId.NewLow && zoneId != ZoneId.NewHigh)) {
+                val directionText = if (orderType == OrderType.Long) "L" else "S"
+                val newOrder = Order(
+                    low,
+                    high,
+                    lastCandle.timestamp,
+                    orderType,
+                    EntryType.Trendy(s"ZoneId:$zoneId.$subId.$directionText"),
+                    state.contractSymbol.get,
+                    status = OrderStatus.PlaceNow,
+                    profitMultiplier = 2.0f,
+                    riskMultiplier = Some(riskMultiplier.toFloat)
+                )
 
-            state.copy(orders = state.orders :+ newOrder)
+                // val newThreshold = if (total > 50) 4 else 3
+
+                // println(s"Estimated profitability --> $total --> $threshold --> ($baseRisk * $losses) = $riskMultiplier")
+
+                state.copy(orders = state.orders :+ newOrder)
+            } else state
         }
     }
 }
