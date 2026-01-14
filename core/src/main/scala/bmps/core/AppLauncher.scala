@@ -24,6 +24,7 @@ import bmps.core.io.DatabentoSource
 import bmps.core.models.Candle
 import bmps.core.io.DataSource
 import bmps.core.io.ParquetSource
+import bmps.core.io.DualSource
 import bmps.core.utils.MarketCalendar
 import com.typesafe.config.Config
 import bmps.core.utils.MarketCalendar
@@ -76,6 +77,12 @@ object AppLauncher extends IOApp.Simple {
           new ParquetSource(Set[CandleDuration](CandleDuration.OneHour)), 
           new ParquetSource(Set[CandleDuration](CandleDuration.OneMinute)),
           new ParquetSource(Set[CandleDuration](CandleDuration.OneSecond, CandleDuration.OneMinute)),
+        )
+      case "DualSource" =>
+        (
+          new DualSource(Set[CandleDuration](CandleDuration.OneHour)),
+          new DualSource(Set[CandleDuration](CandleDuration.OneMinute)),
+          new DualSource(Set[CandleDuration](CandleDuration.OneSecond, CandleDuration.OneMinute))
         )
       case _ => 
         throw new IllegalArgumentException(s"$dataSource not supported.")

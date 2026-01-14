@@ -16,7 +16,8 @@ case class TrendAnalysis(
     longTermMA: Double,   // e.g., 21-period EMA
     plusDI: Double,
     minusDI: Double,
-    adx: Double
+    adx: Double,
+    timestamp: Long
 ) {
     // Convenience methods for trend interpretation
     def isUptrend: Boolean = plusDI > minusDI
@@ -239,7 +240,8 @@ class Trend() {
             longTermMA = longTermMA,
             plusDI = dmi.plusDI,
             minusDI = dmi.minusDI,
-            adx = adx
+            adx = adx,
+            timestamp = candles.last.timestamp
         )
     }
 

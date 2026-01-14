@@ -161,7 +161,7 @@ object StrategyAnalyzer extends IOApp {
 
   private def calculateTrend(state: SystemState): TrendAnalysis = {
     if (state.tradingCandles.size < 2) {
-      TrendAnalysis(0, 0, 0, 0, 0, 0, 0, 0)
+      TrendAnalysis(0, 0, 0, 0, 0, 0, 0, 0, 0L)
     } else {
       trendService.doTrendAnalysis(state.tradingCandles)
     }
