@@ -36,6 +36,8 @@ import okhttp3.OkHttpClient
 import bmps.core.io.CSVFileOrderSink
 import bmps.core.io.OrderSink
 import bmps.core.services.TechnicalAnalysisOrderService
+import bmps.core.services.ZoneTrendOrderService
+import bmps.core.services.AdaptiveMultiRegimeOrderService
 
 object AppLauncher extends IOApp.Simple {
 
@@ -108,11 +110,18 @@ object AppLauncher extends IOApp.Simple {
 
     // Load account brokers and data sources from configuration
     leadAccount = loadAccountBrokers()
+    accountBalance = leadAccount.accountBalance
+      .getOrElse(throw new IllegalStateException("Unable to find an account balance."))
+    
+    _ = println(s"Account Balance: $$${accountBalance}")
+
     (planningSource, preparingSource, tradingSource) = loadDataSources()
 
     technicalAnalysisService = new TechnicalAnalysisService()
-    techAnalysisOrderService = new TechnicalAnalysisOrderService()
-    orderService = new OrderService(technicalAnalysisService, techAnalysisOrderService)
+    techAnalysisOrderService = new TechnicalAnalysisOrderService(accountBalance)
+    zoneTrnedOrderService = new ZoneTrendOrderService(accountBalance)
+    // adaptiveOrderService = new AdaptiveMultiRegimeOrderService(accountBalance)
+    orderService = new OrderService(technicalAnalysisService, techAnalysisOrderService, zoneTrnedOrderService)
 
     // populate with PhaseRunner instances, using configured AccountBrokers for TradingPhase
     runners: Map[SystemStatePhase, PhaseRunner] = Map(

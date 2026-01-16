@@ -40,6 +40,20 @@ case class ApiContract(id: Long, name: String, contractMaturityId: Long)
 // Authentication response models
 case class AccessTokenResponse(accessToken: String, userId: Long, expirationTime: String)
 
+// Cash balance models
+case class TradeDate(year: Int, month: Int, day: Int)
+case class CashBalance(
+    id: Option[Long],
+    accountId: Long,
+    timestamp: String,
+    tradeDate: TradeDate,
+    currencyId: Long,
+    amount: Double,
+    realizedPnL: Option[Double],
+    weekRealizedPnL: Option[Double],
+    amountSOD: Option[Double]
+)
+
 // Order details with price information
 case class OrderDetails(
     limitPrice: Option[Float],
@@ -260,6 +274,15 @@ class TradovateBroker(
             status = status,
             fillTimestamp = fillTimestamp
         )
+    }
+
+    /**
+     * Get cash balance list
+     * Details: https://api.tradovate.com/#tag/Cash-Balance/operation/cashBalanceList
+     */
+    def getCashBalances(): List[CashBalance] = {
+        val request = buildRequest("GET", "/cashBalance/list")
+        executeWithRetry(request, body => decode[List[CashBalance]](body).toTry)
     }
 
     //~~~~~~~~~~~~~~

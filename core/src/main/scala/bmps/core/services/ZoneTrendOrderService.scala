@@ -4,6 +4,7 @@ import bmps.core.models.Candle
 import bmps.core.models.SystemState
 import bmps.core.services.analysis.TrendAnalysis
 import bmps.core.services.analysis.VolatilityAnalysis
+import bmps.core.services.rules.RiskSizingRules
 import bmps.core.models.OrderType
 import bmps.core.models.Order
 import bmps.core.models.EntryType
@@ -145,8 +146,9 @@ case class Zones(high: Float, low: Float) {
 }
 
 class ZoneTrendOrderService(
+    accountBalance: Double,
     bufferTicks: Float = 1.0f
-) {
+) extends RiskSizingRules {
     def processOneMinuteState(state: SystemState): SystemState = {
         if (state.orders.exists(_.isActive) || state.recentTrendAnalysis.size < 5) state else {
             val currentCandle = state.tradingCandles.last
@@ -202,13 +204,6 @@ class ZoneTrendOrderService(
         state.orders.count(_.status == OrderStatus.Loss)
     }
 
-    private def consecutiveLosers(state: SystemState): Int = {
-        val allOrders = state.recentOrders ++ state.orders
-        val losingOrders = allOrders.filter(_.isProfitOrLoss)
-            .reverse.takeWhile(_.status == OrderStatus.Loss)
-        losingOrders.size
-    }
-
     private def isEndOfDay(state: SystemState): Boolean = {
         TimestampUtils.isNearTradingClose(state.tradingCandles.last.timestamp)
     }
@@ -228,34 +223,13 @@ class ZoneTrendOrderService(
         }
     }
 
-    private def calculateRiskMultiplier(state: SystemState): Double = {
-        val rawLosses = consecutiveLosers(state)
-        val martingaleThreshold = state.martingaleThreshold
-        val martingale = (0 to rawLosses).foldLeft(-1) { 
-            case (e, c) =>
-                if (c < martingaleThreshold) e + 1
-                else if (c == martingaleThreshold) e
-                else if (c > martingaleThreshold && e > 0) e - 1
-                else e
-        }
-
-        val risk = Math.pow(2, martingale).toFloat * state.baseRisk
-        println(s"Losses: $rawLosses + Threshold: $martingaleThreshold --> Martin: $martingale --> Risk: $risk")
-
-        risk
-    }
-
     def addOrder(orderType: OrderType, lastCandle: Candle, zones: Zones, 
                  subId: Int, state: SystemState, atrQty: Double, multQty: Double): SystemState = {
         if (isEndOfDay(state)) {
             state
         } else {
-            val threshold = state.martingaleThreshold
             val zoneId = zones.zoneId(lastCandle)
-
-            val rawLosses = consecutiveLosers(state)
-            val highProbOrders = false //rawLosses > state.martingaleThreshold
-            val riskMultiplier = 1.0 //calculateRiskMultiplier(state)
+            val riskMultiplier = computeRiskMultiplierKelly(state, accountBalance)
 
             val (low, high) = orderType match {
                 case OrderType.Short if zoneId == ZoneId.Short => 
@@ -271,26 +245,21 @@ class ZoneTrendOrderService(
                 case _ => throw new IllegalArgumentException("Unexpected order state.")
             }
 
-            if (!highProbOrders || (zoneId != ZoneId.NewLow && zoneId != ZoneId.NewHigh)) {
-                val directionText = if (orderType == OrderType.Long) "L" else "S"
-                val newOrder = Order(
-                    low,
-                    high,
-                    lastCandle.timestamp,
-                    orderType,
-                    EntryType.Trendy(s"ZoneId:$zoneId.$subId.$directionText"),
-                    state.contractSymbol.get,
-                    status = OrderStatus.PlaceNow,
-                    profitMultiplier = 2.0f,
-                    riskMultiplier = Some(riskMultiplier.toFloat)
-                )
+            val directionText = if (orderType == OrderType.Long) "L" else "S"
+            val newOrder = Order(
+                low,
+                high,
+                lastCandle.timestamp,
+                orderType,
+                EntryType.Trendy(s"ZoneId:$zoneId.$subId.$directionText"),
+                state.contractSymbol.get,
+                status = OrderStatus.PlaceNow,
+                profitMultiplier = multQty.toFloat,
+                riskMultiplier = Some(riskMultiplier.toFloat)
+            )
 
-                // val newThreshold = if (total > 50) 4 else 3
-
-                // println(s"Estimated profitability --> $total --> $threshold --> ($baseRisk * $losses) = $riskMultiplier")
-
-                state.copy(orders = state.orders :+ newOrder)
-            } else state
+            state.copy(orders = state.orders :+ newOrder)
+        
         }
     }
 }

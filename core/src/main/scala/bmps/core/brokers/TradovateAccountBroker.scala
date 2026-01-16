@@ -24,6 +24,8 @@ class TradovateAccountBroker(val accountId: String,
                              tradovateBroker: TradovateBroker) extends AccountBroker with DetermineContracts {
     val brokerType: BrokerType = BrokerType.TradovateAccountBroker
 
+    lazy val accountBalance: Option[Double] = tradovateBroker.getCashBalances().headOption.map(_.amount)
+
     //Keeps a private version of each order for this broker to use.
     private val tradovateOrders = TrieMap[Long, TradovateOrder]()
 

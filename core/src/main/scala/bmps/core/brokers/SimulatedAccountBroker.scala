@@ -7,4 +7,6 @@ class SimulatedAccountBroker(val accountId: String,
                             val feePerESContract: Double,
                             val feePerMESContract: Double) extends SimulationAccountBroker {
     val brokerType: BrokerType = BrokerType.SimulatedAccountBroker
+
+    val accountBalance: Option[Double] = None
 }

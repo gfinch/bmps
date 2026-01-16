@@ -38,6 +38,5 @@ case class SystemState(
     orders: List[Order] = List.empty,
     contractSymbol: Option[String] = None,
     recentOrders: List[Order] = List.empty,
-    martingaleThreshold: Int = 3,
-    baseRisk: Double = 0.5
+    accountBalance: Option[Double] = None
 )

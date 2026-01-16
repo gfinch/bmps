@@ -4,6 +4,7 @@ import bmps.core.models.SystemState
 import bmps.core.models.Order
 import bmps.core.models.ExtremeType
 import bmps.core.services.analysis.TrendAnalysis
+import bmps.core.services.rules.RiskSizingRules
 import bmps.core.models.OrderType
 import bmps.core.models.EntryType.Trendy
 import bmps.core.models.OrderStatus
@@ -14,7 +15,7 @@ import java.sql.Timestamp
 import bmps.core.models.SerializableOrder
 import bmps.core.models.OrderStatus.Loss
 
-class TechnicalAnalysisOrderService(initialCapital: Double = 18000.0) {
+class TechnicalAnalysisOrderService(accountBalance: Double) extends RiskSizingRules {
     def processOneMinuteState(state: SystemState): SystemState = {
         val lastCandle = state.tradingCandles.last
         if (state.orders.exists(_.isActive) || TimestampUtils.isNearTradingClose(lastCandle.timestamp)) {
@@ -34,7 +35,7 @@ class TechnicalAnalysisOrderService(initialCapital: Double = 18000.0) {
                 val desc = buildScenarioDescription(s)
                 activeOrders.contains(desc)
             })
-            val riskMultiplier = computeRiskMultiplier(state)
+            val riskMultiplier = computeRiskMultiplierKelly(state, accountBalance)
             
             val newOrders = for {
                 scenario <- activeScenarios
@@ -305,43 +306,6 @@ class TechnicalAnalysisOrderService(initialCapital: Double = 18000.0) {
         else if (siblings.contains(9)) 7
         else if (siblings.contains(10)) 10
         else 0
-    }
-
-    def computeRiskMultiplier(state: SystemState): Float = {
-        val orders = state.orders.filter(_.isProfitOrLoss)
-        val pastOrders = state.recentOrders ++ orders
-        val approximateAccountValue = pastOrders.foldLeft(initialCapital) { (r, c) =>
-            val risk = riskPerTrade(r)
-            r + valueOfOrder(c, risk)
-        }
-        val finalRisk = riskPerTrade(approximateAccountValue)
-        val valueBasedMultiplier = finalRisk.toFloat / 1000.0f
-        val lastWinIndex = pastOrders.reverse.indexWhere(_.status == OrderStatus.Profit)
-        val finalIndex = if (lastWinIndex == -1) pastOrders.size else lastWinIndex
-        finalIndex match {  
-            case -1 => valueBasedMultiplier
-            case 0 => valueBasedMultiplier
-            case 1 => valueBasedMultiplier * 2.0f
-            case 2 => valueBasedMultiplier * 4.0f
-            case n => (valueBasedMultiplier * math.pow(0.5, n - 2)).toFloat
-        }
-    }
-
-    private def riskPerTrade(runningTotal: Double): Double = {
-        // if (runningTotal < 30000.0) 300.0
-        if (runningTotal < 50000.0) 500.0
-        else if (runningTotal < 100000.0) 1000.0
-        else math.floor(runningTotal / 100000.0) * 1000.0
-    }
-
-    private def valueOfOrder(order: Order, riskPerTrade: Double): Double = {
-        require(order.isProfitOrLoss, "This order is not closed.")
-        val serializedOrder = SerializableOrder.fromOrder(order, riskPerTrade)
-        order.status match {
-            case Loss => serializedOrder.atRisk * -1
-            case Profit => serializedOrder.potential
-            case _ => throw new IllegalStateException(s"Unexpected order statue: ${order.status}")
-        }
     }
 
     //NO safety checks = $56k / $170k

@@ -32,6 +32,8 @@ trait AccountBroker {
     val feePerESContract: Double
     val brokerType: BrokerType
 
+    val accountBalance: Option[Double]
+
     def placeOrder(order: Order, candle: Candle): Order
     def fillOrder(order: Order, candle: Candle): Order
     def takeProfit(order: Order, candle: Candle): Order
@@ -135,6 +137,14 @@ class LeadAccountBroker(val brokers: List[AccountBroker],
     def cancelOrder(order: Order, candle: Candle, cancelReason: String): Order = brokers.map(_.cancelOrder(order, candle, cancelReason)).head
 
     lazy val brokerCount = brokers.size
+
+    override lazy val accountBalance: Option[Double] = {
+        val broker = brokers
+            .find(_.accountId.startsWith("tradovate-live"))
+            .orElse(brokers.find(_.accountId.startsWith("tradovate-demo")))
+        
+        broker.flatMap(_.accountBalance)
+    }
 
     def updateOrderStatus(order: Order, candle: Candle): Order = {
         val operations = Seq(
