@@ -150,15 +150,22 @@ class TradovateAccountBroker(val accountId: String,
         }
     }
 
+    private def roundToTickSize(price: Float, tickSize: Float = 0.25f): Float = {
+        // Use integer arithmetic to avoid floating point precision errors
+        // For 0.25 tick: multiply by 4, round, then divide by 4
+        val multiplier = (1.0 / tickSize).toInt
+        (math.round(price * multiplier).toFloat / multiplier)
+    }
+
     private def doPlaceOrder(order: Order, candle: Candle): (PlaceOsoResponse, Order) = {
         require(order.status == OrderStatus.Planned || order.status == OrderStatus.PlaceNow, "Attempting to place an order that was already placed.")
         require(tradovateOrders.get(order.timestamp).isEmpty, "Attempting to place an order that was already placed on Tradovate.")
         val riskMultiplier = order.riskMultiplier.getOrElse(1.0f)
         val (contract, contracts) = determineContracts(order, riskPerTrade, riskMultiplier)
         val plannedOrder = PlannedOrder(
-            entry = order.entryPoint, 
-            stopLoss = order.stopLoss, 
-            takeProfit = order.takeProfit, 
+            entry = roundToTickSize(order.entryPoint), 
+            stopLoss = roundToTickSize(order.stopLoss), 
+            takeProfit = roundToTickSize(order.takeProfit), 
             orderType = order.orderType, 
             contractId = contract, 
             contracts = contracts,
