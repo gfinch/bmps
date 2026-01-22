@@ -9,9 +9,22 @@ import bmps.core.utils.TimestampUtils
 
 trait SimulationAccountBroker extends AccountBroker {
 
+    private def roundToTickSize(price: Float, tickSize: Float = 0.25f): Float = {
+        // Use integer arithmetic to avoid floating point precision errors
+        // For 0.25 tick: multiply by 4, round, then divide by 4
+        val multiplier = (1.0 / tickSize).toInt
+        (math.round(price * multiplier).toFloat / multiplier)
+    }
+
     def placeOrder(order: Order, candle: Candle): Order = {
         val ts = snapToOneMinute(candle)
-        order.copy(status = Placed, placedTimestamp = Some(ts))
+        // Round order prices to tick size
+        val roundedOrder = order.copy(
+            low = roundToTickSize(order.low),
+            high = roundToTickSize(order.high),
+            profitCap = order.profitCap.map(roundToTickSize(_))
+        )
+        roundedOrder.copy(status = Placed, placedTimestamp = Some(ts))
     }
     
     def fillOrder(order: Order, candle: Candle): Order = {

@@ -164,7 +164,8 @@ class OrderPaneRenderer {
       'XGBoostOrderBlock': 'XGB',
       'BouncingOrderBlock': 'BOB',
       'MomentumOrderBlock': 'MOM',
-      'TrendOrderBlock': 'TAB'
+      'TrendOrderBlock': 'TAB',
+      'ConsolidationFadeOrderBlock': 'CFD'
     }
     return entryTypeMap[entryTypeString] || entryTypeString
   }

@@ -38,6 +38,7 @@ object EntryType {
     case object MomentumOrderBlock extends EntryType
     case object OverOrderBlock extends EntryType
     case object TrendOrderBlock extends EntryType
+    case object ConsolidationFadeOrderBlock extends EntryType
     case class Trendy(description: String) extends EntryType {
         override def toString(): String = description
     }

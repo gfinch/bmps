@@ -16,6 +16,7 @@ import bmps.core.models.Direction
 import bmps.core.services.Zones.movingForMinutes
 import bmps.core.models.EntryType.Trendy
 import java.time.Duration
+import bmps.core.services.rules.SafetyRules
 
 object ZoneId {
     val NewLow = 0
@@ -148,7 +149,7 @@ case class Zones(high: Float, low: Float) {
 class ZoneTrendOrderService(
     accountBalance: Double,
     bufferTicks: Float = 1.0f
-) extends RiskSizingRules {
+) extends RiskSizingRules with SafetyRules {
     def processOneMinuteState(state: SystemState): SystemState = {
         if (state.orders.exists(_.isActive) || state.recentTrendAnalysis.size < 5) state else {
             val currentCandle = state.tradingCandles.last
@@ -258,7 +259,9 @@ class ZoneTrendOrderService(
                 riskMultiplier = Some(riskMultiplier.toFloat)
             )
 
-            state.copy(orders = state.orders :+ newOrder)
+            if (isSafeOrder(state, newOrder)) {
+                state.copy(orders = state.orders :+ newOrder)
+            } else state
         
         }
     }

@@ -81,12 +81,13 @@ trait RiskSizingRules {
             martingaleMultiplier
         }
         
-        valueBasedMultiplier * cappedMultiplier
+        // valueBasedMultiplier * cappedMultiplier
+        valueBasedMultiplier
     }
 
     private def riskPerTrade(runningTotal: Double): Double = {
-        // if (runningTotal < 30000.0) 300.0
-        if (runningTotal < 50000.0) 500.0
+        if (runningTotal < 30000.0) 250.0 
+        else if (runningTotal < 50000.0) 500.0
         else if (runningTotal < 100000.0) 1000.0
         else math.floor(runningTotal / 100000.0) * 1000.0
     }

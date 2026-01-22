@@ -14,8 +14,9 @@ import java.time.Duration
 import java.sql.Timestamp
 import bmps.core.models.SerializableOrder
 import bmps.core.models.OrderStatus.Loss
+import bmps.core.services.rules.SafetyRules
 
-class TechnicalAnalysisOrderService(accountBalance: Double) extends RiskSizingRules {
+class TechnicalAnalysisOrderService(accountBalance: Double) extends RiskSizingRules with SafetyRules {
     def processOneMinuteState(state: SystemState): SystemState = {
         val lastCandle = state.tradingCandles.last
         if (state.orders.exists(_.isActive) || TimestampUtils.isNearTradingClose(lastCandle.timestamp)) {
@@ -43,7 +44,9 @@ class TechnicalAnalysisOrderService(accountBalance: Double) extends RiskSizingRu
                 if (scenario.forall(n => applyScenario(n, scenario, state))) {
                     val newOrder = buildOrder(state, scenario, riskMultiplier)
                     // Some(newOrder)
-                    safetyChecks(state, newOrder)
+                    if (isSafeOrder(state, newOrder)) {
+                        safetyChecks(state, newOrder)
+                    } else None
                 } else None
             }
 

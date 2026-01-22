@@ -11,6 +11,7 @@ import bmps.core.models.SerializableOrder
 import bmps.core.utils.TimestampUtils
 import bmps.core.models.EntryType
 import bmps.core.models.CandleDuration
+import java.security.KeyStore.Entry
 
 sealed trait BrokerType
 object BrokerType {
@@ -248,20 +249,24 @@ class LeadAccountBroker(val brokers: List[AccountBroker],
             val reason = CancelReason.FullCandleOutside
             order.orderType match {
                 case OrderType.Long => 
-                    if (candle.low >= order.takeProfit) cancelOrder(order, candle, reason)
-                    else if (candle.high < order.stopLoss) cancelOrder(order, candle, reason)
+                    if (candle.low >= order.takeProfit) {
+                        if (order.entryType == EntryType.ConsolidationFadeOrderBlock) order
+                        else cancelOrder(order, candle, reason)
+                    } else if (candle.high < order.stopLoss) cancelOrder(order, candle, reason)
                     else order
 
                 case OrderType.Short =>
-                    if (candle.high <= order.takeProfit) cancelOrder(order, candle, reason)
-                    else if (candle.low > order.stopLoss) cancelOrder(order, candle, reason)
+                    if (candle.high <= order.takeProfit)  {
+                        if (order.entryType == EntryType.ConsolidationFadeOrderBlock) order
+                        else cancelOrder(order, candle, reason)
+                    } else if (candle.low > order.stopLoss) cancelOrder(order, candle, reason)
                     else order
             }
         } else order
     }
 
     private def cancelPlacedOrderCandleOutside(order: Order, candle: Candle): Order = {
-        if (order.status == Placed) {
+        if (order.status == Placed && order.entryType != EntryType.ConsolidationFadeOrderBlock) {
             val reason = CancelReason.FullCandleOutside
             order.orderType match {
                 case OrderType.Long => 

@@ -62,6 +62,7 @@ object ConsoleClient extends IOApp {
       _ <- processDateRange(startDate, endDate)
       _ <- IO.println("=" * 60)
       _ <- IO.println("All trading days processed successfully!")
+      _ <- IO.print("\u0007") // Bell/beep sound
     } yield ()
   }
 
