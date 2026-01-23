@@ -20,9 +20,8 @@ import bmps.core.utils.TimestampUtils
 
 class OrderService(val technicalAnalysisService: TechnicalAnalysisService,
                    val techAnalysisOrderService: TechnicalAnalysisOrderService,
-                   val zoneTrendOrderService: ZoneTrendOrderService) {
-
-    lazy val consolidationFadeService = new ConsolidationFadeService()
+                   val zoneTrendOrderService: ZoneTrendOrderService,
+                   val consolidationFadeService: ConsolidationFadeService) {
 
     lazy val secondBySecondProcessors = Seq(
         technicalAnalysisService.processOneSecondState(_),
@@ -34,8 +33,8 @@ class OrderService(val technicalAnalysisService: TechnicalAnalysisService,
         technicalAnalysisService.processOneMinuteState(_),
         // adaptiveOrderService.processOneMinuteState(_),
         // combinedOrderService.processOneMinuteState(_),
-        techAnalysisOrderService.processOneMinuteState(_), //<--
-        zoneTrendOrderService.processOneMinuteState(_), //<--
+        // techAnalysisOrderService.processOneMinuteState(_), //<--
+        // zoneTrendOrderService.processOneMinuteState(_), //<--
         consolidationFadeService.processState(_), //<--
         // simpleTrendOrderService.processOneMinuteState(_),
         // techAnalysisOrderService.processOneMinuteState(_),

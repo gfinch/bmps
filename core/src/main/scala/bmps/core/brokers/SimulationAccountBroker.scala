@@ -24,21 +24,25 @@ trait SimulationAccountBroker extends AccountBroker {
             high = roundToTickSize(order.high),
             profitCap = order.profitCap.map(roundToTickSize(_))
         )
+        println(s"${TimestampUtils.toNewYorkTimeString(candle.timestamp)} - Place ${order.orderType} - ${candle.close} - ${order.entryPoint}.")
         roundedOrder.copy(status = Placed, placedTimestamp = Some(ts))
     }
     
     def fillOrder(order: Order, candle: Candle): Order = {
+        println(s"${TimestampUtils.toNewYorkTimeString(candle.timestamp)} - Fill ${order.orderType} - ${candle.low} < ${order.entryPoint} < ${candle.high}. (${(candle.timestamp - order.placedTimestamp.getOrElse(0L)) / 60000.0}m)")
         val ts = snapToOneMinute(candle)
         order.copy(status = Filled, filledTimestamp = Some(ts))
     }
 
     def takeProfit(order: Order, candle: Candle): Order = {
+        println(s"${TimestampUtils.toNewYorkTimeString(candle.timestamp)} - Profit ${order.orderType} - ${candle.low} < ${order.takeProfit} < ${candle.high} (${(candle.timestamp - order.placedTimestamp.getOrElse(0L)) / 60000.0}m)")
         val ts = snapToOneMinute(candle)
         val closedAt = if (TimestampUtils.isNearTradingClose(candle.timestamp)) Some(candle.close) else None
         order.copy(status = Profit, closeTimestamp = Some(ts), closedAt = closedAt)
     }
 
     def takeLoss(order: Order, candle: Candle): Order = {
+        println(s"${TimestampUtils.toNewYorkTimeString(candle.timestamp)} - Loss ${order.orderType} - ${candle.low} < ${order.stopLoss} < ${candle.high}. (${(candle.timestamp - order.placedTimestamp.getOrElse(0L)) / 60000.0}m)")
         val ts = snapToOneMinute(candle)
         val closedAt = if (TimestampUtils.isNearTradingClose(candle.timestamp)) Some(candle.close) else None
         order.copy(status = Loss, closeTimestamp = Some(ts), closedAt = closedAt)
@@ -57,6 +61,7 @@ trait SimulationAccountBroker extends AccountBroker {
     }
 
     def cancelOrder(order: Order, candle: Candle, cancelReason: String): Order = {
+        println(s"${TimestampUtils.toNewYorkTimeString(candle.timestamp)} - Cancel ${order.orderType} - $cancelReason. (${(candle.timestamp - order.placedTimestamp.getOrElse(0L)) / 60000.0}m)")
         val ts = snapToOneMinute(candle)
         order.copy(status = Cancelled, closeTimestamp = Some(ts), cancelReason = Some(cancelReason))
     }

@@ -8,12 +8,35 @@ import bmps.core.models.OrderStatus.Profit
 import bmps.core.models.OrderStatus
 
 trait RiskSizingRules {
-    def computeRiskMultiplier(state: SystemState, accountBalance: Double): Float = {
-        val orders = state.orders.filter(_.isProfitOrLoss)
-        val approximateAccountValue = orders.foldLeft(accountBalance) { (r, c) =>
+    def estimateCurrentAccountValue(orders: List[Order], accountBalance: Double): Double = {
+        orders.foldLeft(accountBalance) { (r, c) =>
             val risk = riskPerTrade(r)
             r + valueOfOrder(c, risk)
         }
+    }
+
+    def riskBasedOnAccountValueOnly(state: SystemState, accountBalance: Double, baseRisk: Double, readOnly: Boolean): Float = {
+        val newOrders = state.orders.filter(_.isProfitOrLoss)
+        val orders = if (readOnly) newOrders else state.recentOrders ++ newOrders
+        val runningTotal = orders.foldLeft(accountBalance) { (r, c) =>
+            val thisRisk = riskForRunningTotal(r) * baseRisk
+            r + valueOfOrder(c, thisRisk)
+        }
+
+        println(s"Current Running Total = $runningTotal")
+        riskForRunningTotal(runningTotal)
+    }
+
+    private def riskForRunningTotal(runningTotal: Double): Float = {
+        if (runningTotal < 28000.0) 1.0f 
+        else if (runningTotal < 50000.0) 2.0f
+        else if (runningTotal < 100000.0) 4.0f
+        else math.min(math.floor(runningTotal / 100000.0) * 4.0, 5.0).toFloat
+    }
+
+    def computeRiskMultiplier(state: SystemState, accountBalance: Double): Float = {
+        val orders = state.recentOrders ++ state.orders.filter(_.isProfitOrLoss)
+        val approximateAccountValue = estimateCurrentAccountValue(orders, accountBalance)
         val finalRisk = riskPerTrade(approximateAccountValue)
         val valueBasedMultiplier = finalRisk.toFloat / 1000.0f //40k burn //223k gain
         val lastWinIndex = orders.reverse.indexWhere(_.status == OrderStatus.Profit)
@@ -34,10 +57,7 @@ trait RiskSizingRules {
         val orders = state.recentOrders ++ state.orders.filter(_.isProfitOrLoss)
         
         // Calculate approximate current account value
-        val approximateAccountValue = orders.foldLeft(accountBalance) { (r, c) =>
-            val risk = riskPerTrade(r)
-            r + valueOfOrder(c, risk)
-        }
+        val approximateAccountValue = estimateCurrentAccountValue(orders, accountBalance)
         
         // Base risk for current account value
         val finalRisk = riskPerTrade(approximateAccountValue)

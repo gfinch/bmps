@@ -3,8 +3,10 @@ package bmps.core.services
 import bmps.core.models.{SystemState, Order, OrderType, OrderStatus, Candle}
 import bmps.core.models.EntryType
 import java.time.Duration
+import bmps.core.services.rules.RiskSizingRules
+import bmps.core.utils.TimestampUtils
 
-class ConsolidationFadeService() {
+class ConsolidationFadeService(accountBalance: Double, baseRisk: Double, readOnly: Boolean) extends RiskSizingRules {
     
     // Configurable parameters
     private val consolidationMinutes = 10 // How long price must be consolidating
@@ -20,8 +22,9 @@ class ConsolidationFadeService() {
         require(state.contractSymbol.isDefined, "The contract symbol must be defined before creating orders.")
         
         val hasActiveOrder = state.orders.exists(_.isActive)
+        val isEndOfDay = TimestampUtils.isNearTradingClose(state.tradingCandles.last.timestamp)
         
-        if (hasActiveOrder) {
+        if (hasActiveOrder || isEndOfDay) {
             return state
         }
         
@@ -42,6 +45,8 @@ class ConsolidationFadeService() {
         
         val contract = state.contractSymbol.get
         val lastCandle = state.tradingCandles.last
+
+        val riskMultiplier = riskBasedOnAccountValueOnly(state, accountBalance, baseRisk, readOnly)
         
         // Create order based on current price position
         // If above midpoint, plan LONG order (price needs to fall to trigger)
@@ -61,7 +66,8 @@ class ConsolidationFadeService() {
                 entryType = EntryType.ConsolidationFadeOrderBlock,
                 contract = contract,
                 profitCap = Some(longTP),
-                status = OrderStatus.Planned
+                status = OrderStatus.Planned,
+                riskMultiplier = Some(riskMultiplier)
             )
         } else {
             // Create SHORT order: enter above midpoint, stop above resistance
@@ -78,7 +84,8 @@ class ConsolidationFadeService() {
                 entryType = EntryType.ConsolidationFadeOrderBlock,
                 contract = contract,
                 profitCap = Some(shortTP),
-                status = OrderStatus.Planned
+                status = OrderStatus.Planned,
+                riskMultiplier = Some(riskMultiplier)
             )
         }
         

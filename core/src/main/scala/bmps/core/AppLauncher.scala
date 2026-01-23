@@ -38,6 +38,7 @@ import bmps.core.io.OrderSink
 import bmps.core.services.TechnicalAnalysisOrderService
 import bmps.core.services.ZoneTrendOrderService
 import bmps.core.services.AdaptiveMultiRegimeOrderService
+import bmps.core.services.ConsolidationFadeService
 
 object AppLauncher extends IOApp.Simple {
 
@@ -117,11 +118,14 @@ object AppLauncher extends IOApp.Simple {
 
     (planningSource, preparingSource, tradingSource) = loadDataSources()
 
+    baseRisk = config.getDouble("bmps.core.base-risk")
+
     technicalAnalysisService = new TechnicalAnalysisService()
     techAnalysisOrderService = new TechnicalAnalysisOrderService(accountBalance)
     zoneTrnedOrderService = new ZoneTrendOrderService(accountBalance)
+    consolidationFadeService = new ConsolidationFadeService(accountBalance, baseRisk, readOnly)
     // adaptiveOrderService = new AdaptiveMultiRegimeOrderService(accountBalance)
-    orderService = new OrderService(technicalAnalysisService, techAnalysisOrderService, zoneTrnedOrderService)
+    orderService = new OrderService(technicalAnalysisService, techAnalysisOrderService, zoneTrnedOrderService, consolidationFadeService)
 
     // populate with PhaseRunner instances, using configured AccountBrokers for TradingPhase
     runners: Map[SystemStatePhase, PhaseRunner] = Map(

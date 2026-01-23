@@ -44,16 +44,9 @@ class ParquetSource(durations: Set[CandleDuration]) extends DataSource {
       // Timestamps are stored as int64 UTC millis, so we can compare directly
       val whereClause = s"timestamp >= $startMs AND timestamp <= $endMs"
       
-      // Sort by endTime to match DatabentoSource behavior
-      // timestamp is start time, so we add duration in ms
-      // Tie-breaker: smaller duration first (e.g. 1s before 1m)
+      // Sort by timestamp first, then by timeframe (seconds before minutes before hours)
       val orderByClause = """
-        (timestamp + CASE timeframe 
-          WHEN '1s' THEN 1000 
-          WHEN '1m' THEN 60000 
-          WHEN '1h' THEN 3600000 
-          ELSE 0 
-        END),
+        timestamp,
         CASE timeframe
           WHEN '1s' THEN 1
           WHEN '1m' THEN 2

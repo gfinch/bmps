@@ -149,10 +149,10 @@ class LeadAccountBroker(val brokers: List[AccountBroker],
 
     def updateOrderStatus(order: Order, candle: Candle): Order = {
         val operations = Seq(
-            checkIfOrderWasFilled(_,_),
             takeProfitOrLossFromTallCandle(_,_),
             takeProfitFromShortCandle(_,_),
             takeLossFromShortCandle(_,_),
+            checkIfOrderWasFilled(_,_),
             fillNewMarketOrders(_,_),
             exitOrderAtEndOfDay(_,_),
             cancelPlannedOrderCandleOutside(_,_),
