@@ -127,7 +127,6 @@ class ChartRenderingService {
     const renderer = this.renderers.get(eventType)
     if (renderer) {
       renderer.setVisibility(visible)
-      console.debug(`ChartRenderingService: Set ${eventType} renderer visibility to ${visible}`)
     } else {
       console.warn(`ChartRenderingService: No renderer found for event type '${eventType}'`)
     }
@@ -182,8 +181,19 @@ class ChartRenderingService {
     const eventTypeCounts = new Map()
     
     events.forEach(event => {
-      const eventType = this.extractEventType(event)
+      let eventType = this.extractEventType(event)
       if (eventType) {
+        // Special handling for Order events: split into Order vs TrailingOrder
+        if (eventType === 'Order') {
+          const actualEvent = event.event || event
+          // New structure: Order fields may be flat on the event (trailStop instead of isTrailing)
+          // Legacy structure: order nested in sub-field (isTrailing)
+          const order = actualEvent.entryPrice !== undefined ? actualEvent : actualEvent.order
+          if (order && (order.trailStop === true || order.isTrailing === true)) {
+            eventType = 'TrailingOrder'
+          }
+        }
+        
         if (!grouped.has(eventType)) {
           grouped.set(eventType, [])
         }
@@ -227,6 +237,11 @@ class ChartRenderingService {
     // Check if event has candle property directly (alternative structure)
     if (actualEvent.candle) {
       return 'Candle'
+    }
+
+    // Check if event has Order fields directly (new flat Order structure)
+    if (actualEvent.entryPrice !== undefined && actualEvent.orderType !== undefined) {
+      return 'Order'
     }
 
     // Check if event has technicalAnalysis property

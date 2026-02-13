@@ -48,7 +48,6 @@ class EventBuffer {
       phase: event.phase || this.phase
     }
 
-    console.debug(`Adding event to ${this.phase} buffer:`, eventWithPhase)
     
     this.events.push(eventWithPhase)
     
@@ -108,7 +107,6 @@ class EventBuffer {
    * Clear all events from the buffer
    */
   clearEvents() {
-    console.log(`Clearing ${this.phase} event buffer (${this.events.length} events)`)
     this.events = []
     this.notifyListeners()
   }
@@ -119,7 +117,6 @@ class EventBuffer {
    */
   setNewYorkOffset(offset) {
     this.newYorkOffset = offset
-    console.debug(`${this.phase} buffer: Set New York offset to ${offset}ms`)
   }
 
   /**
@@ -142,8 +139,6 @@ class EventBuffer {
       return
     }
 
-    console.debug(`Replacing events from ${sourcePhase} phase in ${this.phase} buffer`)
-    console.debug(`Before: ${this.events.length} events`)
     
     // Filter out events from the source phase, keep events from other phases
     const eventsFromOtherPhases = this.events.filter(event => {
@@ -162,7 +157,6 @@ class EventBuffer {
     this.events = [...eventsFromOtherPhases, ...newEventsWithMetadata]
       .sort((a, b) => a.timestamp - b.timestamp)
     
-    console.debug(`After: ${this.events.length} events (${eventsFromOtherPhases.length} preserved, ${newEventsWithMetadata.length} new)`)
     
     this.notifyListeners()
   }
@@ -275,26 +269,36 @@ class EventBufferManager {
         ...event,
         phase: 'results'  // Mark as results event
       }
-      console.debug('Adding order event to results buffer:', resultsEvent)
       this.buffers.results.addEvent(resultsEvent)
     }
   }
 
   /**
    * Check if event is an Order event
+   * The Order is now published directly as the event payload with fields:
+   * entryPrice, orderType, status, contractType, etc.
    * @param {Object} event - Event to check
    * @returns {boolean}
    * @private
    */
   isOrderEvent(event) {
-    // Handle nested event structure (event.event.eventType)
     const actualEvent = event.event || event
     
-    return (actualEvent.eventType === 'Order' || 
+    // Check for eventType identifier
+    const hasOrderEventType = actualEvent.eventType === 'Order' || 
            (typeof actualEvent.eventType === 'object' && 
             actualEvent.eventType && 
-            Object.keys(actualEvent.eventType).includes('Order'))) &&
-           actualEvent.order !== null && actualEvent.order !== undefined
+            Object.keys(actualEvent.eventType).includes('Order'))
+    
+    // New structure: Order fields are directly on the event
+    const isOrderObject = actualEvent.entryPrice !== undefined && 
+                          actualEvent.orderType !== undefined && 
+                          actualEvent.status !== undefined
+    
+    // Legacy structure: order nested in sub-field
+    const hasNestedOrder = actualEvent.order !== null && actualEvent.order !== undefined
+    
+    return hasOrderEventType || isOrderObject || (hasOrderEventType && hasNestedOrder)
   }
 
   /**
@@ -307,7 +311,6 @@ class EventBufferManager {
     
     // Protect results buffer from being cleared - it should persist across resets
     if (normalizedPhase === 'results') {
-      console.debug('Skipping clear of results buffer - results should persist across resets')
       return
     }
     
@@ -326,7 +329,6 @@ class EventBufferManager {
       if (phase !== 'results') {
         buffer.clearEvents()
       } else {
-        console.debug('Preserving results buffer during clearAll()')
       }
     })
   }
@@ -335,7 +337,6 @@ class EventBufferManager {
    * Clear results buffer specifically (for manual reset of results)
    */
   clearResults() {
-    console.debug('Manually clearing results buffer')
     this.buffers.results.clearEvents()
   }
 

@@ -58,11 +58,9 @@ class DaytimeExtremePrimitive {
     // Pass chart context to the renderer
     this.view.setChartContext(param.chart, param.series)
     
-    console.debug('DaytimeExtremePrimitive attached to series')
   }
 
   detached() {
-    console.debug('DaytimeExtremePrimitive detached from series')
     this.chart = null
     this.series = null
     this.requestUpdate = null

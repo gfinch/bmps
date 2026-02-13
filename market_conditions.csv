@@ -1,0 +1,60 @@
+code,description
+# Market Condition Codes - Compound format for consolidation fade analysis
+# Format: PRIOR_TREND|RANGE_QUALITY|POSITION|MOMENTUM|VOLUME|TIME
+#
+# === PRIOR TREND (trend before consolidation) ===
+PRIOR_UP,Price was trending up before entering consolidation
+PRIOR_DOWN,Price was trending down before entering consolidation
+PRIOR_FLAT,No clear trend before consolidation
+PRIOR_UNKNOWN,Insufficient data to determine prior trend
+#
+# === RANGE QUALITY (how tight is the consolidation) ===
+VERY_TIGHT,Very narrow range - Bollinger squeeze or BB width < 5%
+TIGHT,Narrow consolidation range - BB width 5-10%
+NORMAL,Typical consolidation range - BB width 10-15%
+WIDE,Wide consolidation range - BB width > 15%
+RANGE_UNKNOWN,Insufficient volatility data
+#
+# === POSITION IN RANGE (where we're fading from) ===
+FADE_FROM_TOP,Short entry near top of range (BB %B > 80%)
+FADE_FROM_UPPER,Short entry in upper range (BB %B 60-80%)
+FADE_FROM_BOTTOM,Long entry near bottom of range (BB %B < 20%)
+FADE_FROM_LOWER,Long entry in lower range (BB %B 20-40%)
+FADE_FROM_MID,Entry near middle of range
+POS_UNKNOWN,Insufficient data to determine position
+#
+# === MOMENTUM STATE ===
+MOM_OVERSOLD,RSI < 30 - potential bounce setup
+MOM_OVERBOUGHT,RSI > 70 - potential reversal setup
+MOM_BEARISH,RSI 30-45 - leaning bearish
+MOM_NEUTRAL,RSI 45-55 - balanced momentum
+MOM_BULLISH,RSI 55-70 - leaning bullish
+MOM_UNKNOWN,Insufficient momentum data
+#
+# === VOLUME STATE (key for consolidation quality) ===
+VOL_DRYING_UP,"Volume declining + relative vol < 0.7 - classic consolidation, good for fade"
+VOL_DECLINING,Volume decreasing - typical consolidation behavior
+VOL_VERY_LOW,Relative volume < 0.5 - very quiet market
+VOL_NORMAL,Stable volume - no clear signal
+VOL_RISING,Volume increasing - watch for breakout
+VOL_HIGH,Relative volume > 1.3 - elevated activity
+VOL_SURGING,"Volume increasing + relative vol > 1.5 - BREAKOUT WARNING, fade risky"
+VOL_UNKNOWN,Insufficient volume data
+#
+# === TIME OF DAY ===
+MORNING,8:00-10:00 CT - First 2 hours of regular session
+MIDMORNING,10:00-12:00 CT - Often sees continuation moves
+LUNCH,12:00-14:00 CT - Often choppy/low volume
+AFTERNOON,14:00-15:00 CT - Often sees directional moves
+LATE,After 15:00 CT - End of day positioning
+TIME_UNKNOWN,Could not determine time
+#
+# === EXAMPLE COMPOUND CODES ===
+# PRIOR_UP|TIGHT|FADE_FROM_BOTTOM|MOM_OVERSOLD|VOL_DRYING_UP|MIDMORNING
+#   -> Uptrend pullback in tight range, oversold, volume declining = HIGH PROBABILITY LONG
+#
+# PRIOR_DOWN|WIDE|FADE_FROM_TOP|MOM_NEUTRAL|VOL_SURGING|AFTERNOON
+#   -> Downtrend, wide range, volume surging = DANGER - possible breakout, avoid fade
+#
+# PRIOR_FLAT|VERY_TIGHT|FADE_FROM_MID|MOM_NEUTRAL|VOL_VERY_LOW|LUNCH
+#   -> Lunch hour squeeze, low vol = typical consolidation but direction uncertain

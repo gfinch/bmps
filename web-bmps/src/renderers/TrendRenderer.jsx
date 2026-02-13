@@ -36,7 +36,6 @@ class TrendRenderer extends BaseRenderer {
   initialize() {
     if (this.shortTermSeries) return // Already initialized
     
-    console.debug('TrendRenderer: Starting initialization...')
     
     // Create moving average series on main chart
     this.shortTermSeries = this.chart.addSeries(LineSeries, {
@@ -54,40 +53,17 @@ class TrendRenderer extends BaseRenderer {
       lastValueVisible: false,
       priceLineVisible: false,
     })
-    
-    console.debug('TrendRenderer: Initialized with moving averages', {
-      shortTerm: !!this.shortTermSeries,
-      longTerm: !!this.longTermSeries
-    })
   }
 
   update(allEvents, currentTimestamp, newYorkOffset = 0) {
     if (!this.shortTermSeries) return
-    
-    console.debug('TrendRenderer: Update called', {
-      totalEvents: allEvents.length,
-      currentTimestamp,
-      newYorkOffset,
-      hasShortTermSeries: !!this.shortTermSeries
-    })
     
     // Filter for TechnicalAnalysis events
     const technicalAnalysisEvents = allEvents.filter(eventWrapper => {
       const actualEvent = eventWrapper.event || eventWrapper
       const eventType = extractEventType(actualEvent)
       const isTechnical = eventType === 'TechnicalAnalysis'
-      if (isTechnical) {
-        console.debug('TrendRenderer: Found TechnicalAnalysis event', {
-          eventType,
-          hasAnalysis: !!actualEvent.technicalAnalysis,
-          analysisKeys: actualEvent.technicalAnalysis ? Object.keys(actualEvent.technicalAnalysis) : []
-        })
-      }
       return isTechnical
-    })
-    
-    console.debug('TrendRenderer: Filtered events', {
-      technicalCount: technicalAnalysisEvents.length
     })
     
     if (technicalAnalysisEvents.length === 0) return
@@ -95,15 +71,9 @@ class TrendRenderer extends BaseRenderer {
     // Process technical analysis events
     const processedData = this.processTechnicalAnalysisEvents(technicalAnalysisEvents, newYorkOffset)
     
-    console.debug('TrendRenderer: Processed data', {
-      shortTermCount: processedData.shortTerm.length,
-      longTermCount: processedData.longTerm.length
-    })
-    
     // Update moving average series
     this.updateMovingAverages(processedData, newYorkOffset)
     
-    console.debug(`TrendRenderer: Updated with ${technicalAnalysisEvents.length} technical analysis events`)
   }
 
   /**
@@ -118,21 +88,10 @@ class TrendRenderer extends BaseRenderer {
     // Reset crossover markers for new data
     this.crossoverMarkers = []
     
-    console.debug('TrendRenderer: Processing events', {
-      eventCount: events.length,
-      firstEvent: events[0]
-    })
-    
     events.forEach((eventWrapper, index) => {
       const actualEvent = eventWrapper.event || eventWrapper
       // Handle both correct and typo versions
       const technicalAnalysis = actualEvent.technicalAnalysis || actualEvent.techncialAnalysis
-      
-      console.debug(`TrendRenderer: Event ${index}`, {
-        hasTechnicalAnalysis: !!technicalAnalysis,
-        trendAnalysisKeys: technicalAnalysis ? Object.keys(technicalAnalysis) : [],
-        trendAnalysisData: technicalAnalysis?.trendAnalysis
-      })
       
       if (!technicalAnalysis || !technicalAnalysis.trendAnalysis) return
       
@@ -140,7 +99,6 @@ class TrendRenderer extends BaseRenderer {
       const time = Math.floor((timestamp + newYorkOffset) / 1000)
       const trend = technicalAnalysis.trendAnalysis
       
-      console.debug(`TrendRenderer: Processing trend data for time ${time}`, trend)
       
       // Extract current MA values for crossover detection
       const currentMAs = {
@@ -180,11 +138,6 @@ class TrendRenderer extends BaseRenderer {
       const crossovers = this.detectCrossovers(currentMAs, timestamp)
       this.crossoverMarkers.push(...crossovers)
     })
-    
-    console.debug('TrendRenderer: Processed data results', {
-      shortTermCount: processedData.shortTerm.length,
-      longTermCount: processedData.longTerm.length
-    })
 
     // Sort all data by time
     Object.keys(processedData).forEach(key => {
@@ -201,36 +154,23 @@ class TrendRenderer extends BaseRenderer {
     // Store the offset for marker display
     this.currentNewYorkOffset = newYorkOffset
     
-    console.debug('TrendRenderer: Updating moving averages with data', {
-      shortTermCount: data.shortTerm.length,
-      longTermCount: data.longTerm.length
-    })
-    
     if (data.shortTerm.length > 0) {
       this.shortTermSeries.setData(data.shortTerm)
-      console.debug('TrendRenderer: Set Short Term data', data.shortTerm.length, 'points')
     }
     if (data.longTerm.length > 0) {
       this.longTermSeries.setData(data.longTerm)
-      console.debug('TrendRenderer: Set Long Term data', data.longTerm.length, 'points')
     }
     
     // Update crossover markers
     this.updateCrossoverMarkers()
-    
-    console.debug('TrendRenderer: Finished updating all moving averages and crossover markers', {
-      crossoverCount: this.crossoverMarkers.length
-    })
   }
 
   /**
    * Set visibility of the trend renderer
    */
   setVisibility(visible) {
-    console.debug(`TrendRenderer: setVisibility called with ${visible}`)
     
     if (!this.shortTermSeries) {
-      console.debug('TrendRenderer: No series found, cannot set visibility')
       return
     }
     
@@ -238,7 +178,6 @@ class TrendRenderer extends BaseRenderer {
     this.shortTermSeries.applyOptions({ visible })
     this.longTermSeries.applyOptions({ visible })
     
-    console.debug(`TrendRenderer: Visibility set to ${visible} for all series`)
   }
 
   /**
@@ -295,14 +234,6 @@ class TrendRenderer extends BaseRenderer {
           signal: 'bullish',
           adx: curr.adx || null // Include ADX value for trend strength evaluation
         })
-        console.debug('TrendRenderer: GOLDEN CROSS detected!', {
-          time: new Date(timestamp),
-          prevShort: prev.shortTerm,
-          prevLong: prev.longTerm,
-          currShort: curr.shortTerm,
-          currLong: curr.longTerm,
-          adx: curr.adx
-        })
       } else if (prev.shortTerm >= prev.longTerm && curr.shortTerm < curr.longTerm) {
         crossovers.push({
           type: 'death_cross',
@@ -311,14 +242,6 @@ class TrendRenderer extends BaseRenderer {
           price: curr.shortTerm,
           signal: 'bearish',
           adx: curr.adx || null // Include ADX value for trend strength evaluation
-        })
-        console.debug('TrendRenderer: DEATH CROSS detected!', {
-          time: new Date(timestamp),
-          prevShort: prev.shortTerm,
-          prevLong: prev.longTerm,
-          currShort: curr.shortTerm,
-          currLong: curr.longTerm,
-          adx: curr.adx
         })
       }
     }
@@ -350,16 +273,6 @@ class TrendRenderer extends BaseRenderer {
         markerColor = isBullish ? '#FBBF24' : '#000000' // Yellow for Golden Cross, Black for Death Cross
       }
       
-      console.debug('TrendRenderer: Creating crossover marker', {
-        type: crossover.type,
-        signal: crossover.signal,
-        adx: crossover.adx,
-        hasWeakTrend,
-        isStrongTrend,
-        markerColor,
-        time: new Date(crossover.timestamp)
-      })
-      
       return {
         time: Math.floor((crossover.timestamp + newYorkOffset) / 1000),
         position: isBullish ? 'belowBar' : 'aboveBar',
@@ -376,14 +289,12 @@ class TrendRenderer extends BaseRenderer {
    */
   updateCrossoverMarkers() {
     if (this.crossoverMarkers.length === 0) {
-      console.debug('TrendRenderer: No crossover markers to display')
       return
     }
 
     // Get the candlestick renderer to add our markers alongside swing point markers
     const candlestickRenderer = this.getCandlestickRenderer()
     if (!candlestickRenderer) {
-      console.debug('TrendRenderer: No candlestick renderer found for markers')
       return
     }
 
@@ -391,17 +302,6 @@ class TrendRenderer extends BaseRenderer {
     if (typeof candlestickRenderer.addAdditionalMarkers === 'function') {
       const markers = this.createCrossoverMarkers(this.crossoverMarkers, this.currentNewYorkOffset)
       candlestickRenderer.addAdditionalMarkers('crossover', markers)
-      console.debug(`TrendRenderer: Added ${markers.length} crossover markers via addAdditionalMarkers`)
-    } else {
-      // Fallback: Log the crossover events for now
-      console.debug('TrendRenderer: Crossover events detected (markers not yet supported):', 
-        this.crossoverMarkers.map(cross => ({
-          type: cross.type,
-          signal: cross.signal,
-          time: new Date(cross.timestamp),
-          description: cross.description
-        }))
-      )
     }
   }
 
@@ -417,7 +317,6 @@ class TrendRenderer extends BaseRenderer {
   }
 
   destroy() {
-    console.debug('TrendRenderer: Destroying renderer')
     
     // Remove main chart series
     if (this.shortTermSeries) {

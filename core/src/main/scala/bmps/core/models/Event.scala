@@ -27,7 +27,7 @@ case class Event(
     swingPoint: Option[SwingPoint] = None,
     planZone: Option[PlanZone] = None,
     daytimeExtreme: Option[DaytimeExtreme] = None,
-    order: Option[SerializableOrder] = None,
+    order: Option[Order] = None,
     tradingDirection: Option[Direction] = None,
     techncialAnalysis: Option[TechnicalAnalysis] = None
 )
@@ -37,7 +37,7 @@ object Event {
     def fromSwingPoint(swingPoint: SwingPoint): Event = Event(EventType.SwingPoint, swingPoint.timestamp, swingPoint = Some(swingPoint))
     def fromPlanZone(planZone: PlanZone): Event = Event(EventType.PlanZone, planZone.startTime, planZone = Some(planZone))
     def fromDaytimeExtreme(daytimeExtreme: DaytimeExtreme): Event = Event(EventType.DaytimeExtreme, daytimeExtreme.timestamp, daytimeExtreme = Some(daytimeExtreme))
-    def fromOrder(order: Order, riskPerTrade: Double): Event = Event(EventType.Order, order.timestamp, order = Some(SerializableOrder.fromOrder(order, riskPerTrade)))
+    def fromOrder(order: Order): Event = Event(EventType.Order, order.timestamp, order = Some(order))
     def fromTradeDirection(candle: Candle, tradingDirection: Option[Direction]) = Event(EventType.TradingDirection, candle.timestamp, tradingDirection = tradingDirection)
     def fromTechnicalAnalysis(technicalAnalysis: TechnicalAnalysis) = Event(EventType.TechnicalAnalysis, technicalAnalysis.timestamp, techncialAnalysis = Some(technicalAnalysis))
     def phaseComplete(timestamp: Long): Event = Event(EventType.PhaseComplete, timestamp)

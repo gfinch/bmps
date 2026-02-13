@@ -8,12 +8,9 @@ import java.util.concurrent.atomic.AtomicReference
 import scala.util.{Try, Success, Failure}
 import scala.concurrent.duration._
 import java.time.Duration
-import bmps.core.models.EntryType
 import bmps.core.models.OrderType
 import cats.instances.order
-
-case class PlannedOrder(entry: Float, stopLoss: Float, takeProfit: Float, 
-                        orderType: OrderType, contractId: String, contracts: Int, status: OrderStatus)
+import bmps.core.models.Order
 
 case class PlaceOsoResponse(orderId: Option[Long], oso1Id: Option[Long], oso2Id: Option[Long], 
                            failureReason: Option[String], failureText: Option[String])
@@ -36,6 +33,10 @@ case class ApiFill(id: Long, orderId: Long, contractId: Long, timestamp: String,
 case class ApiOrderVersion(id: Long, orderId: Long, orderQty: Int, orderType: String,
                           price: Option[Double], stopPrice: Option[Double])
 case class ApiContract(id: Long, name: String, contractMaturityId: Long)
+
+// OCO Order response
+case class PlaceOcoResponse(orderId: Option[Long], ocoId: Option[Long], 
+                           failureReason: Option[String], failureText: Option[String])
 
 // Authentication response models
 case class AccessTokenResponse(accessToken: String, userId: Long, expirationTime: String)
@@ -101,41 +102,129 @@ class TradovateBroker(
     }
 
     /**
-     * Place an OSO (Order Sends Order) bracket order
-     * Details: https://api.tradovate.com/#tag/Orders/operation/placeOSO
+     * Place an OCO (Order Cancels Order) order strategy
+     * If one order is filled, the other is cancelled
+     * Details: https://api.tradovate.com/#tag/Orders/operation/placeOCO
      */
-    def placeOrder(plannedOrder: PlannedOrder): PlaceOsoResponse = {
-        val action = if (plannedOrder.orderType == OrderType.Long) "Buy" else "Sell"
-        
-        // Determine opposite action for exit orders
+    def placeOCOOrder(order: Order): PlaceOcoResponse = {
+        val action = if (order.orderType == OrderType.Long) "Buy" else "Sell"
         val exitAction = if (action == "Buy") "Sell" else "Buy"
         
-        // Create bracket orders: bracket1 = take profit, bracket2 = stop loss
-        val takeProfitBracket = Json.obj(
-            "action" -> Json.fromString(exitAction),
-            "orderType" -> Json.fromString("Limit"),
-            "price" -> Json.fromDoubleOrNull(plannedOrder.takeProfit.toDouble)
-        )
+        // First order (e.g., take profit)
+        val orderType = if (order.status == OrderStatus.PlaceNow) "Market" else "Limit"
+        val price = if (order.status == OrderStatus.PlaceNow) None else Some(order.entryPrice)
         
-        val stopLossBracket = Json.obj(
+        // Other order (e.g., stop loss)
+        val otherOrderType = if (order.trailStop) "TrailingStop" else "Stop"
+        val other = Json.obj(
             "action" -> Json.fromString(exitAction),
-            "orderType" -> Json.fromString("Stop"),
-            "stopPrice" -> Json.fromDoubleOrNull(plannedOrder.stopLoss.toDouble)
+            "orderType" -> Json.fromString(otherOrderType),
+            "stopPrice" -> Json.fromDoubleOrNull(order.stopLoss)
         )
-
-        val orderType = if (plannedOrder.status == OrderStatus.PlaceNow) "Market" else "Limit"
-        val price = if (plannedOrder.status == OrderStatus.PlaceNow) None else Some(plannedOrder.entry.toDouble)
         
         val basePayload = Json.obj(
             "accountSpec" -> Json.fromString(accountSpec),
             "accountId" -> Json.fromLong(accountId),
             "action" -> Json.fromString(action),
-            "symbol" -> Json.fromString(plannedOrder.contractId),
-            "orderQty" -> Json.fromInt(plannedOrder.contracts),
+            "symbol" -> Json.fromString(order.contractId),
+            "orderQty" -> Json.fromInt(order.contracts),
+            "orderType" -> Json.fromString(orderType),
+            "isAutomated" -> Json.fromBoolean(true),
+            "other" -> other
+        )
+        
+        val payloadJson = price match {
+            case Some(p) => basePayload.deepMerge(Json.obj("price" -> Json.fromDoubleOrNull(p)))
+            case None => basePayload
+        }
+        
+        val payload = payloadJson.noSpaces
+
+        val request = buildRequest("POST", "/order/placeoco", Some(payload))
+        executeWithRetry(request, body => decode[PlaceOcoResponse](body).toTry)
+    }
+
+    /**
+     * Modify an existing order's parameters
+     * Details: https://api.tradovate.com/#tag/Orders/operation/modifyOrder
+     */
+    def modifyOrder(order: Order, orderId: Long): CommandResult = {
+        val orderType = order.status match {
+            case OrderStatus.PlaceNow => "Market"
+            case _ => if (order.entryPrice > 0) "Limit" else "Stop"
+        }
+        
+        val basePayload = Json.obj(
+            "orderId" -> Json.fromLong(orderId),
+            "orderQty" -> Json.fromInt(order.contracts),
+            "orderType" -> Json.fromString(orderType),
+            "isAutomated" -> Json.fromBoolean(true)
+        )
+        
+        // Add price fields based on order type
+        val withPrice = if (order.entryPrice > 0) {
+            basePayload.deepMerge(Json.obj("price" -> Json.fromDoubleOrNull(order.entryPrice)))
+        } else basePayload
+        
+        val withStopPrice = if (order.stopLoss > 0) {
+            withPrice.deepMerge(Json.obj("stopPrice" -> Json.fromDoubleOrNull(order.stopLoss)))
+        } else withPrice
+        
+        val payload = withStopPrice.noSpaces
+
+        val request = buildRequest("POST", "/order/modifyorder", Some(payload))
+        executeWithRetry(request, body => decode[CommandResult](body).toTry)
+    }
+
+    /**
+     * List all positions for the authenticated user
+     * Details: https://api.tradovate.com/#tag/Positions/operation/positionList
+     */
+    def listPositions(): List[ApiPosition] = {
+        val request = buildRequest("GET", "/position/list")
+        executeWithRetry(request, body => decode[List[ApiPosition]](body).toTry)
+    }
+
+    /**
+     * List all orders for the authenticated user
+     * Details: https://api.tradovate.com/#tag/Orders/operation/orderList
+     */
+    def listOrders(): List[ApiOrder] = {
+        val request = buildRequest("GET", "/order/list")
+        executeWithRetry(request, body => decode[List[ApiOrder]](body).toTry)
+    }
+
+    /**
+     * Place an OSO (Order Sends Order) bracket order
+     * Details: https://api.tradovate.com/#tag/Orders/operation/placeOSO
+     */
+    def placeOSOOrder(order: Order): PlaceOsoResponse = {
+        val action = if (order.orderType == OrderType.Long) "Buy" else "Sell"
+        
+        // Determine opposite action for exit orders
+        val exitAction = if (action == "Buy") "Sell" else "Buy"
+        
+        val stopLossBracket = {
+            val orderType = if (order.trailStop) "TrailingStop" else "Stop"
+            Json.obj(
+                "action" -> Json.fromString(exitAction),
+                "orderType" -> Json.fromString(orderType),
+                "stopPrice" -> Json.fromDoubleOrNull(order.stopLoss)
+            )
+        }
+
+        val orderType = if (order.status == OrderStatus.PlaceNow) "Market" else "Limit"
+        val price = if (order.status == OrderStatus.PlaceNow) None else Some(order.entryPrice)
+        
+        val basePayload = Json.obj(
+            "accountSpec" -> Json.fromString(accountSpec),
+            "accountId" -> Json.fromLong(accountId),
+            "action" -> Json.fromString(action),
+            "symbol" -> Json.fromString(order.contractId),
+            "orderQty" -> Json.fromInt(order.contracts),
             "orderType" -> Json.fromString(orderType),
             "isAutomated" -> Json.fromBoolean(true), // Required for algorithmic trading
-            "bracket1" -> takeProfitBracket,
-            "bracket2" -> stopLossBracket
+            "bracket1" -> stopLossBracket
         )
         
         val payloadJson = price match {

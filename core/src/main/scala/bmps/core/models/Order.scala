@@ -1,6 +1,12 @@
 package bmps.core.models
 
 import java.security.KeyStore.Entry
+import bmps.core.models.ContractType.ES
+import spire.syntax.truncatedDivision
+import breeze.numerics.round
+import bmps.core.models.OrderStatus._
+import cats.instances.order
+import io.circe.{Encoder, Decoder, Json, HCursor}
 
 sealed trait OrderStatus
 object OrderStatus {
@@ -25,201 +31,141 @@ object ContractType {
     case object MES extends ContractType
 }
 
-sealed trait EntryType
-object EntryType {
-    case object EngulfingOrderBlock extends EntryType
-    case object FairValueGapOrderBlock extends EntryType
-    case object InvertedFairValueGapOrderBlock extends EntryType
-    case object BreakerBlockOrderBlock extends EntryType
-    case object MarketStructureShiftOrderBlock extends EntryType
-    case object SupermanOrderBlock extends EntryType
-    case object JediOrderBlock extends EntryType
-    case object BouncingOrderBlock extends EntryType
-    case object MomentumOrderBlock extends EntryType
-    case object OverOrderBlock extends EntryType
-    case object TrendOrderBlock extends EntryType
-    case object ConsolidationFadeOrderBlock extends EntryType
-    case class Trendy(description: String) extends EntryType {
-        override def toString(): String = description
-    }
+case class EntryStrategy(description: String)
+
+trait ExitStrategy {
+    def adjustOrder(state: SystemState, order: Order): Seq[Order] = Seq(order)
 }
 
-object CancelReason {
-    final val FullCandleOutside: String = "A full candle fell outside the range of the order."
-    final val TenMinuteWickOutside: String = "More than ten minutes have passed and the candle wicked outside the order."
-    final val TenMinutesUnfilled: String = "The order has been unfilled for more than ten minutes."
-    final val EndOfDay: String = "Ten minutes until closing. All orders cancelled."
+object ExitStrategy {
+    implicit val encoder: Encoder[ExitStrategy] = Encoder.instance(_ => Json.Null)
 }
 
-case class Order(low: Float, 
-                    high: Float, 
-                    timestamp: Long, 
-                    orderType: OrderType,
-                    entryType: EntryType,
-                    contract: String, 
-                    profitCap: Option[Float] = None,
-                    status: OrderStatus = OrderStatus.Planned,
-                    profitMultiplier: Float = 2.0f,
-                    placedTimestamp: Option[Long] = None,
-                    filledTimestamp: Option[Long] = None,
-                    closeTimestamp: Option[Long] = None,
-                    cancelReason: Option[String] = None,
-                    accountId: Option[String] = None,
-                    closedAt: Option[Float] = None,
-                    riskMultiplier: Option[Float] = None) {
-
-    import OrderType._
-    import OrderStatus._
-
-    require(high > low, "High and Low of an order zone cannot be equal or inverted.")
-
-    final val DollarsPerMicro = 5.0 //Five dollars per point on micros (MES)
-
-    lazy val entryPoint = orderType match {
-        case Long => high
-        case Short => low
-    }
-
-    lazy val stopLoss = orderType match {
-        case Long => low
-        case Short => high
-    }
-
-    lazy val atRiskPoints = (high - low)
-    lazy val profitPoints = atRiskPoints * profitMultiplier
-
-    lazy val atRiskPerContract = atRiskPoints * DollarsPerMicro 
-    lazy val potentialPerContract = profitPoints * DollarsPerMicro
-
-    lazy val takeProfit = profitCap.getOrElse(orderType match {
-        case Long => high + profitPoints
-        case Short => low - profitPoints
-    })
-
-    lazy val isActive = (status == OrderStatus.Placed || status == OrderStatus.PlaceNow || status == OrderStatus.Filled)
-    lazy val direction: Direction = if (orderType == OrderType.Long) Direction.Up else Direction.Down
-
-    lazy val isProfitOrLoss = (status == OrderStatus.Profit || status == OrderStatus.Loss)
-    lazy val exitPrice = closedAt.getOrElse {
-        status match {
-            case OrderStatus.Profit => takeProfit
-            case OrderStatus.Loss   => stopLoss
-            case _ => throw new IllegalStateException("Order not closed")
-        }
-    }
-
-    lazy val realizedR: Float = {
-        val unclamped = orderType match {
-            case OrderType.Long  => (exitPrice - entryPoint) / atRiskPoints
-            case OrderType.Short => (entryPoint - exitPrice) / atRiskPoints
-        }
-
-        math.max(-1.2f, math.min(unclamped, profitMultiplier + 0.2f))
-    }
-}
-
-case class SerializableOrder(low: Float, 
-                             high: Float, 
-                             timestamp: Long, 
-                             orderType: OrderType,
-                             entryType: EntryType, 
-                             status: OrderStatus,
-                             profitMultiplier: Double,
-                             placedTimestamp: Option[Long],
-                             filledTimestamp: Option[Long],
-                             closeTimestamp: Option[Long],
-                             entryPoint: Double,
-                             stopLoss: Double,
-                             takeProfit: Double,
-                             contract: String,
-                             contracts: Int,
-                             atRisk: Double,
-                             potential: Double,
-                             cancelReason: Option[String]
-                     )
-
-object Order {
-    def fromCandle(candle: Candle, orderType: OrderType, entryType: EntryType, timestamp: Long, contract: String) = {
-        Order(candle.low, candle.high, timestamp, orderType, entryType, contract)
-    }
-
-    def fromGapCandles(firstCandle: Candle, secondCandle: Candle, orderType: OrderType, entryType: EntryType, timestamp: Long, contract: String) = {
-        orderType match {
-            case OrderType.Short => Order(firstCandle.high, secondCandle.high, timestamp, orderType, entryType, contract)
-            case OrderType.Long => Order(secondCandle.low, firstCandle.low, timestamp, orderType, entryType, contract)
-        }        
-    }
-}
-
-trait DetermineContracts{
-    final val mesContractCutoff = 10
-
-    protected def determineContracts(order: Order, riskPerTrade: Double, riskMultiplier: Float): (String, Int) = {
-        require(order.atRiskPerContract > 0, "atRiskPerContract must be positive")
-        require(riskPerTrade > 0, "riskPerTrade must be positive")
-        require(riskMultiplier > 0, "riskMultiplier must be positive")
-        val finalRiskPerTrade = riskPerTrade * riskMultiplier
-        val mesContracts: Int = Math.floor(finalRiskPerTrade / order.atRiskPerContract).toInt
-
-        val (contractType, contracts) = if (mesContracts >= mesContractCutoff) {
-            (ContractType.ES, Math.round(mesContracts.toDouble / 10.0).toInt)
-        } else (ContractType.MES, mesContracts)
-
-        val contract = contractType match {
-            case ContractType.ES => order.contract
-            case ContractType.MES => "M" + order.contract
-        }
-
-        (contract, contracts)
-    }
-}
-
-object SerializableOrder extends DetermineContracts {
+object Prices {
     final val MicroDollarsPerPoint = 5.0
     final val MiniDollarsPerPoint = 50.0
     final val FeePerESContract = 2.88 * 2
     final val FeePerMESContract = 0.95 * 2
+}
 
-    def fromOrder(order: Order, riskPerTrade: Double): SerializableOrder = {
-        val riskMultiplier = order.riskMultiplier.getOrElse(1.0f)
-        val (contract, contracts) = determineContracts(order, riskPerTrade, riskMultiplier)
-        val (atRisk, potential) = {
-            val takeProfit = order.closedAt.getOrElse(order.takeProfit)
-            val stopLoss = order.closedAt.getOrElse(order.stopLoss)
-            val profitPoints = math.abs(takeProfit - order.entryPoint)
-            val lossPoints = math.abs(stopLoss - order.entryPoint)
-            if (contract.startsWith("M")) {
-                val rawLoss = lossPoints * MicroDollarsPerPoint * contracts
-                val rawProfit = profitPoints * MicroDollarsPerPoint * contracts
-                val fees = FeePerMESContract * contracts
-                (rawLoss + fees, rawProfit - fees)
-            } else {
-                val rawLoss = lossPoints * MiniDollarsPerPoint * contracts
-                val rawProfit = profitPoints * MiniDollarsPerPoint * contracts
-                val fees = FeePerMESContract * contracts
-                (rawLoss + fees, rawProfit - fees)
+case class Order (
+    timestamp: Long,
+    orderType: OrderType,
+    status: OrderStatus,
+    contractType: ContractType,
+    contract: String,
+    contracts: Int,
+    entryStrategy: EntryStrategy,
+    exitStrategy: ExitStrategy,
+    entryPrice: Double,
+    stopLoss: Double,
+    trailStop: Boolean = false,
+    takeProfit: Double,
+    exitPrice: Option[Double] = None,
+    placedTimestamp: Option[Long] = None,
+    filledTimestamp: Option[Long] = None,
+    closeTimestamp: Option[Long] = None
+) {
+    lazy val isActive = closeTimestamp.isEmpty
+    lazy val isProfitOrLoss = status match {
+        case OrderStatus.Profit => true
+        case OrderStatus.Loss => true
+        case _ => false
+    }
+
+    lazy val closedProfit: Option[Double] = {
+        if (!isProfitOrLoss) None
+        else {
+            val exit = exitPrice.getOrElse {
+                status match {
+                    case OrderStatus.Profit => takeProfit
+                    case OrderStatus.Loss => stopLoss
+                    case _ => entryPrice
+                }
             }
+            Some(calcProfit(exit))
+        }
+    }
+    lazy val cancelProfit = 0.0
+    lazy val contractId = contractType match {
+        case ContractType.ES => contract
+        case ContractType.MES => "M" + contract
+    }
+
+    def openProfit(candle: Candle): Option[Double] = {
+        if (isActive && status == OrderStatus.Filled) {
+            Some(calcProfit(candle.close)) 
+        } else None
+    }
+
+    def profit(candle: Candle): Double = closedProfit
+        .orElse(openProfit(candle))
+        .getOrElse(cancelProfit)
+
+    lazy val fees: Double = contractType match {
+        case ContractType.ES => Prices.FeePerESContract * contracts
+        case ContractType.MES => Prices.FeePerMESContract * contracts
+    }
+
+    lazy val tickAligned: Order = this.copy(
+        entryPrice = roundToTickSize(entryPrice),
+        stopLoss = roundToTickSize(stopLoss),
+        takeProfit = roundToTickSize(takeProfit)
+    )
+
+    lazy val timeAligned: Order = this.copy(
+        timestamp = snapToOneMinute(timestamp),
+        placedTimestamp = this.placedTimestamp.map(snapToOneMinute),
+        filledTimestamp = this.filledTimestamp.map(snapToOneMinute),
+        closeTimestamp = this.closeTimestamp.map(snapToOneMinute)
+    )
+
+    def log(candle: Candle): String = {
+        val currentProfit = profit(candle)
+        val profitIndicator = if (currentProfit == 0) "🟡"
+            else if (currentProfit > 0) "🟢"
+            else "🔴"
+
+        val profitIndication = s"$profitIndicator: $currentProfit"
+        val basic = s"$status $orderType - ➡️: $entryPrice"
+        val open = s"$basic  🟥: $stopLoss 🟩: $takeProfit $profitIndication"
+        val closed = s"$basic $profitIndication"
+        status match {
+            case Planned => basic
+            case PlaceNow => basic
+            case Placed => basic
+            case Filled => open
+            case Cancelled => closed
+            case Profit => closed
+            case Loss => closed
+        }
+    }
+
+    private def snapToOneMinute(ts: Long): Long = {
+        val oneMinuteMillis = 60000L
+        val remainder = ts % oneMinuteMillis
+        ts - remainder
+    }
+
+    private def roundToTickSize(price: Double, tickSize: Double = 0.25f): Double = {
+        // Use integer arithmetic to avoid floating point precision errors
+        // For 0.25 tick: multiply by 4, round, then divide by 4
+        val multiplier = (1.0 / tickSize).toInt
+        (math.round(price * multiplier) / multiplier)
+    }
+
+    private def calcProfit(exitPrice: Double) = {
+        val movement = orderType match {
+            case OrderType.Long => (exitPrice - entryPrice)
+            case OrderType.Short => (entryPrice - exitPrice)
         }
 
-        SerializableOrder(
-            low = order.low,
-            high = order.high,
-            timestamp = order.timestamp,
-            orderType = order.orderType,
-            entryType = order.entryType,
-            status = order.status,
-            profitMultiplier = order.profitMultiplier,
-            placedTimestamp = order.placedTimestamp,
-            filledTimestamp = order.filledTimestamp,
-            closeTimestamp = order.closeTimestamp,
-            entryPoint = order.entryPoint.toDouble,
-            stopLoss = order.stopLoss.toDouble,
-            takeProfit = order.takeProfit.toDouble,
-            contract = contract,
-            contracts = contracts,
-            atRisk = atRisk,
-            potential = potential,
-            cancelReason = order.cancelReason
-        )
+        val pricePerPoint = contractType match {
+            case ContractType.ES => Prices.MiniDollarsPerPoint
+            case ContractType.MES => Prices.MicroDollarsPerPoint
+        }
+
+        val gain = movement * pricePerPoint * contracts
+        gain - fees
     }
 }

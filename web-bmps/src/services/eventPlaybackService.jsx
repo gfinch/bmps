@@ -87,21 +87,17 @@ class EventPlaybackService {
       
       if (wasAtEnd && newEndTs > previousEndTs) {
         // We were at the end and new candles arrived - auto-follow to the new end
-        console.debug(`Auto-following ${phase}: was at ${previousEndTs}, moving to new end ${newEndTs}`)
         this.currentTimestamp[phase] = newEndTs
         this.publishVisibleEvents(phase)
       } else if (!wasAtEnd) {
-        console.debug(`${phase} not at end (current: ${currentTs}, previous end: ${previousEndTs}), not auto-following`)
       }
     } else if (currentTs === null) {
       // Initialize to first timestamp when buffer is first populated
       if (uniqueTimestamps.length > 0) {
         const firstTimestamp = uniqueTimestamps[0]
-        console.debug(`Initializing ${phase} to first timestamp: ${firstTimestamp}`)
         this.currentTimestamp[phase] = firstTimestamp
         this.publishVisibleEvents(phase)
       } else {
-        console.debug(`${phase} buffer updated but no events with valid timestamps`)
       }
     }
     
@@ -153,11 +149,9 @@ class EventPlaybackService {
     const uniqueTimestamps = this.getUniqueTimestamps(phase)
     
     if (uniqueTimestamps.length === 0) {
-      console.debug(`No events in ${phase} buffer to rewind to`)
       this.currentTimestamp[phase] = null
     } else {
       const firstTimestamp = uniqueTimestamps[0]
-      console.debug(`Rewinding ${phase} to first timestamp: ${firstTimestamp}`)
       this.currentTimestamp[phase] = firstTimestamp
     }
     
@@ -173,7 +167,6 @@ class EventPlaybackService {
     const currentTs = this.currentTimestamp[phase]
     
     if (uniqueTimestamps.length === 0) {
-      console.debug(`No events in ${phase} buffer to step backward`)
       return
     }
     
@@ -186,11 +179,9 @@ class EventPlaybackService {
     const currentIndex = uniqueTimestamps.findIndex(ts => ts === currentTs)
     if (currentIndex > 0) {
       const previousTimestamp = uniqueTimestamps[currentIndex - 1]
-      console.debug(`Stepping ${phase} backward to timestamp: ${previousTimestamp}`)
       this.currentTimestamp[phase] = previousTimestamp
       this.publishVisibleEvents(phase)
     } else {
-      console.debug(`${phase} already at first timestamp`)
     }
   }
 
@@ -203,7 +194,6 @@ class EventPlaybackService {
     const currentTs = this.currentTimestamp[phase]
     
     if (uniqueTimestamps.length === 0) {
-      console.debug(`No events in ${phase} buffer to step forward`)
       return
     }
     
@@ -216,11 +206,9 @@ class EventPlaybackService {
     const currentIndex = uniqueTimestamps.findIndex(ts => ts === currentTs)
     if (currentIndex < uniqueTimestamps.length - 1) {
       const nextTimestamp = uniqueTimestamps[currentIndex + 1]
-      console.debug(`Stepping ${phase} forward to timestamp: ${nextTimestamp}`)
       this.currentTimestamp[phase] = nextTimestamp
       this.publishVisibleEvents(phase)
     } else {
-      console.debug(`${phase} already at latest timestamp`)
     }
   }
 
@@ -232,11 +220,9 @@ class EventPlaybackService {
     const uniqueTimestamps = this.getUniqueTimestamps(phase)
     
     if (uniqueTimestamps.length === 0) {
-      console.debug(`No events in ${phase} buffer to fast forward to`)
       this.currentTimestamp[phase] = null
     } else {
       const latestTimestamp = uniqueTimestamps[uniqueTimestamps.length - 1]
-      console.debug(`Fast forwarding ${phase} to latest timestamp: ${latestTimestamp}`)
       this.currentTimestamp[phase] = latestTimestamp
     }
     
@@ -251,13 +237,11 @@ class EventPlaybackService {
    */
   play(phase) {
     if (this.isPlaying[phase]) {
-      console.debug(`${phase} playback already playing`)
       return
     }
     
     const uniqueTimestamps = this.getUniqueTimestamps(phase)
     if (uniqueTimestamps.length === 0) {
-      console.debug(`No events in ${phase} buffer to play`)
       return
     }
     
@@ -266,7 +250,6 @@ class EventPlaybackService {
       this.rewind(phase)
     }
     
-    console.debug(`Starting ${phase} playback at rate: ${this.playRate}ms`)
     this.isPlaying[phase] = true
     
     this.playIntervals[phase] = setInterval(() => {
@@ -278,7 +261,6 @@ class EventPlaybackService {
         this.stepForward(phase)
       } else {
         // Reached the end, stop playing
-        console.debug(`${phase} playback reached end, stopping`)
         this.pause(phase)
       }
     }, this.playRate)
@@ -295,7 +277,6 @@ class EventPlaybackService {
       return
     }
     
-    console.debug(`Pausing ${phase} playback`)
     this.isPlaying[phase] = false
     
     if (this.playIntervals[phase]) {
@@ -313,7 +294,6 @@ class EventPlaybackService {
   setPlayRate(ms) {
     const oldRate = this.playRate
     this.playRate = ms
-    console.debug(`Updated playback rate: ${oldRate}ms → ${ms}ms`)
     
     // Restart any active playback with new rate
     const playingPhases = Object.keys(this.isPlaying).filter(phase => this.isPlaying[phase])
@@ -345,7 +325,6 @@ class EventPlaybackService {
     const uniqueTimestamps = this.getUniqueTimestamps(phase)
     
     if (uniqueTimestamps.length === 0) {
-      console.debug(`No events in ${phase} buffer to jump to`)
       return
     }
 
@@ -361,7 +340,6 @@ class EventPlaybackService {
       }
     }
     
-    console.debug(`Jumping ${phase} to timestamp: ${closestTimestamp} (requested: ${timestamp})`)
     this.currentTimestamp[phase] = closestTimestamp
     this.publishVisibleEvents(phase)
   }
@@ -455,10 +433,8 @@ class EventPlaybackService {
     const visibleEvents = this.getVisibleEvents(phase)
     const currentTs = this.getCurrentTimestamp(phase)
     
-    console.debug(`Publishing ${visibleEvents.length} visible events for ${phase} at timestamp ${currentTs}`)
     // Log all visible events for debugging
     visibleEvents.forEach(event => {
-      console.debug(`[${phase}] Event:`, event)
     })
     
     // Notify all listeners of the change
@@ -509,7 +485,6 @@ class EventPlaybackService {
    * Reset playback state (used during application resets)
    */
   resetPlaybackState() {
-    console.debug('Resetting event playback service state')
     
     // Stop all playback first
     Object.keys(this.isPlaying).forEach(phase => {
@@ -537,7 +512,6 @@ class EventPlaybackService {
     // Notify listeners of the reset
     this.notifyListeners({ reset: true })
     
-    console.debug('Event playback service reset complete')
   }
 
   /**
@@ -559,7 +533,6 @@ class EventPlaybackService {
     // Clear listeners
     this.listeners.clear()
     
-    console.debug('Event playback service destroyed')
   }
 }
 

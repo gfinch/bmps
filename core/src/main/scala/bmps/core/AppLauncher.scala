@@ -28,17 +28,12 @@ import bmps.core.io.DualSource
 import bmps.core.utils.MarketCalendar
 import com.typesafe.config.Config
 import bmps.core.utils.MarketCalendar
-import bmps.core.services.OrderService
 import bmps.core.services.TechnicalAnalysisService
-import bmps.core.services.MLStrategyService
 import bmps.core.brokers.rest.InferenceBroker
 import okhttp3.OkHttpClient
 import bmps.core.io.CSVFileOrderSink
 import bmps.core.io.OrderSink
-import bmps.core.services.TechnicalAnalysisOrderService
-import bmps.core.services.ZoneTrendOrderService
-import bmps.core.services.AdaptiveMultiRegimeOrderService
-import bmps.core.services.ConsolidationFadeService
+import bmps.core.strategies.lifecycle.OrderManager
 
 object AppLauncher extends IOApp.Simple {
 
@@ -63,7 +58,7 @@ object AppLauncher extends IOApp.Simple {
       AccountBrokerFactory.buildAccountBroker(brokerType, brokerDetails)
     }
 
-    new LeadAccountBroker(brokers, riskPerTradeUI)
+    new LeadAccountBroker(brokers)
   }
 
   private def loadDataSources(): (DataSource, DataSource, DataSource) = {
@@ -121,17 +116,19 @@ object AppLauncher extends IOApp.Simple {
     baseRisk = config.getDouble("bmps.core.base-risk")
 
     technicalAnalysisService = new TechnicalAnalysisService()
-    techAnalysisOrderService = new TechnicalAnalysisOrderService(accountBalance)
-    zoneTrnedOrderService = new ZoneTrendOrderService(accountBalance)
-    consolidationFadeService = new ConsolidationFadeService(accountBalance, baseRisk, readOnly)
-    // adaptiveOrderService = new AdaptiveMultiRegimeOrderService(accountBalance)
-    orderService = new OrderService(technicalAnalysisService, techAnalysisOrderService, zoneTrnedOrderService, consolidationFadeService)
+    // techAnalysisOrderService = new TechnicalAnalysisOrderService(accountBalance)
+    // zoneTrnedOrderService = new ZoneTrendOrderService(accountBalance, baseRisk, readOnly)
+    // consolidationFadeService = new ConsolidationFadeService(accountBalance, baseRisk, readOnly)
+    // trendRiderEntryBlock = new TrendRiderEntryBlock(accountBalance, baseRisk, readOnly)
+    // orderService = new OrderService(technicalAnalysisService, techAnalysisOrderService, 
+    //   zoneTrnedOrderService, consolidationFadeService, trendRiderEntryBlock)
+    orderManager = new OrderManager(leadAccount)
 
     // populate with PhaseRunner instances, using configured AccountBrokers for TradingPhase
     runners: Map[SystemStatePhase, PhaseRunner] = Map(
       SystemStatePhase.Planning -> PlanningPhaseBuilder.build(planningSource),
       SystemStatePhase.Preparing -> PreparingPhaseBuilder.build(preparingSource),
-      SystemStatePhase.Trading -> TradingPhaseBuilder.build(leadAccount, tradingSource, orderService, orderSink)
+      SystemStatePhase.Trading -> TradingPhaseBuilder.build(tradingSource, orderManager, technicalAnalysisService, orderSink)
     )
 
     controller = new PhaseController(stateRef, eventStore, runners, sem)

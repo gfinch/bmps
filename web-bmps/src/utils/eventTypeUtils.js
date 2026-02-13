@@ -29,6 +29,11 @@ export function extractEventType(event) {
     return 'Candle'
   }
 
+  // Check if event has Order fields directly (new flat Order structure)
+  if (event.entryPrice !== undefined && event.orderType !== undefined) {
+    return 'Order'
+  }
+
   // Check if event has swingPoint property
   if (event.swingPoint) {
     return 'SwingPoint'

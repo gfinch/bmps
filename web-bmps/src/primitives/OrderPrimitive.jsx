@@ -78,11 +78,9 @@ class OrderPrimitive {
     // Pass chart context to the renderer
     this.view.setChartContext(param.chart, param.series)
     
-    console.debug('OrderPrimitive attached to series')
   }
 
   detached() {
-    console.debug('OrderPrimitive detached from series')
     this.chart = null
     this.series = null
     this.requestUpdate = null
@@ -136,22 +134,24 @@ class OrderPaneRenderer {
   }
 
   /**
-   * Convert entry type to abbreviated label
-   * @param {string|object} entryType - The entry type from the order (can be string or object with description)
-   * @returns {string} The abbreviated label or description
+   * Convert entry type/strategy to display label
+   * New Order uses entryStrategy: {description: "..."} 
+   * Legacy used entryType: {EngulfingOrderBlock: {}} or {Trendy: {description: "..."}}
+   * @param {string|object} entryType - The entry type/strategy from the order
+   * @returns {string} The label for display
    */
   getEntryTypeLabel(entryType) {
-    // If entryType has a Trendy property with description, use the description
-    if (entryType && typeof entryType === 'object' && entryType.Trendy?.description) {
-      return entryType.Trendy.description
-    }
-    
-    // If entryType is directly an object with a description, use it
+    // New structure: entryStrategy with description field
     if (entryType && typeof entryType === 'object' && entryType.description) {
       return entryType.description
     }
     
-    // Otherwise, convert string entry type to abbreviated label
+    // Legacy: entryType has a Trendy property with description
+    if (entryType && typeof entryType === 'object' && entryType.Trendy?.description) {
+      return entryType.Trendy.description
+    }
+    
+    // Legacy: convert string entry type to abbreviated label
     const entryTypeString = typeof entryType === 'string' ? entryType : ''
     const entryTypeMap = {
       'EngulfingOrderBlock': 'EOB',

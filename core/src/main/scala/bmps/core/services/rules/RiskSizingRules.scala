@@ -2,7 +2,6 @@ package bmps.core.services.rules
 
 import bmps.core.models.SystemState
 import bmps.core.models.Order
-import bmps.core.models.SerializableOrder
 import bmps.core.models.OrderStatus.Loss
 import bmps.core.models.OrderStatus.Profit
 import bmps.core.models.OrderStatus
@@ -52,6 +51,7 @@ trait RiskSizingRules {
 
     /** Modified version of original martingale with hard drawdown caps.
       * Target: Limit drawdown to $20k while maintaining high profit.
+      * @deprecated Use computeMakeupMultiplier instead - better risk/reward ratio
       */
     def computeRiskMultiplierKelly(state: SystemState, accountBalance: Double): Float = {
         val orders = state.recentOrders ++ state.orders.filter(_.isProfitOrLoss)
@@ -113,13 +113,7 @@ trait RiskSizingRules {
     }
 
     private def valueOfOrder(order: Order, riskPerTrade: Double): Double = {
-        require(order.isProfitOrLoss, "This order is not closed.")
-        val serializedOrder = SerializableOrder.fromOrder(order, riskPerTrade)
-        order.status match {
-            case Loss => serializedOrder.atRisk * -1
-            case Profit => serializedOrder.potential
-            case _ => throw new IllegalStateException(s"Unexpected order statue: ${order.status}")
-        }
+        order.closedProfit.getOrElse(throw new IllegalStateException("This order is not closed."))
     }
 }
 

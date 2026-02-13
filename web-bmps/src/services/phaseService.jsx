@@ -30,7 +30,6 @@ class PhaseService {
    * @param {PlanningConfig} config - Planning configuration
    */
   async initializePlanning(config) {
-    console.debug('Initializing planning phase with config:', config)
 
     try {
       this.isInitializing = true
@@ -52,7 +51,6 @@ class PhaseService {
       await this.startPhase('planning', config.tradingDate)
 
       this.isInitialized = true
-      console.debug('Planning initialization completed successfully')
 
     } catch (error) {
       console.error('Planning initialization failed:', error)
@@ -70,7 +68,6 @@ class PhaseService {
    * @private
    */
   async startPhase(phase, tradingDate) {
-    console.debug(`Starting ${phase} phase`, { tradingDate })
     
     this.currentPhase = phase
     this.isPolling = true
@@ -81,7 +78,6 @@ class PhaseService {
       const isToday = tradingDate === today
       
       if (isToday) {
-        console.debug(`Trading date is today - skipping startPhase API call, will only poll for existing events`)
       } else {
         // Call REST API to start phase (for historical dates)
         await restApiService.startPhase(phase, tradingDate)
@@ -106,11 +102,9 @@ class PhaseService {
             buffer.setNewYorkOffset(newYorkOffset)
           }
           
-          console.debug(`${phase} polling update: ${events.length} events, complete: ${isComplete}`)
         },
         () => {
           // On completion callback
-          console.debug(`${phase} phase completed`)
           this.handlePhaseComplete(phase, tradingDate)
         },
         (error) => {
@@ -119,7 +113,6 @@ class PhaseService {
         }
       )
       
-      console.debug(`${phase} phase started and polling initiated`)
     } catch (error) {
       this.isPolling = false
       console.error(`Failed to start ${phase} phase:`, error)
@@ -134,25 +127,21 @@ class PhaseService {
    * @private
    */
   async handlePhaseComplete(completedPhase, tradingDate) {
-    console.debug(`Handling completion of ${completedPhase} phase`)
     
     // Auto-progression logic
     if (completedPhase === 'planning') {
-      console.debug('Auto-starting preparing phase')
       try {
         await this.startPhase('preparing', tradingDate)
       } catch (error) {
         console.error('Failed to auto-start preparing phase:', error)
       }
     } else if (completedPhase === 'preparing') {
-      console.debug('Auto-starting trading phase')
       try {
         await this.startPhase('trading', tradingDate)
       } catch (error) {
         console.error('Failed to auto-start trading phase:', error)
       }
     } else if (completedPhase === 'trading') {
-      console.debug('All phases complete!')
       this.isPolling = false
     }
   }
@@ -161,7 +150,6 @@ class PhaseService {
    * Reset planning phase
    */
   resetPlanning() {
-    console.debug('Resetting planning phase')
     this.isInitialized = false
     this.isInitializing = false
     this.isPolling = false

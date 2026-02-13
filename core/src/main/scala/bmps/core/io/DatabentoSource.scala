@@ -136,7 +136,10 @@ class DatabentoSource(durations: Set[CandleDuration]) extends DataSource {
       fetchHistoricalCandles(schema, startMs, endMs)
     }
     
-    // Combine all IO[List[Candle]] into a single IO[List[Candle]] and sort by timestamp
+    // Combine all IO[List[Candle]] into a single IO[List[Candle]] and sort by endTime
+    // This is realistic: candles are delivered when they COMPLETE, not when they start.
+    // A 1m candle starting at 10:00:00 completes at 10:01:00, so it arrives after
+    // all the 1s candles from 10:00:00-10:00:59 have been delivered.
     Stream.eval {
       candleListsIO.foldLeft(IO.pure(List.empty[Candle])) { (accIO, candlesIO) =>
         for {

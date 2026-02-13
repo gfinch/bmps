@@ -60,9 +60,9 @@ object LiquidityZoneService {
     private def ensureAndUpdateHigh(state: SystemState, candle: Candle, market: Market): SystemState = {
         val newHigh = state.daytimeExtremes.find(e => e.extremeType == High && e.market == market).map { existingHigh =>
             if (candle.high > existingHigh.level) {
-                DaytimeExtreme(candle.high, High, existingHigh.timestamp, None, market)
+                DaytimeExtreme(candle.high.toFloat, High, existingHigh.timestamp, None, market)
             } else existingHigh
-        }.getOrElse(DaytimeExtreme(candle.high, High, candle.timestamp, None, market))
+        }.getOrElse(DaytimeExtreme(candle.high.toFloat, High, candle.timestamp, None, market))
 
         val newExtremes = state.daytimeExtremes.filterNot(e => e.extremeType == High && e.market == market) :+ newHigh
         state.copy(daytimeExtremes = newExtremes)
@@ -71,9 +71,9 @@ object LiquidityZoneService {
     private def ensureAndUpdateLow(state: SystemState, candle: Candle, market: Market): SystemState = {
         val newLow = state.daytimeExtremes.find(e => e.extremeType == Low && e.market == market).map { existingLow =>
             if (candle.low < existingLow.level) {
-                DaytimeExtreme(candle.low, Low, existingLow.timestamp, None, market)
+                DaytimeExtreme(candle.low.toFloat, Low, existingLow.timestamp, None, market)
             } else existingLow
-        }.getOrElse(DaytimeExtreme(candle.low, Low, candle.timestamp, None, market))
+        }.getOrElse(DaytimeExtreme(candle.low.toFloat, Low, candle.timestamp, None, market))
 
         val newExtremes = state.daytimeExtremes.filterNot(e => e.extremeType == Low && e.market == market) :+ newLow
         state.copy(daytimeExtremes = newExtremes)

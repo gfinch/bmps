@@ -183,7 +183,7 @@ trait SafetyRules {
         
         // Check if the most recent closed order was a loss
         val recentLoss = state.recentOrders
-            .filter(o => o.closedAt.isDefined && o.closeTimestamp.isDefined)
+            .filter(o => !o.isActive)
             .sortBy(_.closeTimestamp.get)
             .lastOption
             .exists { lastOrder =>

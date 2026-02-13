@@ -69,7 +69,6 @@ export default function PlanningChartPage() {
           try {
             clearEvents()
             await startPlanning({ tradingDate: navDate })
-            console.log('Auto-started planning for date:', navDate)
           } catch (err) {
             console.error('Failed to auto-start planning:', err)
           }
@@ -224,14 +223,12 @@ export default function PlanningChartPage() {
       // Update daytime extremes visibility
       chartServiceRef.current.setRendererVisibility('DaytimeExtreme', layerVisibility.daytimeExtremes)
       
-      console.log('Layer visibility updated:', layerVisibility)
     }
   }, [layerVisibility])
 
   // Event handlers using playback service
   const handlePlay = () => {
     playback.togglePlayPause()
-    console.log(`Playback ${playback.isPlaying ? 'paused' : 'playing'}`)
   }
 
   const handleStepBackward = () => {
@@ -240,7 +237,6 @@ export default function PlanningChartPage() {
       playback.pause()
     }
     playback.stepBackward()
-    console.log(`Stepped backward to timestamp: ${playback.currentTimestamp}`)
   }
 
   const handleStepForward = () => {
@@ -249,7 +245,6 @@ export default function PlanningChartPage() {
       playback.pause()
     }
     playback.stepForward()
-    console.log(`Stepped forward to timestamp: ${playback.currentTimestamp}`)
   }
 
   const handleRewind = () => {
@@ -258,7 +253,6 @@ export default function PlanningChartPage() {
       playback.pause()
     }
     playback.rewind()
-    console.log(`Rewound to timestamp: ${playback.currentTimestamp}`)
   }
 
   const handleFastForward = () => {
@@ -267,12 +261,10 @@ export default function PlanningChartPage() {
       playback.pause()
     }
     playback.fastForward()
-    console.log(`Fast forwarded to timestamp: ${playback.currentTimestamp}`)
   }
 
   const handleClipToolToggle = () => {
     setIsClipToolActive(!isClipToolActive)
-    console.log(`Clip tool ${!isClipToolActive ? 'activated' : 'deactivated'}`)
   }
 
   const handleStartPlanning = async () => {
@@ -282,7 +274,6 @@ export default function PlanningChartPage() {
       
       // Start planning with the selected trading date
       await startPlanning({ tradingDate })
-      console.log('Planning started successfully for date:', tradingDate)
     } catch (err) {
       console.error('Failed to start planning:', err)
       // Error is already handled by the hook
@@ -307,7 +298,6 @@ export default function PlanningChartPage() {
           // Convert back to UTC by subtracting the offset
           const utcTimestampMs = timestampMs - (playback.newYorkOffset || 0)
           playback.jumpToTimestamp(utcTimestampMs)
-          console.log(`Clipped to timestamp: ${utcTimestampMs} (chart time: ${timestampMs})`)
           
           // Center the chart view on the clicked timestamp
           // Calculate a logical range centered on the clicked point

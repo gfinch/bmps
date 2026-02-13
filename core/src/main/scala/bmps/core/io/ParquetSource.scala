@@ -44,9 +44,18 @@ class ParquetSource(durations: Set[CandleDuration]) extends DataSource {
       // Timestamps are stored as int64 UTC millis, so we can compare directly
       val whereClause = s"timestamp >= $startMs AND timestamp <= $endMs"
       
-      // Sort by timestamp first, then by timeframe (seconds before minutes before hours)
+      // Sort by endTime (timestamp + duration) for realistic ordering.
+      // Candles are delivered when they COMPLETE, not when they start.
+      // A 1m candle starting at 10:00:00 completes at 10:01:00, arriving after
+      // all the 1s candles from 10:00:00-10:00:59.
+      // When candles end at the same instant, smaller timeframes come first.
       val orderByClause = """
-        timestamp,
+        CASE timeframe
+          WHEN '1s' THEN timestamp + 1000
+          WHEN '1m' THEN timestamp + 60000
+          WHEN '1h' THEN timestamp + 3600000
+          ELSE timestamp
+        END,
         CASE timeframe
           WHEN '1s' THEN 1
           WHEN '1m' THEN 2

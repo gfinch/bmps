@@ -5,9 +5,11 @@ import cats.implicits._
 import java.time.LocalDate
 import bmps.core.api.storage.EventStore
 import bmps.core.brokers.{AccountBroker, LeadAccountBroker}
-import bmps.core.models.{Event, EventType, SystemStatePhase, SerializableOrder}
+import bmps.core.models.{Event, EventType, SystemStatePhase}
 import bmps.core.brokers.rest.OrderState
 import bmps.core.models.OrderStatus
+import bmps.core.models.Order
+import bmps.core.brokers.OrderReport
 
 case class DateProfitability(
   date: LocalDate,
@@ -48,7 +50,7 @@ class ReportService(
       case Some(broker) =>
         eventStore.getEvents(date, SystemStatePhase.Trading).map { case (events, _) =>
           val orders = extractOrdersFromEvents(events)
-          val report = broker.orderReport(orders)
+          val report = OrderReport.orderReport(orders)
           Some(report)
         }
     }
@@ -73,7 +75,7 @@ class ReportService(
             }
           }
           aggregatedOrders = allOrders.flatten
-          report = broker.orderReport(aggregatedOrders)
+          report = OrderReport.orderReport(aggregatedOrders)
         } yield {
           printScenarioWinLoss(report.orders)
           Some(report)
@@ -81,8 +83,8 @@ class ReportService(
     }
   }
 
-  private def printScenarioWinLoss(orders: List[SerializableOrder]): Unit = {
-    val stats = orders.groupBy(_.entryType).map { case (entryType, groupOrders) =>
+  private def printScenarioWinLoss(orders: List[Order]): Unit = {
+    val stats = orders.groupBy(_.entryStrategy).map { case (entryType, groupOrders) =>
       val wins = groupOrders.count(order => order.status == OrderStatus.Profit)
       val losses = groupOrders.count(order => order.status == OrderStatus.Loss)
       val total = wins + losses
@@ -101,7 +103,7 @@ class ReportService(
   ): IO[DateProfitability] = {
     eventStore.getEvents(date, SystemStatePhase.Trading).map { case (events, _) =>
       val orders = extractOrdersFromEvents(events)
-      val profitable = broker.isProfitable(orders)
+      val profitable = OrderReport.isProfitable(orders)
       DateProfitability(date, profitable)
     }
   }
@@ -115,7 +117,7 @@ class ReportService(
     }
   }
   
-  private def extractOrdersFromEvents(events: List[Event]): List[SerializableOrder] = {
+  private def extractOrdersFromEvents(events: List[Event]): List[Order] = {
     val orderEvents = events.filter(_.eventType == EventType.Order)
     val deduplicatedOrders = orderEvents
       .zipWithIndex

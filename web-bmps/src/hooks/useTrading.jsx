@@ -36,7 +36,6 @@ export function useTrading() {
       if (!isMounted.current) return
       
       const currentEvents = tradingBuffer.getEvents()
-      console.debug(`useTrading: Updated with ${currentEvents.length} events`)
       setEvents(currentEvents)
     }
     
@@ -50,7 +49,6 @@ export function useTrading() {
     return () => {
       isMounted.current = false
       tradingBuffer.removeListener(updateEvents)
-      console.debug('useTrading: Component unmounted')
     }
   }, [])
 
@@ -59,7 +57,6 @@ export function useTrading() {
    * @param {Object} config - Trading configuration (if any)
    */
   const startTrading = useCallback(async (config = {}) => {
-    console.debug('useTrading: Starting trading with config:', config)
     
     if (!isConnected) {
       const errorMsg = 'Cannot start trading: WebSocket not connected'
@@ -82,7 +79,6 @@ export function useTrading() {
         options: config
       }
       
-      console.debug('useTrading: Sending start command:', startCommand)
       websocketService.send(startCommand)
       
       // Small delay to ensure start command is processed
@@ -94,11 +90,9 @@ export function useTrading() {
         phase: 'trading'
       }
       
-      console.debug('useTrading: Sending subscribe command:', subscribeCommand)
       websocketService.send(subscribeCommand)
       
       setIsInitialized(true)
-      console.debug('useTrading: Trading started successfully')
       
     } catch (err) {
       console.error('useTrading: Failed to start trading:', err)
@@ -114,7 +108,6 @@ export function useTrading() {
    * Reset trading phase
    */
   const resetTrading = useCallback(() => {
-    console.debug('useTrading: Resetting trading')
     setError(null)
     setIsInitialized(false)
     setIsInitializing(false)
@@ -126,7 +119,6 @@ export function useTrading() {
    * Clear trading events
    */
   const clearEvents = useCallback(() => {
-    console.debug('useTrading: Clearing events')
     eventBufferManager.clearPhase('trading')
   }, [])
 
@@ -142,7 +134,6 @@ export function useTrading() {
     }
     
     try {
-      console.debug('useTrading: Sending trading command:', command)
       websocketService.send(command)
     } catch (err) {
       console.error('useTrading: Failed to send command:', err)

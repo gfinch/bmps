@@ -29,7 +29,6 @@ class PlanZoneRenderer extends BaseRenderer {
     // Attach to the candlestick series (assumes it exists)
     if (this.chart.candlestickSeries) {
       this.chart.candlestickSeries.attachPrimitive(this.primitive)
-      console.debug('PlanZoneRenderer initialized and attached to candlestick series')
     } else {
       console.warn('PlanZoneRenderer: No candlestick series found to attach primitive')
     }
@@ -37,7 +36,6 @@ class PlanZoneRenderer extends BaseRenderer {
 
   update(events, currentTimestamp = null, newYorkOffset = 0) {
     if (!this.primitive) {
-      console.debug('PlanZoneRenderer: Primitive not initialized, skipping update')
       return
     }
 
@@ -48,17 +46,14 @@ class PlanZoneRenderer extends BaseRenderer {
     // If not visible, pass empty zones to hide all plan zones
     if (!this.visible) {
       this.primitive.updateZones([])
-      console.debug('PlanZoneRenderer: Hidden, updating with empty zones')
       return
     }
 
-    console.debug(`PlanZoneRenderer: Updating with ${events.length} events`)
 
     // Filter and deduplicate events
     const validEvents = events.filter(event => this.isValidEvent(event))
     const deduplicatedEvents = this.deduplicateByStartTime(validEvents)
     
-    console.debug(`PlanZoneRenderer: After deduplication: ${deduplicatedEvents.length} events`)
 
     // Transform events into zone data, passing the offset
     this.planZones = deduplicatedEvents.map(event => this.transformEventToZoneData(event, newYorkOffset))
@@ -67,10 +62,8 @@ class PlanZoneRenderer extends BaseRenderer {
     let zonesToDisplay = this.planZones
     if (this.options.showOnlyActive) {
       zonesToDisplay = this.planZones.filter(zone => zone.endTime === null)
-      console.debug(`PlanZoneRenderer: Filtering for active zones only. Total: ${this.planZones.length}, Active: ${zonesToDisplay.length}`)
     }
 
-    console.debug(`PlanZoneRenderer: Displaying ${zonesToDisplay.length} zones`)
 
     // Update the primitive with zone data
     this.primitive.updateZones(zonesToDisplay)
@@ -123,7 +116,6 @@ class PlanZoneRenderer extends BaseRenderer {
            planZone.planZoneType // Should have a planZoneType object
 
     if (!isValid) {
-      console.debug('PlanZoneRenderer: Invalid event filtered out:', actualEvent)
     }
 
     return isValid
@@ -164,7 +156,6 @@ class PlanZoneRenderer extends BaseRenderer {
       label: this.generateLabel(planZone, zoneType)
     }
 
-    console.debug('Transformed event to zone data:', zoneData)
     return zoneData
   }
 
@@ -181,7 +172,6 @@ class PlanZoneRenderer extends BaseRenderer {
   }
 
   destroy() {
-    console.debug('PlanZoneRenderer: Destroying renderer')
     
     if (this.primitive && this.chart.candlestickSeries) {
       this.chart.candlestickSeries.detachPrimitive(this.primitive)

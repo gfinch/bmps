@@ -205,7 +205,6 @@ class CandlestickRenderer extends BaseRenderer {
   addAdditionalMarkers(sourceId, markers) {
     this.additionalMarkers.set(sourceId, markers)
     this.updateAllMarkers()
-    console.debug(`CandlestickRenderer: Added ${markers.length} markers from ${sourceId}`)
   }
 
   /**
@@ -216,7 +215,6 @@ class CandlestickRenderer extends BaseRenderer {
     if (this.additionalMarkers.has(sourceId)) {
       this.additionalMarkers.delete(sourceId)
       this.updateAllMarkers()
-      console.debug(`CandlestickRenderer: Removed markers from ${sourceId}`)
     }
   }
 
@@ -243,7 +241,6 @@ class CandlestickRenderer extends BaseRenderer {
     allMarkers.sort((a, b) => a.time - b.time)
 
     this.markersPlugin.setMarkers(allMarkers)
-    console.debug(`CandlestickRenderer: Updated ${allMarkers.length} total markers`)
   }
 
   destroy() {

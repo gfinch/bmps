@@ -41,11 +41,9 @@ class TechnicalAnalysisRenderer extends BaseRenderer {
     this.trendVisible = true
     this.keltnerVisible = true
     
-    console.log('TechnicalAnalysisRenderer: Created coordinator with sub-renderers')
   }
 
   initialize() {
-    console.log('TechnicalAnalysisRenderer: Initializing coordinator and sub-renderers')
     this.trendRenderer.initialize()
     this.keltnerRenderer.initialize()
   }
@@ -58,21 +56,17 @@ class TechnicalAnalysisRenderer extends BaseRenderer {
       return
     }
 
-    console.log(`TechnicalAnalysisRenderer: Processing ${events.length} TechnicalAnalysis events`)
     
     // Since we're registered for TechnicalAnalysis, all events should already be relevant
     // Just pass them directly to sub-renderers with all parameters
-    console.log(`TechnicalAnalysisRenderer: Delegating ${events.length} events to sub-renderers`)
     
     // Delegate to trend renderer if visible
     if (this.trendVisible) {
-      console.log('TechnicalAnalysisRenderer: Updating trend renderer')
       this.trendRenderer.update(events, currentTimestamp, newYorkOffset)
     }
     
     // Delegate to Keltner renderer if visible
     if (this.keltnerVisible) {
-      console.log('TechnicalAnalysisRenderer: Updating Keltner renderer')
       this.keltnerRenderer.update(events, currentTimestamp, newYorkOffset)
     }
   }
@@ -81,7 +75,6 @@ class TechnicalAnalysisRenderer extends BaseRenderer {
    * Set visibility for specific sub-renderer or all
    */
   setVisibility(visible, subRenderer = null) {
-    console.log(`TechnicalAnalysisRenderer: Setting visibility to ${visible}${subRenderer ? ` for ${subRenderer}` : ' for all'}`)
     
     if (subRenderer === 'trend' || !subRenderer) {
       this.trendVisible = visible
@@ -109,7 +102,6 @@ class TechnicalAnalysisRenderer extends BaseRenderer {
    * Clear all rendered elements from sub-renderers
    */
   clear() {
-    console.log('TechnicalAnalysisRenderer: Clearing all sub-renderers')
     this.trendRenderer.clear()
     this.keltnerRenderer.clear()
   }
@@ -118,7 +110,6 @@ class TechnicalAnalysisRenderer extends BaseRenderer {
    * Destroy all sub-renderers
    */
   destroy() {
-    console.log('TechnicalAnalysisRenderer: Destroying coordinator and sub-renderers')
     this.trendRenderer.destroy()
     this.keltnerRenderer.destroy()
   }

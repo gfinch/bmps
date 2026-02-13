@@ -55,7 +55,6 @@ class ADXRenderer extends BaseRenderer {
   initialize() {
     if (this.adxSeries) return // Already initialized
     
-    console.debug('ADXRenderer: Starting initialization...')
     
     // Create ADX line series
     this.adxSeries = this.chart.addSeries(LineSeries, {
@@ -133,24 +132,10 @@ class ADXRenderer extends BaseRenderer {
         priceLineVisible: true,
       })
     }
-    
-    console.debug('ADXRenderer: Initialized successfully', {
-      hasADX: !!this.adxSeries,
-      hasRSI: !!this.rsiSeries,
-      hasIRSI: !!this.iRsiSeries,
-      hasTrendStrength: !!this.trendStrengthSeries,
-      hasThresholds: this.options.showThresholds
-    })
   }
 
   update(allEvents, currentTimestamp, newYorkOffset = 0) {
     if (!this.adxSeries) return
-    
-    console.debug('ADXRenderer: Update called', {
-      totalEvents: allEvents.length,
-      currentTimestamp,
-      newYorkOffset
-    })
     
     // Filter for TechnicalAnalysis events
     const technicalAnalysisEvents = allEvents.filter(eventWrapper => {
@@ -159,48 +144,29 @@ class ADXRenderer extends BaseRenderer {
       return eventType === 'TechnicalAnalysis'
     })
     
-    console.debug('ADXRenderer: Filtered events', {
-      technicalCount: technicalAnalysisEvents.length
-    })
-    
     if (technicalAnalysisEvents.length === 0) return
     
     // Process technical analysis events
     const processedData = this.processIndicatorEvents(technicalAnalysisEvents, newYorkOffset)
     
-    console.debug('ADXRenderer: Processed indicator data', {
-      adxCount: processedData.adx.length,
-      rsiCount: processedData.rsi.length,
-      iRsiCount: processedData.iRsi.length,
-      trendStrengthCount: processedData.trendStrength.length,
-      sampleADX: processedData.adx.slice(0, 3),
-      sampleRSI: processedData.rsi.slice(0, 3),
-      sampleIRSI: processedData.iRsi.slice(0, 3),
-      sampleTrendStrength: processedData.trendStrength.slice(0, 3)
-    })
-    
     // Update ADX series
     if (processedData.adx.length > 0) {
       this.adxSeries.setData(processedData.adx)
-      console.debug('ADXRenderer: Set ADX data', processedData.adx.length, 'points')
     }
     
     // Update RSI series
     if (processedData.rsi.length > 0) {
       this.rsiSeries.setData(processedData.rsi)
-      console.debug('ADXRenderer: Set RSI data', processedData.rsi.length, 'points')
     }
     
     // Update inverse RSI series
     if (processedData.iRsi.length > 0) {
       this.iRsiSeries.setData(processedData.iRsi)
-      console.debug('ADXRenderer: Set iRSI data', processedData.iRsi.length, 'points')
     }
     
     // Update Trend Strength series
     if (processedData.trendStrength.length > 0) {
       this.trendStrengthSeries.setData(processedData.trendStrength)
-      console.debug('ADXRenderer: Set Trend Strength data', processedData.trendStrength.length, 'points')
     }
     
     // Update threshold lines with flat data across the time range
@@ -209,7 +175,6 @@ class ADXRenderer extends BaseRenderer {
       this.updateThresholdLines(allData)
     }
     
-    console.debug(`ADXRenderer: Updated with ${technicalAnalysisEvents.length} technical analysis events`)
   }
 
   /**
@@ -224,17 +189,12 @@ class ADXRenderer extends BaseRenderer {
     // Array to store all event data for trend strength calculation
     const allEventData = []
     
-    console.debug('ADXRenderer: Processing events for ADX and RSI', {
-      eventCount: events.length
-    })
-    
     events.forEach((eventWrapper, index) => {
       const actualEvent = eventWrapper.event || eventWrapper
       // Handle both correct and typo versions
       const technicalAnalysis = actualEvent.technicalAnalysis || actualEvent.techncialAnalysis
       
       if (!technicalAnalysis) {
-        console.debug(`ADXRenderer: Event ${index} missing technical analysis`)
         return
       }
       
@@ -254,11 +214,6 @@ class ADXRenderer extends BaseRenderer {
       if (technicalAnalysis.trendAnalysis && technicalAnalysis.trendAnalysis.adx != null) {
         const adxValue = Number(technicalAnalysis.trendAnalysis.adx)
         adxData.push({ time, value: adxValue })
-        
-        console.debug(`ADXRenderer: ADX data point`, {
-          time: new Date(timestamp),
-          adx: adxValue
-        })
       }
       
       // Extract RSI from momentum analysis
@@ -269,17 +224,6 @@ class ADXRenderer extends BaseRenderer {
         // Calculate inverse RSI (100 - RSI)
         const iRsiValue = 100 - rsiValue
         iRsiData.push({ time, value: iRsiValue })
-        
-        console.debug(`ADXRenderer: RSI data point`, {
-          time: new Date(timestamp),
-          rsi: rsiValue,
-          iRsi: iRsiValue
-        })
-      } else {
-        console.debug(`ADXRenderer: Event ${index} missing momentum analysis or RSI data`, {
-          hasMomentumAnalysis: !!technicalAnalysis.momentumAnalysis,
-          momentumKeys: technicalAnalysis.momentumAnalysis ? Object.keys(technicalAnalysis.momentumAnalysis) : []
-        })
       }
     })
     
@@ -293,17 +237,6 @@ class ADXRenderer extends BaseRenderer {
     iRsiData.sort((a, b) => a.time - b.time)
     trendStrengthData.sort((a, b) => a.time - b.time)
     
-    console.debug('ADXRenderer: Processed indicator data results', {
-      adxPoints: adxData.length,
-      rsiPoints: rsiData.length,
-      iRsiPoints: iRsiData.length,
-      trendStrengthPoints: trendStrengthData.length,
-      timeRange: adxData.length > 0 ? {
-        start: new Date(adxData[0].time * 1000),
-        end: new Date(adxData[adxData.length - 1].time * 1000)
-      } : null
-    })
-    
     return { adx: adxData, rsi: rsiData, iRsi: iRsiData, trendStrength: trendStrengthData }
   }
 
@@ -315,7 +248,6 @@ class ADXRenderer extends BaseRenderer {
     const trendStrengthData = []
     
     if (allEventData.length < 5) {
-      console.debug('ADXRenderer: Not enough data for trend strength calculation')
       return []
     }
     
@@ -332,21 +264,8 @@ class ADXRenderer extends BaseRenderer {
           time: currentEvent.time,
           value: strength * 100 // Scale to 0-100
         })
-        
-        if (i % 50 === 0) { // Log every 50th calculation to avoid spam
-          console.debug('ADXRenderer: Calculated trend strength', {
-            time: new Date(currentEvent.timestamp),
-            strength: strength * 100,
-            windowSize: fivePoints.length
-          })
-        }
       }
     }
-    
-    console.debug('ADXRenderer: Trend strength calculation complete', {
-      totalPoints: trendStrengthData.length,
-      sampleValues: trendStrengthData.slice(0, 5)
-    })
     
     return trendStrengthData
   }
@@ -372,7 +291,6 @@ class ADXRenderer extends BaseRenderer {
     const keltner = lastPoint.volatilityAnalysis.keltnerChannels
     
     if (!keltner) {
-      console.debug('ADXRenderer: No Keltner channel data available')
       return 0.0
     }
     
@@ -387,20 +305,6 @@ class ADXRenderer extends BaseRenderer {
     const clampedStrength = Math.max(0.0, Math.min(1.0, rawStrength))
     
     // Occasional logging to debug
-    if (Math.random() < 0.01) { // Log ~1% of calculations
-      console.debug('ADXRenderer: Strength calculation details', {
-        time: new Date(lastPoint.timestamp),
-        shortTermMA: trend.shortTermMA,
-        longTermMA: trend.longTermMA,
-        maSpread: maSpread,
-        upperBand: keltner.upperBand,
-        lowerBand: keltner.lowerBand,
-        channelWidth: channelWidth,
-        rawStrength: rawStrength,
-        clampedStrength: clampedStrength,
-        finalValue: clampedStrength * 100
-      })
-    }
     
     return clampedStrength
   }
@@ -419,7 +323,6 @@ class ADXRenderer extends BaseRenderer {
     // If start and end are the same (only one data point), skip threshold updates
     // to avoid duplicate timestamps error
     if (startTime === endTime) {
-      console.debug('ADXRenderer: Skipping threshold update - only one data point')
       return
     }
     
@@ -462,24 +365,14 @@ class ADXRenderer extends BaseRenderer {
     if (this.rsiOversoldSeries) {
       this.rsiOversoldSeries.setData(rsiOversoldData)
     }
-    
-    console.debug('ADXRenderer: Updated threshold lines', {
-      strongTrend: this.options.strongTrendLine,
-      veryStrongTrend: this.options.veryStrongTrendLine,
-      rsiOverbought: this.options.rsiOverboughtLine,
-      rsiOversold: this.options.rsiOversoldLine,
-      timeRange: { start: startTime, end: endTime }
-    })
   }
 
   /**
    * Set visibility of the ADX renderer
    */
   setVisibility(visible) {
-    console.debug(`ADXRenderer: setVisibility called with ${visible}`)
     
     if (!this.adxSeries) {
-      console.debug('ADXRenderer: No series found, cannot set visibility')
       return
     }
     
@@ -503,7 +396,6 @@ class ADXRenderer extends BaseRenderer {
       this.rsiOversoldSeries.applyOptions({ visible })
     }
     
-    console.debug(`ADXRenderer: Visibility set to ${visible} for all indicators and thresholds`)
   }
 
   /**
@@ -515,7 +407,6 @@ class ADXRenderer extends BaseRenderer {
   }
 
   destroy() {
-    console.debug('ADXRenderer: Destroying renderer')
     
     // Remove ADX, RSI, inverse RSI, and Trend Strength series
     if (this.adxSeries) {

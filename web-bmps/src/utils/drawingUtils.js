@@ -160,8 +160,17 @@ export function getTimeCoordinate(timestamp, chart) {
     const timeInSeconds = Math.floor(timestamp / 1000)
     
     // Use the chart's time scale to convert to coordinate
-    const logicalIndex = chart.timeScale().timeToCoordinate(timeInSeconds)
-    return logicalIndex !== null && logicalIndex !== undefined ? logicalIndex : null
+    const timeScale = chart.timeScale()
+    let coord = timeScale.timeToCoordinate(timeInSeconds)
+    
+    // If exact time doesn't match a candle, snap to nearest minute boundary
+    // (1-minute candles use 60-second aligned timestamps)
+    if (coord === null || coord === undefined) {
+      const snappedTime = Math.round(timeInSeconds / 60) * 60
+      coord = timeScale.timeToCoordinate(snappedTime)
+    }
+    
+    return coord !== null && coord !== undefined ? coord : null
   } catch (error) {
     console.warn('Error converting time coordinate:', error)
     return null

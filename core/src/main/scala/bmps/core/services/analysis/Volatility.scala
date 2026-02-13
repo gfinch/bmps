@@ -45,6 +45,8 @@ case class KeltnerChannels(
     // Breakout signals
     def isUpperBreakout(price: Double): Boolean = price > upperBand
     def isLowerBreakout(price: Double): Boolean = price < lowerBand
+
+    lazy val actualWidth = math.abs(upperBand - lowerBand)
 }
 
 // Case class to hold Bollinger Bands results

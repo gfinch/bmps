@@ -39,10 +39,10 @@ object Direction {
 }
 
 case class Candle(
-    open: Float,
-    high: Float,
-    low: Float,
-    close: Float,
+    open: Double,
+    high: Double,
+    low: Double,
+    close: Double,
     volume: Long,
     timestamp: Long,
     duration: CandleDuration,
@@ -99,7 +99,7 @@ case class Candle(
 }
 
 case class SwingPoint(
-    level: Float,
+    level: Double,
     direction: Direction,
     timestamp: Long
 )
@@ -158,7 +158,7 @@ case class PlanZone(planZoneType: PlanZoneType, low: Float, high: Float, startTi
 object PlanZone {
     def apply(low: SwingPoint, high: SwingPoint, zoneType: PlanZoneType): PlanZone = {
         val minTimestamp = Math.min(low.timestamp, high.timestamp)
-        PlanZone(zoneType, low.level, high.level, minTimestamp)
+        PlanZone(zoneType, low.level.toFloat, high.level.toFloat, minTimestamp)
     }
 }
 

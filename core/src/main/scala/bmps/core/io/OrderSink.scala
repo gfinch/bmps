@@ -1,6 +1,7 @@
 package bmps.core.io
 
 import bmps.core.models._
+import bmps.core.strategies.exit.SimpleExitStrategy
 import java.time.LocalDate
 import java.nio.file.{Files, Paths, StandardOpenOption}
 import java.net.URI
@@ -34,7 +35,7 @@ trait OrderSink {
 class CSVFileOrderSink(filePath: String) extends OrderSink {
     //NOTE: filePath might be an s3 path (prefixed with s3://) or a local file path (prefixed with file://)
     
-    private val Header = "tradingDay,timestamp,contract,orderType,entryType,status,low,high,profitCap,profitMultiplier,placedTimestamp,filledTimestamp,closeTimestamp,cancelReason,accountId,closedAt"
+    private val Header = "tradingDay,timestamp,orderType,status,contractType,contract,contracts,entryStrategy,exitStrategy,entryPrice,stopLoss,trailStop,takeProfit,exitPrice,placedTimestamp,filledTimestamp,closeTimestamp"
 
     private lazy val s3Client = S3Client.create()
 
@@ -130,20 +131,21 @@ class CSVFileOrderSink(filePath: String) extends OrderSink {
         val fields = List(
             tradingDay.toString,
             order.timestamp.toString,
-            order.contract,
             order.orderType.toString,
-            order.entryType.toString,
             order.status.toString,
-            order.low.toString,
-            order.high.toString,
-            order.profitCap.map(_.toString).getOrElse(""),
-            order.profitMultiplier.toString,
+            order.contractType.toString,
+            order.contract,
+            order.contracts.toString,
+            order.entryStrategy.description,
+            order.exitStrategy.getClass.getSimpleName.stripSuffix("$"),
+            order.entryPrice.toString,
+            order.stopLoss.toString,
+            order.trailStop.toString,
+            order.takeProfit.toString,
+            order.exitPrice.map(_.toString).getOrElse(""),
             order.placedTimestamp.map(_.toString).getOrElse(""),
             order.filledTimestamp.map(_.toString).getOrElse(""),
-            order.closeTimestamp.map(_.toString).getOrElse(""),
-            order.cancelReason.getOrElse(""),
-            order.accountId.getOrElse(""),
-            order.closedAt.map(_.toString).getOrElse("")
+            order.closeTimestamp.map(_.toString).getOrElse("")
         )
         fields.map(escapeCsv).mkString(",")
     }
@@ -158,47 +160,48 @@ class CSVFileOrderSink(filePath: String) extends OrderSink {
 
     private def deserializeOrder(line: String): Option[Order] = {
         val parts = parseCsvLine(line)
-        if (parts.length < 16) return None
+        if (parts.length < 17) return None
 
         Try {
             // parts(0) is tradingDay, ignored for Order object itself
             val timestamp = parts(1).toLong
-            val contract = parts(2)
-            val orderType = parts(3) match {
+            val orderType = parts(2) match {
                 case "Long" => OrderType.Long
                 case "Short" => OrderType.Short
-                case _ => throw new IllegalArgumentException(s"Unknown order type: ${parts(3)}")
+                case _ => throw new IllegalArgumentException(s"Unknown order type: ${parts(2)}")
             }
-            val entryTypeStr = parts(4)
-            val entryType = parseEntryType(entryTypeStr)
-            val status = parseOrderStatus(parts(5))
-            val low = parts(6).toFloat
-            val high = parts(7).toFloat
-            val profitCap = if (parts(8).isEmpty) None else Some(parts(8).toFloat)
-            val profitMultiplier = parts(9).toFloat
-            val placedTimestamp = if (parts(10).isEmpty) None else Some(parts(10).toLong)
-            val filledTimestamp = if (parts(11).isEmpty) None else Some(parts(11).toLong)
-            val closeTimestamp = if (parts(12).isEmpty) None else Some(parts(12).toLong)
-            val cancelReason = if (parts(13).isEmpty) None else Some(parts(13))
-            val accountId = if (parts(14).isEmpty) None else Some(parts(14))
-            val closedAt = if (parts(15).isEmpty) None else Some(parts(15).toFloat)
+            val status = parseOrderStatus(parts(3))
+            val contractType = parseContractType(parts(4))
+            val contract = parts(5)
+            val contracts = parts(6).toInt
+            val entryStrategy = EntryStrategy(parts(7))
+            val exitStrategy = createExitStrategy(parts(8))
+            val entryPrice = parts(9).toDouble
+            val stopLoss = parts(10).toDouble
+            val trailStop = if (parts(11).isEmpty) false else parts(11).toBoolean
+            val takeProfit = parts(12).toDouble
+            val exitPrice = if (parts(13).isEmpty) None else Some(parts(13).toDouble)
+            val placedTimestamp = if (parts(14).isEmpty) None else Some(parts(14).toLong)
+            val filledTimestamp = if (parts(15).isEmpty) None else Some(parts(15).toLong)
+            val closeTimestamp = if (parts(16).isEmpty) None else Some(parts(16).toLong)
 
             Order(
-                low = low,
-                high = high,
                 timestamp = timestamp,
                 orderType = orderType,
-                entryType = entryType,
-                contract = contract,
-                profitCap = profitCap,
                 status = status,
-                profitMultiplier = profitMultiplier,
+                contractType = contractType,
+                contract = contract,
+                contracts = contracts,
+                entryStrategy = entryStrategy,
+                exitStrategy = exitStrategy,
+                entryPrice = entryPrice,
+                stopLoss = stopLoss,
+                trailStop = trailStop,
+                takeProfit = takeProfit,
+                exitPrice = exitPrice,
                 placedTimestamp = placedTimestamp,
                 filledTimestamp = filledTimestamp,
-                closeTimestamp = closeTimestamp,
-                cancelReason = cancelReason,
-                accountId = accountId,
-                closedAt = closedAt
+                closeTimestamp = closeTimestamp
             )
         }.toOption
     }
@@ -238,23 +241,6 @@ class CSVFileOrderSink(filePath: String) extends OrderSink {
         result.toList
     }
 
-    private def parseEntryType(s: String): EntryType = {
-        s match {
-            case "EngulfingOrderBlock" => EntryType.EngulfingOrderBlock
-            case "FairValueGapOrderBlock" => EntryType.FairValueGapOrderBlock
-            case "InvertedFairValueGapOrderBlock" => EntryType.InvertedFairValueGapOrderBlock
-            case "BreakerBlockOrderBlock" => EntryType.BreakerBlockOrderBlock
-            case "MarketStructureShiftOrderBlock" => EntryType.MarketStructureShiftOrderBlock
-            case "SupermanOrderBlock" => EntryType.SupermanOrderBlock
-            case "JediOrderBlock" => EntryType.JediOrderBlock
-            case "BouncingOrderBlock" => EntryType.BouncingOrderBlock
-            case "MomentumOrderBlock" => EntryType.MomentumOrderBlock
-            case "OverOrderBlock" => EntryType.OverOrderBlock
-            case "TrendOrderBlock" => EntryType.TrendOrderBlock
-            case other => EntryType.Trendy(other)
-        }
-    }
-
     private def parseOrderStatus(s: String): OrderStatus = {
         s match {
             case "Planned" => OrderStatus.Planned
@@ -265,6 +251,21 @@ class CSVFileOrderSink(filePath: String) extends OrderSink {
             case "Loss" => OrderStatus.Loss
             case "Cancelled" => OrderStatus.Cancelled
             case _ => OrderStatus.Planned
+        }
+    }
+
+    private def parseContractType(s: String): ContractType = {
+        s match {
+            case "ES" => ContractType.ES
+            case "MES" => ContractType.MES
+            case _ => throw new IllegalArgumentException(s"Unknown contract type: $s")
+        }
+    }
+
+    private def createExitStrategy(className: String): ExitStrategy = {
+        className match {
+            case "SimpleExitStrategy" => new SimpleExitStrategy()
+            case _ => new SimpleExitStrategy() // Default fallback
         }
     }
 }

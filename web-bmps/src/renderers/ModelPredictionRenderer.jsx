@@ -39,12 +39,10 @@ class ModelPredictionRenderer extends BaseRenderer {
       this.predictionsByHorizon.set(horizon, [])
     })
     
-    console.debug('ModelPredictionRenderer initialized with horizons:', this.horizons)
   }
 
   update(events, currentTimestamp = null, newYorkOffset = 0) {
     if (this.seriesByHorizon.size === 0) {
-      console.debug('ModelPredictionRenderer: Series not initialized, skipping update')
       return
     }
 
@@ -120,7 +118,6 @@ class ModelPredictionRenderer extends BaseRenderer {
       // Store updated predictions for this horizon
       this.predictionsByHorizon.set(horizon, sortedPredictions)
       
-      console.debug(`ModelPredictionRenderer: Updated ${horizon} with ${sortedPredictions.length} predictions`)
     })
   }
 
@@ -137,7 +134,6 @@ class ModelPredictionRenderer extends BaseRenderer {
       } else {
         series.applyOptions({ visible: false })
       }
-      console.debug(`ModelPredictionRenderer: Set ${horizon} visibility to ${visible}`)
     } else {
       console.warn(`ModelPredictionRenderer: No series found for horizon: ${horizon}`)
     }
@@ -174,7 +170,6 @@ class ModelPredictionRenderer extends BaseRenderer {
     if (series) {
       series.setData([])
       this.predictionsByHorizon.set(horizon, [])
-      console.debug(`ModelPredictionRenderer: Cleared predictions for ${horizon}`)
     }
   }
 
@@ -186,7 +181,6 @@ class ModelPredictionRenderer extends BaseRenderer {
       series.setData([])
       this.predictionsByHorizon.set(horizon, [])
     })
-    console.debug('ModelPredictionRenderer: Cleared all predictions')
   }
 
   destroy() {
@@ -194,7 +188,6 @@ class ModelPredictionRenderer extends BaseRenderer {
     this.seriesByHorizon.forEach((series, horizon) => {
       try {
         this.chart.removeSeries(series)
-        console.debug(`ModelPredictionRenderer: Removed series for ${horizon}`)
       } catch (error) {
         console.warn(`ModelPredictionRenderer: Error removing series for ${horizon}:`, error)
       }
@@ -204,7 +197,6 @@ class ModelPredictionRenderer extends BaseRenderer {
     this.seriesByHorizon.clear()
     this.predictionsByHorizon.clear()
     
-    console.debug('ModelPredictionRenderer: Destroyed')
   }
 }
 

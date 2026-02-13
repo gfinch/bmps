@@ -7,7 +7,6 @@ import bmps.core.services.analysis.Volume
 import bmps.core.services.analysis.Volatility
 import bmps.core.models.OrderType
 import bmps.core.models.Order
-import bmps.core.models.EntryType
 import bmps.core.brokers.rest.OrderState
 import bmps.core.models.OrderStatus
 import bmps.core.utils.MarketCalendar
@@ -71,78 +70,7 @@ class TechnicalAnalysisService(trend: Trend = new Trend(),
             recentVolatilityAnalysis = recentVolatilityAnalysis
         )
         
-        if (stateWithAnalysis.orders.exists(_.isActive) || TimestampUtils.isNearTradingClose(lastCandle.timestamp)) stateWithAnalysis
-        else buildOrders(stateWithAnalysis)
         stateWithAnalysis
-    }
-
-    private def buildOrders(state: SystemState): SystemState = {
-        if (state.recentMomentumAnalysis.length > 3 && !state.orders.exists(_.isActive)) {
-            createOrder(state).map { order => 
-                state.copy(orders = state.orders :+ order)
-            }.getOrElse(state)
-        } else state
-    }
-
-    private def createOrder(state: SystemState): Option[Order] = {
-        createMomentumOrder(state)
-        // .orElse(createTrendOrder(state))
-        // createTrendOrder((state))
-        // .orElse(createOverOrder(state))
-    }
-
-    private def createTrendOrder(state: SystemState): Option[Order] = {
-        val lastCandle = state.tradingCandles.last
-        val entryPrice = state.recentTrendAnalysis.last.shortTermMA.toFloat
-        val someAtrs = atrs(state, useAtrs)
-        ruleIsGoldenOrDeathCross(state) match {
-            case Some(OrderType.Long) =>
-                val low = entryPrice - someAtrs
-                Some(Order(low.toFloat, entryPrice, lastCandle.timestamp, OrderType.Long, 
-                      EntryType.TrendOrderBlock, state.contractSymbol.get))
-            case Some(OrderType.Short) => 
-                val high = entryPrice + someAtrs
-                Some(Order(entryPrice, high.toFloat, lastCandle.timestamp, OrderType.Short, 
-                      EntryType.TrendOrderBlock, state.contractSymbol.get))
-            case None => None
-        }
-    }
-
-    private def createOverOrder(state: SystemState): Option[Order] = {
-        val lastCandle = state.tradingCandles.last
-        val someAtrs = atrs(state, 2.0)
-        ruleIsMomentumOverboughtOrOversold(state) match {
-            case Some(OrderType.Long) =>
-                val entryPrice = lastCandle.low
-                val low = entryPrice - someAtrs
-                Some(Order(low.toFloat, entryPrice, lastCandle.timestamp, OrderType.Long, 
-                      EntryType.OverOrderBlock, state.contractSymbol.get))
-            case Some(OrderType.Short) => 
-                val entryPrice = lastCandle.high
-                val high = entryPrice + someAtrs
-                Some(Order(entryPrice, high.toFloat, lastCandle.timestamp, OrderType.Short, 
-                      EntryType.OverOrderBlock, state.contractSymbol.get))
-            case None => None
-        }
-    }
-
-    private def createMomentumOrder(state: SystemState): Option[Order] = {
-        val lastCandle = state.tradingCandles.last
-        val entryPrice = lastCandle.close
-        val someAtrs = atrs(state, useAtrs)
-        ruleHasStrongMomentum(state) match {
-            case Some(OrderType.Long) =>
-                val low = entryPrice - someAtrs
-                Some(Order(low.toFloat, entryPrice, lastCandle.timestamp, OrderType.Long, 
-                      EntryType.MomentumOrderBlock, state.contractSymbol.get, 
-                      status = OrderStatus.PlaceNow))
-            case Some(OrderType.Short) => 
-                val high = entryPrice + someAtrs
-                Some(Order(entryPrice, high.toFloat, lastCandle.timestamp, OrderType.Short, 
-                      EntryType.MomentumOrderBlock, state.contractSymbol.get,
-                      status = OrderStatus.PlaceNow))
-            case None => None
-        }
     }
 
     private def isGoldenCross(state: SystemState): Boolean = {

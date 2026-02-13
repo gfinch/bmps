@@ -27,7 +27,6 @@ class DaytimeExtremeRenderer extends BaseRenderer {
     // Attach to the candlestick series (assumes it exists)
     if (this.chart.candlestickSeries) {
       this.chart.candlestickSeries.attachPrimitive(this.primitive)
-      console.debug('DaytimeExtremeRenderer initialized and attached to candlestick series')
     } else {
       console.warn('DaytimeExtremeRenderer: No candlestick series found to attach primitive')
     }
@@ -35,7 +34,6 @@ class DaytimeExtremeRenderer extends BaseRenderer {
 
   update(events, currentTimestamp = null, newYorkOffset = 0) {
     if (!this.primitive) {
-      console.debug('DaytimeExtremeRenderer: Primitive not initialized, skipping update')
       return
     }
 
@@ -46,22 +44,18 @@ class DaytimeExtremeRenderer extends BaseRenderer {
     // If not visible, pass empty lines to hide all extreme lines
     if (!this.visible) {
       this.primitive.updateLines([])
-      console.debug('DaytimeExtremeRenderer: Hidden, updating with empty lines')
       return
     }
 
-    console.debug(`DaytimeExtremeRenderer: Updating with ${events.length} events`)
 
     // Filter and deduplicate events by description, keeping only the latest for each
     const validEvents = events.filter(event => this.isValidEvent(event))
     const deduplicatedEvents = this.deduplicateByDescription(validEvents)
     
-    console.debug(`DaytimeExtremeRenderer: After deduplication: ${deduplicatedEvents.length} events`)
 
     // Transform events into line data, passing the offset
     this.extremeLines = deduplicatedEvents.map(event => this.transformEventToLineData(event, newYorkOffset))
 
-    console.debug(`DaytimeExtremeRenderer: Transformed to ${this.extremeLines.length} lines:`, this.extremeLines)
 
     // Update the primitive with new line data
     this.primitive.updateLines(this.extremeLines)
@@ -132,7 +126,6 @@ class DaytimeExtremeRenderer extends BaseRenderer {
     const isValid = typeof extreme.level === 'number'
 
     if (!isValid) {
-      console.debug('DaytimeExtremeRenderer: Invalid event filtered out:', actualEvent)
     }
 
     return isValid
@@ -180,7 +173,6 @@ class DaytimeExtremeRenderer extends BaseRenderer {
       }
     }
 
-    console.debug('Transformed event to line data:', lineData)
     return lineData
   }
 
@@ -199,7 +191,6 @@ class DaytimeExtremeRenderer extends BaseRenderer {
   }
 
   destroy() {
-    console.debug('DaytimeExtremeRenderer: Destroying renderer')
     
     if (this.primitive && this.chart.candlestickSeries) {
       this.chart.candlestickSeries.detachPrimitive(this.primitive)

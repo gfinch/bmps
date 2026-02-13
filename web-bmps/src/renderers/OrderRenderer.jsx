@@ -36,7 +36,6 @@ class OrderRenderer extends BaseRenderer {
     // Attach to the candlestick series (assumes it exists)
     if (this.chart.candlestickSeries) {
       this.chart.candlestickSeries.attachPrimitive(this.primitive)
-      console.debug('OrderRenderer initialized and attached to candlestick series')
     } else {
       console.warn('OrderRenderer: No candlestick series found to attach primitive')
     }
@@ -44,7 +43,6 @@ class OrderRenderer extends BaseRenderer {
 
   update(events, currentTimestamp = null, newYorkOffset = 0) {
     if (!this.primitive) {
-      console.debug('OrderRenderer: Primitive not initialized, skipping update')
       return
     }
 
@@ -55,11 +53,9 @@ class OrderRenderer extends BaseRenderer {
     // If not visible, pass empty orders to hide all orders
     if (!this.visible) {
       this.primitive.updateOrders([])
-      console.debug('OrderRenderer: Hidden, updating with empty orders')
       return
     }
 
-    console.debug(`OrderRenderer: Updating with ${events.length} events`)
 
     // Filter events by validity and current playback timestamp
     const validEvents = events.filter(event => this.isValidEvent(event))
@@ -67,20 +63,34 @@ class OrderRenderer extends BaseRenderer {
       ? validEvents.filter(event => this.isOrderVisibleAtTime(event, currentTimestamp))
       : validEvents
     
-    console.debug(`OrderRenderer: After time filtering: ${timeFilteredEvents.length} events (currentTime: ${currentTimestamp})`)
     
     // Deduplicate the time-filtered events
     const deduplicatedEvents = this.deduplicateByTimestamp(timeFilteredEvents)
     
-    console.debug(`OrderRenderer: After deduplication: ${deduplicatedEvents.length} events`)
 
     // Transform events into order data, passing the offset
     this.orders = deduplicatedEvents.map(event => this.transformEventToOrderData(event, newYorkOffset))
 
-    console.debug(`OrderRenderer: Transformed to ${this.orders.length} orders:`, this.orders)
 
     // Update the primitive with new order data
     this.primitive.updateOrders(this.orders)
+  }
+
+  /**
+   * Extract the order data from an event, handling both new flat structure and legacy nested structure
+   * New: Order fields are directly on the event (entryPrice, orderType, status, etc.)
+   * Legacy: Order is nested in event.order sub-field
+   * @param {Object} event - Raw event
+   * @returns {Object} { actualEvent, order } where order contains the Order fields
+   */
+  extractOrder(event) {
+    const actualEvent = event.event || event
+    // New structure: Order fields are directly on the event
+    if (actualEvent.entryPrice !== undefined) {
+      return { actualEvent, order: actualEvent }
+    }
+    // Legacy structure: order nested in sub-field
+    return { actualEvent, order: actualEvent.order }
   }
 
   /**
@@ -91,8 +101,7 @@ class OrderRenderer extends BaseRenderer {
    * @returns {boolean} True if order should be visible
    */
   isOrderVisibleAtTime(event, currentTimestamp) {
-    const actualEvent = event.event || event
-    const order = actualEvent.order
+    const { actualEvent, order } = this.extractOrder(event)
     
     // List of all possible timestamps in an order
     const timestamps = [
@@ -104,14 +113,6 @@ class OrderRenderer extends BaseRenderer {
     
     // All timestamps must be <= currentTimestamp
     const isVisible = timestamps.every(ts => ts <= currentTimestamp)
-    
-    if (!isVisible) {
-      console.debug(`OrderRenderer: Filtering out order with future timestamp(s):`, {
-        orderTimestamps: timestamps,
-        currentTimestamp,
-        futureTimestamps: timestamps.filter(ts => ts > currentTimestamp)
-      })
-    }
     
     return isVisible
   }
@@ -125,7 +126,7 @@ class OrderRenderer extends BaseRenderer {
     const eventMap = new Map()
     
     events.forEach((event, index) => {
-      const actualEvent = event.event || event
+      const { actualEvent } = this.extractOrder(event)
       const timestamp = actualEvent.timestamp
       
       // If we haven't seen this timestamp before, or this event comes later in the buffer, store it
@@ -146,84 +147,80 @@ class OrderRenderer extends BaseRenderer {
   }
 
   isValidEvent(event) {
-    const actualEvent = event.event || event
+    const { actualEvent, order } = this.extractOrder(event)
     
-    // Check for Order event - either by eventType or by order property
+    // Check for Order event - either by eventType or by Order fields present
     const hasOrderEventType = actualEvent.eventType === 'Order' || 
                              (typeof actualEvent.eventType === 'object' && 
                               actualEvent.eventType && 
                               Object.keys(actualEvent.eventType).includes('Order'))
     
-    const hasOrderData = actualEvent.order !== null && actualEvent.order !== undefined
+    const hasOrderData = order !== null && order !== undefined
     
-    if (!hasOrderEventType && !hasOrderData) {
+    // Also detect by presence of Order-specific fields (new flat structure)
+    const hasOrderFields = actualEvent.entryPrice !== undefined && 
+                           actualEvent.orderType !== undefined
+    
+    if (!hasOrderEventType && !hasOrderData && !hasOrderFields) {
       return false
     }
 
-    // Validate required order properties - they are direct numeric values, not objects with .value
-    const order = actualEvent.order
+    // Validate required order properties
+    // New Order uses entryPrice (not entryPoint)
     const isValid = order &&
-           typeof order.entryPoint === 'number' &&
+           typeof order.entryPrice === 'number' &&
            typeof order.takeProfit === 'number' &&
            typeof order.stopLoss === 'number' &&
            typeof actualEvent.timestamp === 'number' &&
            order.status
 
-    if (!isValid) {
-      console.debug('OrderRenderer: Invalid event filtered out:', actualEvent)
-    }
-
     return isValid
   }
 
   transformEventToOrderData(event, newYorkOffset = 0) {
-    const actualEvent = event.event || event
-    const order = actualEvent.order
+    const { actualEvent, order } = this.extractOrder(event)
     
-    // Extract orderType from nested object structure like {Long: {}} or {Short: {}}
+    // Extract orderType - now a string ("Long"/"Short"), but handle legacy object format too
     let orderType = 'Long' // default
-    if (order.orderType) {
-      if (order.orderType.Long !== undefined) {
-        orderType = 'Long'
-      } else if (order.orderType.Short !== undefined) {
-        orderType = 'Short'
-      }
+    if (typeof order.orderType === 'string') {
+      orderType = order.orderType
+    } else if (order.orderType) {
+      if (order.orderType.Long !== undefined) orderType = 'Long'
+      else if (order.orderType.Short !== undefined) orderType = 'Short'
     }
     
-    // Extract status from nested object structure like {Loss: {}}, {Profit: {}}, etc.
+    // Extract status - now a string ("Planned"/"Filled"/etc.), but handle legacy object format too
     let status = 'Planned' // default
-    if (order.status) {
+    if (typeof order.status === 'string') {
+      status = order.status
+    } else if (order.status) {
       const statusKeys = Object.keys(order.status)
-      if (statusKeys.length > 0) {
-        status = statusKeys[0] // Take the first key (Loss, Profit, Planned, etc.)
-      }
+      if (statusKeys.length > 0) status = statusKeys[0]
     }
 
-    // Preserve the entire entryType object structure to keep nested data like Trendy.description
-    // The structure is like {EngulfingOrderBlock: {}}, {Trendy: {description: "..."}} etc.
-    let entryType = order.entryType || 'EngulfingOrderBlock' // default
+    // Extract entry strategy description (was entryType, now entryStrategy)
+    // New: entryStrategy is {description: "..."}
+    // Legacy: entryType was {EngulfingOrderBlock: {}} or {Trendy: {description: "..."}}
+    let entryType = order.entryStrategy || order.entryType || { description: 'Order' }
     
     const orderData = {
       id: `order-${actualEvent.timestamp}`,
-      entryPoint: order.entryPoint,      // Direct numeric value
-      takeProfit: order.takeProfit,      // Direct numeric value
-      stopLoss: order.stopLoss,          // Direct numeric value
+      entryPoint: order.entryPrice,      // Was entryPoint, now entryPrice
+      takeProfit: order.takeProfit,
+      stopLoss: order.stopLoss,
       timestamp: actualEvent.timestamp + newYorkOffset,
       placedTimestamp: order.placedTimestamp ? order.placedTimestamp + newYorkOffset : null,
       filledTimestamp: order.filledTimestamp ? order.filledTimestamp + newYorkOffset : null,
       closeTimestamp: order.closeTimestamp ? order.closeTimestamp + newYorkOffset : null,
       status: status,
       orderType: orderType,
-      entryType: entryType,
-      cancelReason: order.cancelReason || null
+      entryType: entryType
     }
 
-    console.debug('Transformed event to order data:', orderData)
     return orderData
   }
 
   destroy() {
-    console.debug('OrderRenderer: Destroying renderer')
     
     if (this.primitive && this.chart.candlestickSeries) {
       this.chart.candlestickSeries.detachPrimitive(this.primitive)

@@ -35,7 +35,6 @@ export function usePlanning() {
       if (!isMounted.current) return
       
       const currentEvents = planningBuffer.getEvents()
-      console.debug(`usePlanning: Updated with ${currentEvents.length} events`)
       setEvents(currentEvents)
     }
     
@@ -67,7 +66,6 @@ export function usePlanning() {
       isMounted.current = false
       planningBuffer.removeListener(updateEvents)
       clearInterval(statusInterval)
-      console.debug('usePlanning: Component unmounted')
     }
   }, [])
 
@@ -77,7 +75,6 @@ export function usePlanning() {
    * @param {string} config.tradingDate - Trading date (system uses 2 trading days automatically)
    */
   const startPlanning = useCallback(async (config) => {
-    console.debug('usePlanning: Starting planning with config:', config)
     
     if (!config) {
       setError('Configuration is required')
@@ -88,7 +85,6 @@ export function usePlanning() {
     
     try {
       await phaseService.initializePlanning(config)
-      console.debug('usePlanning: Planning started successfully')
     } catch (err) {
       console.error('usePlanning: Failed to start planning:', err)
       setError(err.message || 'Failed to start planning phase')
@@ -100,7 +96,6 @@ export function usePlanning() {
    * Reset planning phase
    */
   const resetPlanning = useCallback(() => {
-    console.debug('usePlanning: Resetting planning')
     setError(null)
     phaseService.resetPlanning()
   }, [])
@@ -109,7 +104,6 @@ export function usePlanning() {
    * Clear planning events
    */
   const clearEvents = useCallback(() => {
-    console.debug('usePlanning: Clearing events')
     eventBufferManager.clearPhase('planning')
   }, [])
 

@@ -5,7 +5,7 @@ import { DayPicker } from 'react-day-picker'
 import 'react-day-picker/dist/style.css'
 import { useEventPlayback } from '../hooks/useEventPlayback.jsx'
 import { ChartRenderingService } from '../services/chartRenderingService.jsx'
-import { CandlestickRenderer, DaytimeExtremeRenderer, PlanZoneRenderer, OrderRenderer, ModelPredictionRenderer, TechnicalAnalysisRenderer, ADXRenderer } from '../renderers/index.js'
+import { CandlestickRenderer, DaytimeExtremeRenderer, PlanZoneRenderer, OrderRenderer, TrailingOrderRenderer, ModelPredictionRenderer, TechnicalAnalysisRenderer, ADXRenderer } from '../renderers/index.js'
 import phaseService from '../services/phaseService.jsx'
 import restApiService from '../services/restApiService.jsx'
 
@@ -177,6 +177,16 @@ export default function TradingChartPage() {
         })
         chartServiceRef.current.addRenderer('Order', orderRenderer)
 
+        // Create trailing order renderer for orders with trailing stops
+        const trailingOrderRenderer = new TrailingOrderRenderer(chart, {
+          openColor: '#2563EB',           // Blue for open trailing orders
+          profitFill: 'rgba(34, 197, 94, 0.85)',   // Green, almost opaque
+          lossFill: 'rgba(239, 68, 68, 0.85)',     // Red, almost opaque
+          strokeColor: '#000000',          // Black stroke for triangles
+          lineWidth: 2
+        })
+        chartServiceRef.current.addRenderer('TrailingOrder', trailingOrderRenderer)
+
         // Create technical analysis renderer that coordinates trend and volatility analysis
         const technicalAnalysisRenderer = new TechnicalAnalysisRenderer(chart, {
           trend: {
@@ -252,7 +262,6 @@ export default function TradingChartPage() {
             indicatorChartRef.current = null
           } catch (error) {
             // Ignore errors if charts are already disposed
-            console.debug('Chart cleanup error (likely already disposed):', error)
           }
         }
       } catch (error) {
@@ -322,7 +331,6 @@ export default function TradingChartPage() {
         // Store chart reference
         indicatorChartRef.current = indicatorChart
 
-        console.log('Indicator chart initialized successfully with ADX')
 
       } catch (error) {
         console.error('Error creating indicator chart:', error)
@@ -345,7 +353,6 @@ export default function TradingChartPage() {
       const mainChart = chartRef.current
       const indicatorChart = indicatorChartRef.current
 
-      console.log('Setting up chart synchronization...')
 
       let syncingTimeScale = false
 
@@ -366,17 +373,9 @@ export default function TradingChartPage() {
             
             const offsetSeconds = mainStartTime - indicatorStartTime
             
-            console.log('Chart time offset calculated:', {
-              mainStart: new Date(mainStartTime * 1000),
-              indicatorStart: new Date(indicatorStartTime * 1000),
-              offsetSeconds,
-              offsetHours: offsetSeconds / 3600
-            })
-            
             return offsetSeconds
           }
         } catch (error) {
-          console.debug('Could not calculate time offset:', error)
         }
         return 0
       }
@@ -395,10 +394,8 @@ export default function TradingChartPage() {
             // Use the same time range on indicator chart
             // The charts should show the same actual time periods
             indicatorTimeScale.setVisibleRange(mainRange)
-            console.debug('Synced main to indicator using time range')
           }
         } catch (error) {
-          console.debug('Main to indicator sync failed:', error)
         }
         
         setTimeout(() => { syncingTimeScale = false }, 10)
@@ -416,10 +413,8 @@ export default function TradingChartPage() {
           if (indicatorRange) {
             // Use the same time range on main chart
             mainTimeScale.setVisibleRange(indicatorRange)
-            console.debug('Synced indicator to main using time range')
           }
         } catch (error) {
-          console.debug('Indicator to main sync failed:', error)
         }
         
         setTimeout(() => { syncingTimeScale = false }, 10)
@@ -432,7 +427,6 @@ export default function TradingChartPage() {
       mainTimeScale.subscribeVisibleLogicalRangeChange(handleMainTimeScaleChange)
       indicatorTimeScale.subscribeVisibleLogicalRangeChange(handleIndicatorTimeScaleChange)
 
-      console.log('Chart synchronization (time scale) setup complete')
 
       // Return cleanup function
       return () => {
@@ -449,9 +443,7 @@ export default function TradingChartPage() {
             indicatorTimeScale.unsubscribeVisibleLogicalRangeChange(handleIndicatorTimeScaleChange)
           }
           
-          console.log('Chart synchronization cleanup complete')
         } catch (error) {
-          console.debug('Synchronization cleanup error (likely already disposed):', error)
         }
       }
     }
@@ -508,13 +500,11 @@ export default function TradingChartPage() {
       indicatorChartServiceRef.current.setRendererVisibility('TechnicalAnalysis', layerVisibility.adx)
     }
 
-    console.log('Trading chart layer visibility updated:', layerVisibility)
   }, [layerVisibility])
 
   // Event handlers using playback service
   const handlePlay = () => {
     playback.togglePlayPause()
-    console.log(`Trading playback ${playback.isPlaying ? 'paused' : 'playing'}`)
   }
 
   const handleStepBackward = () => {
@@ -523,7 +513,6 @@ export default function TradingChartPage() {
       playback.pause()
     }
     playback.stepBackward()
-    console.log(`Trading stepped backward to timestamp: ${playback.currentTimestamp}`)
   }
 
   const handleStepForward = () => {
@@ -532,7 +521,6 @@ export default function TradingChartPage() {
       playback.pause()
     }
     playback.stepForward()
-    console.log(`Trading stepped forward to timestamp: ${playback.currentTimestamp}`)
   }
 
   const handleRewind = () => {
@@ -541,7 +529,6 @@ export default function TradingChartPage() {
       playback.pause()
     }
     playback.rewind()
-    console.log(`Trading rewound to timestamp: ${playback.currentTimestamp}`)
   }
 
   const handleFastForward = () => {
@@ -550,13 +537,11 @@ export default function TradingChartPage() {
       playback.pause()
     }
     playback.fastForward()
-    console.log(`Trading fast forwarded to timestamp: ${playback.currentTimestamp}`)
   }
 
   // Clip tool handlers
   const handleClipToolToggle = () => {
     setIsClipToolActive(!isClipToolActive)
-    console.log(`Trading clip tool ${!isClipToolActive ? 'activated' : 'deactivated'}`)
   }
 
   // Date selection handler
@@ -581,7 +566,6 @@ export default function TradingChartPage() {
             chartServiceRef.current = null
           }
         } catch (e) {
-          console.debug('Error destroying chart service:', e)
         }
         
         try {
@@ -590,7 +574,6 @@ export default function TradingChartPage() {
             indicatorChartServiceRef.current = null
           }
         } catch (e) {
-          console.debug('Error destroying indicator chart service:', e)
         }
         
         try {
@@ -599,7 +582,6 @@ export default function TradingChartPage() {
             chartRef.current = null
           }
         } catch (e) {
-          console.debug('Error removing chart:', e)
         }
         
         try {
@@ -608,7 +590,6 @@ export default function TradingChartPage() {
             indicatorChartRef.current = null
           }
         } catch (e) {
-          console.debug('Error removing indicator chart:', e)
         }
         
         // Reset flag after manual cleanup
@@ -631,18 +612,12 @@ export default function TradingChartPage() {
         setTimeout(() => {
           // Check if we have events before fast forwarding
           const status = phaseService.getStatus()
-          console.log('Phase status after load:', {
-            tradingEventCount: status.tradingEventCount,
-            planningEventCount: status.planningEventCount,
-            currentPhase: status.currentPhase
-          })
           
           // Fast forward to the end
           playback.fastForward()
           setIsLoadingDate(false)
         }, 500) // Wait briefly for charts to recreate
         
-        console.log(`Loaded all phases for ${dateString}, recreated charts, and fast-forwarding to end`)
       } catch (error) {
         console.error('Failed to load trading data for new date:', error)
         setIsLoadingDate(false)
@@ -718,7 +693,6 @@ export default function TradingChartPage() {
           // Convert back to UTC by subtracting the offset
           const utcTimestampMs = timestampMs - (playback.newYorkOffset || 0)
           playback.jumpToTimestamp(utcTimestampMs)
-          console.log(`Trading clipped to timestamp: ${utcTimestampMs} (chart time: ${timestampMs})`)
           
           // Center the chart view on the clicked timestamp
           // Calculate a logical range centered on the clicked point

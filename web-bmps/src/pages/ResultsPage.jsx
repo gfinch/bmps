@@ -8,6 +8,44 @@ import restApiService from '../services/restApiService.jsx'
 import phaseService from '../services/phaseService.jsx'
 
 /**
+ * Calculate profit/loss for an order using Order case class logic
+ * Matches the Scala Order.calcProfit method
+ */
+function calcOrderPnL(order) {
+  const status = typeof order.status === 'object' ? Object.keys(order.status)[0] : order.status
+  if (status !== 'Profit' && status !== 'Loss') return 0
+  
+  const orderType = typeof order.orderType === 'object' ? Object.keys(order.orderType)[0] : order.orderType
+  const entryPrice = order.entryPrice !== undefined ? order.entryPrice : order.entryPoint
+  const contracts = order.contracts || 1
+  
+  // Determine exit price
+  let exitPrice = order.exitPrice
+  if (exitPrice === null || exitPrice === undefined) {
+    exitPrice = status === 'Profit' ? order.takeProfit : order.stopLoss
+  }
+  
+  // Calculate movement based on order type
+  const movement = orderType === 'Long' 
+    ? (exitPrice - entryPrice) 
+    : (entryPrice - exitPrice)
+  
+  // Determine price per point and fees based on contract type
+  let contractType = 'MES'
+  if (typeof order.contractType === 'string') contractType = order.contractType
+  else if (typeof order.contractType === 'object' && order.contractType) {
+    if (order.contractType.ES !== undefined) contractType = 'ES'
+    else if (order.contractType.MES !== undefined) contractType = 'MES'
+  } else if (order.contract && !order.contract.startsWith('M')) contractType = 'ES'
+  
+  const pricePerPoint = contractType === 'ES' ? 50.0 : 5.0
+  const feePerContract = contractType === 'ES' ? (2.88 * 2) : (0.95 * 2)
+  const fees = feePerContract * contracts
+  
+  return (movement * pricePerPoint * contracts) - fees
+}
+
+/**
  * Converts a UTC timestamp (in milliseconds) to New York local time (DST-safe).
  * Returns a Unix timestamp in seconds (offset from UTC).
  */
@@ -235,8 +273,7 @@ export default function ResultsPage() {
       const pnlData = []
 
       completedOrders.forEach(order => {
-        const status = typeof order.status === 'object' ? Object.keys(order.status)[0] : order.status
-        const pnl = status === 'Profit' ? order.potential : -order.atRisk
+        const pnl = calcOrderPnL(order)
         cumulativePnL += pnl
         
         let time = utcMsToNewYorkSeconds(order.closeTimestamp)
@@ -395,7 +432,8 @@ export default function ResultsPage() {
     .map((order, index) => {
       const status = typeof order.status === 'object' ? Object.keys(order.status)[0] : order.status
       const orderType = typeof order.orderType === 'object' ? Object.keys(order.orderType)[0] : order.orderType
-      const pnl = status === 'Profit' ? order.potential : -order.atRisk
+      const pnl = calcOrderPnL(order)
+      const entryPrice = order.entryPrice !== undefined ? order.entryPrice : order.entryPoint
       const closeDate = new Date(order.closeTimestamp)
       
       // Format date as YYYY-MM-DD for navigation
@@ -410,7 +448,7 @@ export default function ResultsPage() {
         dateISO: dateISO,
         time: closeDate.toLocaleTimeString('en-US', { timeZone: 'America/New_York' }),
         type: orderType,
-        price: order.entryPoint,
+        price: entryPrice,
         contract: order.contract || 'N/A',
         quantity: order.contracts,
         pnl: pnl
@@ -707,7 +745,8 @@ export default function ResultsPage() {
                         {orderReport.winRates.map((winRate, index) => {
                           const totalTrades = winRate.winning + winRate.losing
                           const winRatePercentage = totalTrades > 0 ? Math.round((winRate.winning / totalTrades) * 100) : 0
-                          const orderTypeName = typeof winRate.orderType === 'object' ? Object.keys(winRate.orderType)[0] : winRate.orderType
+                          const orderTypeName = winRate.orderType?.description
+                            || (typeof winRate.orderType === 'string' ? winRate.orderType : 'Unknown')
                           return (
                             <div key={index} className="bg-gray-50 rounded-lg p-4">
                               <div className="flex items-center justify-between mb-2">

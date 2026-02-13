@@ -54,6 +54,21 @@ class ResultsService {
   }
 
   /**
+   * Extract the order data from an event, handling both flat and nested structure
+   * @param {Object} event - Raw event
+   * @returns {Object|null} Order data or null
+   */
+  extractOrderFromEvent(event) {
+    const actualEvent = event.event || event
+    // New structure: Order fields are directly on the event
+    if (actualEvent.entryPrice !== undefined) {
+      return actualEvent
+    }
+    // Legacy structure: order nested in sub-field
+    return actualEvent.order || null
+  }
+
+  /**
    * Deduplicate orders by timestamp, keeping the one with most timestamps
    * @param {Array} events - Order events from results buffer
    * @returns {Map} Map of timestamp -> order
@@ -64,7 +79,7 @@ class ResultsService {
     
     events.forEach(event => {
       const actualEvent = event.event || event
-      const order = actualEvent.order
+      const order = this.extractOrderFromEvent(event)
       const mainTimestamp = actualEvent.timestamp
       
       if (!order) return
@@ -166,6 +181,61 @@ class ResultsService {
   }
 
   /**
+   * Calculate profit/loss for a completed order using Order case class logic
+   * @param {Object} order - Order data
+   * @returns {number} Profit/loss in dollars
+   * @private
+   */
+  calcOrderPnL(order) {
+    const status = this.getOrderStatus(order.status)
+    if (status !== 'Profit' && status !== 'Loss') return 0
+    
+    const orderType = this.getOrderType(order.orderType)
+    const entryPrice = order.entryPrice !== undefined ? order.entryPrice : order.entryPoint
+    const contracts = order.contracts || 1
+    
+    // Determine exit price
+    let exitPrice = order.exitPrice
+    if (exitPrice === null || exitPrice === undefined) {
+      exitPrice = status === 'Profit' ? order.takeProfit : order.stopLoss
+    }
+    
+    // Calculate movement based on order type
+    const movement = orderType === 'Long' 
+      ? (exitPrice - entryPrice) 
+      : (entryPrice - exitPrice)
+    
+    // Determine price per point based on contract type
+    const contractType = this.getContractType(order)
+    const pricePerPoint = contractType === 'ES' ? 50.0 : 5.0
+    
+    // Calculate fees
+    const feePerContract = contractType === 'ES' ? (2.88 * 2) : (0.95 * 2)
+    const fees = feePerContract * contracts
+    
+    // gain = movement * pricePerPoint * contracts - fees
+    return (movement * pricePerPoint * contracts) - fees
+  }
+
+  /**
+   * Extract contract type from order
+   * @param {Object} order - Order data
+   * @returns {string} 'ES' or 'MES'
+   * @private
+   */
+  getContractType(order) {
+    // New Order has contractType field
+    if (typeof order.contractType === 'string') return order.contractType
+    if (typeof order.contractType === 'object' && order.contractType) {
+      if (order.contractType.ES !== undefined) return 'ES'
+      if (order.contractType.MES !== undefined) return 'MES'
+    }
+    // Fallback: infer from contract name
+    if (order.contract && order.contract.startsWith('M')) return 'MES'
+    return 'MES' // Default to MES
+  }
+
+  /**
    * Get current results (calculated on-demand)
    * @returns {Object} Current trading results
    */
@@ -183,13 +253,13 @@ class ResultsService {
     
     const totalWinAmount = completedOrders
       .filter(order => this.getOrderStatus(order.status) === 'Profit')
-      .reduce((sum, order) => sum + (order.potential || 0), 0)
+      .reduce((sum, order) => sum + Math.max(0, this.calcOrderPnL(order)), 0)
     
     const totalLossAmount = completedOrders
       .filter(order => this.getOrderStatus(order.status) === 'Loss')
-      .reduce((sum, order) => sum + (order.atRisk || 0), 0)
+      .reduce((sum, order) => sum + Math.abs(this.calcOrderPnL(order)), 0)
     
-    const totalPnL = totalWinAmount - totalLossAmount
+    const totalPnL = completedOrders.reduce((sum, order) => sum + this.calcOrderPnL(order), 0)
     
     // Create P&L history
     const pnlHistory = []
@@ -198,8 +268,7 @@ class ResultsService {
     completedOrders
       .sort((a, b) => a.eventTimestamp - b.eventTimestamp)
       .forEach(order => {
-        const status = this.getOrderStatus(order.status)
-        const pnl = status === 'Profit' ? (order.potential || 0) : -(order.atRisk || 0)
+        const pnl = this.calcOrderPnL(order)
         cumulativePnL += pnl
         
         pnlHistory.push({
@@ -274,23 +343,24 @@ class ResultsService {
       })
       .sort((a, b) => a.eventTimestamp - b.eventTimestamp)
       .map((order, index) => {
-        const status = this.getOrderStatus(order.status)
         const orderType = this.getOrderType(order.orderType)
+        const entryPrice = order.entryPrice !== undefined ? order.entryPrice : order.entryPoint
         
         return {
           id: index + 1,
           time: this.formatTimestamp(order.eventTimestamp),
           type: orderType,
-          price: order.entryPoint,
+          price: entryPrice,
           quantity: order.contracts || 1,
-          pnl: status === 'Profit' ? (order.potential || 0) : -(order.atRisk || 0),
+          pnl: this.calcOrderPnL(order),
           status: 'closed'
         }
       })
   }
 
   /**
-   * Extract status string from order status object
+   * Extract status string from order status
+   * New Order uses string status; legacy used object like {Profit: {}}
    * @param {Object|string} status - Order status
    * @returns {string}
    * @private
@@ -300,7 +370,7 @@ class ResultsService {
     if (typeof status === 'object' && status) {
       const statusKeys = Object.keys(status)
       if (statusKeys.length > 0) {
-        return statusKeys[0] // Take first key (Profit, Loss, Planned, etc.)
+        return statusKeys[0]
       }
     }
     return 'Unknown'
@@ -308,6 +378,7 @@ class ResultsService {
 
   /**
    * Extract order type string
+   * New Order uses string orderType; legacy used object like {Long: {}}
    * @param {Object|string} orderType - Order type
    * @returns {string}
    * @private

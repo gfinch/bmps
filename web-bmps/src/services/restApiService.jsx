@@ -33,7 +33,6 @@ class RestApiService {
    * @returns {Promise<void>}
    */
   async startPhase(phase, tradingDate) {
-    console.debug(`REST API: Starting phase ${phase}`, { tradingDate })
     
     const apiUrl = this.getApiUrl(tradingDate)
     const body = {
@@ -57,7 +56,6 @@ class RestApiService {
       }
 
       const result = await response.json()
-      console.debug(`REST API: Phase ${phase} start response:`, result)
       return result
     } catch (error) {
       console.error(`REST API: Failed to start phase ${phase}:`, error)
@@ -72,7 +70,6 @@ class RestApiService {
    * @returns {Promise<{events: Array, isComplete: boolean, newYorkOffset: number}>}
    */
   async pollPhaseEvents(phase, tradingDate) {
-    console.debug(`REST API: Polling events for ${phase} on ${tradingDate}`)
     
     const apiUrl = this.getApiUrl(tradingDate)
     try {
@@ -92,7 +89,6 @@ class RestApiService {
       }
 
       const result = await response.json()
-      console.debug(`REST API: Received ${result.events.length} events for ${phase}, complete: ${result.isComplete}, offset: ${result.newYorkOffset}`)
       
       return {
         events: result.events || [],
@@ -116,7 +112,6 @@ class RestApiService {
    * @returns {Function} Stop function to cancel polling
    */
   startPolling(phase, tradingDate, onEvents, onComplete = null, onError = null, interval = 1000) {
-    console.debug(`REST API: Starting polling for ${phase}`)
     
     // Stop any existing poll for this phase
     this.stopPolling(phase)
@@ -139,7 +134,6 @@ class RestApiService {
         
         // If complete, call completion callback and stop polling
         if (isComplete) {
-          console.debug(`REST API: Phase ${phase} completed`)
           if (onComplete) {
             onComplete()
           }
@@ -170,7 +164,6 @@ class RestApiService {
     
     // Store the stop function
     const stopFn = () => {
-      console.debug(`REST API: Stopping polling for ${phase}`)
       isRunning = false
       if (timeoutId) {
         clearTimeout(timeoutId)
@@ -199,7 +192,6 @@ class RestApiService {
    * Stop all active polling
    */
   stopAllPolling() {
-    console.debug('REST API: Stopping all polling')
     for (const [phase, stopFn] of this.activePolls.entries()) {
       stopFn()
     }
@@ -222,7 +214,6 @@ class RestApiService {
    * @returns {Promise<Object>} OrderReport with orders, winning, losing, averageWinDollars, averageLossDollars, maxDrawdownDollars
    */
   async getOrderReport(tradingDate, accountId = null) {
-    console.debug(`REST API: Getting order report for ${tradingDate}`, { accountId })
     
     const apiUrl = this.getApiUrl(tradingDate)
     try {
@@ -244,7 +235,6 @@ class RestApiService {
       }
 
       const report = await response.json()
-      console.debug(`REST API: Received order report with ${report.orders.length} orders`, report)
       return report
     } catch (error) {
       console.error(`REST API: Failed to get order report:`, error)
@@ -260,7 +250,6 @@ class RestApiService {
    *          - profitable: true = profitable, false = unprofitable, null = neutral/no trades
    */
   async getAvailableDates(tradingDate) {
-    console.debug('REST API: Getting available dates with profitability')
     
     const apiUrl = this.getApiUrl(tradingDate)
     try {
@@ -277,7 +266,6 @@ class RestApiService {
       }
 
       const result = await response.json()
-      console.debug(`REST API: Received ${result.dates.length} available dates with profitability`, result.dates)
       return result.dates
     } catch (error) {
       console.error('REST API: Failed to get available dates:', error)
@@ -292,7 +280,6 @@ class RestApiService {
    * @returns {Promise<Object>} OrderReport with orders, winning, losing, averageWinDollars, averageLossDollars, maxDrawdownDollars, totalPnL
    */
   async getAggregateOrderReport(tradingDate, accountId = null) {
-    console.debug('REST API: Getting aggregate order report', { accountId })
     
     const apiUrl = this.getApiUrl(tradingDate)
     try {
@@ -318,7 +305,6 @@ class RestApiService {
       }
 
       const report = await response.json()
-      console.debug(`REST API: Received aggregate order report with ${report.orders.length} orders`, report)
       return report
     } catch (error) {
       console.error(`REST API: Failed to get aggregate order report:`, error)
