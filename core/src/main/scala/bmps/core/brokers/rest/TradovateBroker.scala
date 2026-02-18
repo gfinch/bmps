@@ -115,7 +115,7 @@ class TradovateBroker(
         val price = if (order.status == OrderStatus.PlaceNow) None else Some(order.entryPrice)
         
         // Other order (e.g., stop loss)
-        val otherOrderType = if (order.trailStop) "TrailingStop" else "Stop"
+        val otherOrderType = if (order.trailStop.isDefined) "TrailingStop" else "Stop"
         val other = Json.obj(
             "action" -> Json.fromString(exitAction),
             "orderType" -> Json.fromString(otherOrderType),
@@ -205,7 +205,7 @@ class TradovateBroker(
         val exitAction = if (action == "Buy") "Sell" else "Buy"
         
         val stopLossBracket = {
-            val orderType = if (order.trailStop) "TrailingStop" else "Stop"
+            val orderType = if (order.trailStop.isDefined) "TrailingStop" else "Stop"
             Json.obj(
                 "action" -> Json.fromString(exitAction),
                 "orderType" -> Json.fromString(orderType),

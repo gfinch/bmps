@@ -50,7 +50,7 @@ class TradovateAccountBroker(val accountId: String,
         } else order
     }
     
-    def exitOrder(order: Order, candle: Candle): Order = {
+    def exitOrder(order: Order, candle: Candle, exitPrice: Double): Order = {
         if (candle.isLive) {
             doExitOrder(order, candle)
         } else order

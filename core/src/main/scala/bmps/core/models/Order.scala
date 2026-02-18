@@ -7,6 +7,7 @@ import breeze.numerics.round
 import bmps.core.models.OrderStatus._
 import cats.instances.order
 import io.circe.{Encoder, Decoder, Json, HCursor}
+import bmps.core.utils.TimestampUtils
 
 sealed trait OrderStatus
 object OrderStatus {
@@ -59,7 +60,7 @@ case class Order (
     exitStrategy: ExitStrategy,
     entryPrice: Double,
     stopLoss: Double,
-    trailStop: Boolean = false,
+    trailStop: Option[Double] = None,
     takeProfit: Double,
     exitPrice: Option[Double] = None,
     placedTimestamp: Option[Long] = None,
@@ -121,13 +122,14 @@ case class Order (
     )
 
     def log(candle: Candle): String = {
+        val timestamp = TimestampUtils.toNewYorkTimeString(candle.endTime)
         val currentProfit = profit(candle)
         val profitIndicator = if (currentProfit == 0) "🟡"
-            else if (currentProfit > 0) "🟢"
+            else if (currentProfit > 0) s"🟢"
             else "🔴"
 
-        val profitIndication = s"$profitIndicator: $currentProfit"
-        val basic = s"$status $orderType - ➡️: $entryPrice"
+        val profitIndication = s"$profitIndicator: $$$currentProfit"
+        val basic = s"$timestamp: $status $orderType - ➡️: $entryPrice"
         val open = s"$basic  🟥: $stopLoss 🟩: $takeProfit $profitIndication"
         val closed = s"$basic $profitIndication"
         status match {
@@ -147,11 +149,11 @@ case class Order (
         ts - remainder
     }
 
-    private def roundToTickSize(price: Double, tickSize: Double = 0.25f): Double = {
+    private def roundToTickSize(price: Double, tickSize: Double = 0.25): Double = {
         // Use integer arithmetic to avoid floating point precision errors
         // For 0.25 tick: multiply by 4, round, then divide by 4
         val multiplier = (1.0 / tickSize).toInt
-        (math.round(price * multiplier) / multiplier)
+        math.round(price * multiplier).toDouble / multiplier
     }
 
     private def calcProfit(exitPrice: Double) = {

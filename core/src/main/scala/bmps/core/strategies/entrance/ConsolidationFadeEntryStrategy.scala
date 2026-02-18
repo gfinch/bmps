@@ -12,8 +12,8 @@ import bmps.core.strategies.exit.SimpleExitStrategy
 import java.time.Duration
 
 trait ConsolidationFadeEntryStrategy {
-    final val entryStrategy = EntryStrategy("ConsolidationFadeEntryStrategy")
-    final val exitStrategy = new SimpleExitStrategy()
+    private final val entryStrategy = EntryStrategy("ConsolidationFadeEntryStrategy")
+    private final val exitStrategy = new SimpleExitStrategy()
 
     // Configurable parameters
     private val consolidationMinutes = 10
@@ -23,7 +23,7 @@ trait ConsolidationFadeEntryStrategy {
     private val stopBufferPoints = 1.0
     private val riskRewardRatio = 4.0
 
-    def isConsolidationFadeTriggered(state: SystemState): Option[(OrderType, EntryStrategy)] = {
+    def isConsolidationFadeTriggered(state: SystemState): Option[(OrderType, EntryStrategy, (SystemState, OrderType, EntryStrategy) => Order)] = {
         if (!isInConsolidation(state)) {
             return None
         }
@@ -38,9 +38,9 @@ trait ConsolidationFadeEntryStrategy {
         val lastCandle = state.tradingCandles.last
 
         if (lastCandle.close > midpoint) {
-            Some((OrderType.Long, entryStrategy))
+            Some((OrderType.Long, entryStrategy, consolidationFadeSetup))
         } else {
-            Some((OrderType.Short, entryStrategy))
+            Some((OrderType.Short, entryStrategy, consolidationFadeSetup))
         }
     }
 
@@ -65,7 +65,7 @@ trait ConsolidationFadeEntryStrategy {
         }
 
         Order(
-            timestamp = lastCandle.timestamp,
+            timestamp = lastCandle.endTime,
             orderType = orderType,
             status = OrderStatus.Planned,
             contractType = ContractType.ES,
@@ -75,7 +75,7 @@ trait ConsolidationFadeEntryStrategy {
             exitStrategy = exitStrategy,
             entryPrice = entry,
             stopLoss = stop,
-            trailStop = false,
+            trailStop = None,
             takeProfit = profit
         )
     }

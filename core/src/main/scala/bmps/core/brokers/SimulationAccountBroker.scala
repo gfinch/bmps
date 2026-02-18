@@ -33,11 +33,11 @@ trait SimulationAccountBroker extends AccountBroker {
         filledOrder
     }
 
-    def exitOrder(order: Order, candle: Candle): Order = {
+    def exitOrder(order: Order, candle: Candle, exitPrice: Double): Order = {
         require(order.status == Filled, s"Can't exit an order in state ${order.status}")
         val profit = order.profit(candle)
         val status = if (profit >= 0.0) Profit else Loss
-        val closedOrder = order.copy(status = status, closeTimestamp = Some(candle.endTime))
+        val closedOrder = order.copy(status = status, closeTimestamp = Some(candle.endTime), exitPrice = Some(exitPrice))
         println(closedOrder.log(candle))
         closedOrder
     }

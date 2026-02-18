@@ -153,12 +153,12 @@ class TrailingOrderRenderer extends BaseRenderer {
     }
 
     // Validate required order properties
-    // New Order uses entryPrice and trailStop (was isTrailing)
+    // New Order uses entryPrice and trailStop (number/null instead of boolean)
     const isValid = order &&
            typeof order.entryPrice === 'number' &&
            typeof actualEvent.timestamp === 'number' &&
            order.status &&
-           order.trailStop === true  // Must be a trailing order (was isTrailing)
+           order.trailStop != null  // Must be a trailing order (trailStop is now a number)
 
     if (!isValid) {
     }
@@ -190,10 +190,16 @@ class TrailingOrderRenderer extends BaseRenderer {
     // Extract entry strategy description (was entryType, now entryStrategy)
     let entryType = order.entryStrategy || order.entryType || { description: 'Order' }
 
+    // Derive exitPoint from exitPrice, with fallback to takeProfit/stopLoss based on status
+    let exitPoint = (order.exitPrice !== undefined && order.exitPrice !== null) ? order.exitPrice : null
+    if (exitPoint === null && (status === 'Profit' || status === 'Loss')) {
+      exitPoint = status === 'Profit' ? order.takeProfit : order.stopLoss
+    }
+
     const orderData = {
       id: `trailing-order-${actualEvent.timestamp}`,
       entryPoint: order.entryPrice,      // Was entryPoint, now entryPrice
-      exitPoint: order.exitPrice !== undefined ? order.exitPrice : null,  // Was exitPoint, now exitPrice
+      exitPoint: exitPoint,  // Derived from exitPrice or fallback to takeProfit/stopLoss
       timestamp: actualEvent.timestamp + newYorkOffset,
       placedTimestamp: order.placedTimestamp ? order.placedTimestamp + newYorkOffset : null,
       filledTimestamp: order.filledTimestamp ? order.filledTimestamp + newYorkOffset : null,

@@ -24,8 +24,8 @@ trait OrderLifecycleRules {
 
     def hitLimit(order: Order, candle: Candle): Boolean = {
         if (order.status == Placed) order.orderType match {
-            case OrderType.Long if candle.high >= order.entryPrice => true
-            case OrderType.Short if candle.low <= order.entryPrice => true
+            case OrderType.Long if candle.low <= order.entryPrice => true
+            case OrderType.Short if candle.high >= order.entryPrice => true
             case _ => false
         } else false
     }
@@ -51,7 +51,7 @@ trait OrderLifecycleRules {
     }
 
     def unfilledTooLong(order: Order, candle: Candle, minutes: Int): Boolean = {
-        if(order.status == Filled) {
+        if(order.status == Planned || order.status == Placed) {
             val plus = Duration.ofMinutes(minutes).toMillis()
             laterTimestamp(order.placedTimestamp, candle, plus)
         } else false
@@ -78,7 +78,7 @@ trait OrderLifecycleRules {
     }
 
     private def laterTimestamp(orderTimestamp: Option[Long], candle: Candle, plus: Long = 0L): Boolean = {
-        candle.timestamp >= (orderTimestamp.getOrElse(0L) + plus)
+        candle.endTime >= (orderTimestamp.getOrElse(0L) + plus)
     }
 }
 

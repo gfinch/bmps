@@ -13,7 +13,7 @@ trait TimeEntryRules {
 }
 
 trait TimeExitRules {
-    def isLateInTheDay(state: SystemState, candle: Candle, order: Order): ExitAction = {
+    def isLateInTheDay(candle: Candle, order: Order): ExitAction = {
         if (TimestampUtils.isNearTradingClose(candle.endTime)) order.status match {
             case Filled => ExitAction.ExitNow
             case Placed => ExitAction.Cancel

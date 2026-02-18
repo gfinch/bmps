@@ -13,6 +13,7 @@ class OrderManager(val leadAccountBroker: AccountBroker) extends OrderLifecycle 
     def buildAndPlaceOrders(state: SystemState, candle: Candle): SystemState = {
         buildOrders(state) match {
             case Some(order) => 
+                println(order.log(candle))
                 val placedOrder = placeMarketOrder(order, state.tradingCandles.last)
                 state.copy(orders = state.orders :+ order)
             case _ => state

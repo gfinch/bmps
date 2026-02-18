@@ -10,12 +10,12 @@ import bmps.core.models.EntryStrategy
 import bmps.core.models.ExitStrategy
 import bmps.core.strategies.exit.SimpleExitStrategy
 import bmps.core.strategies.exit
+import bmps.core.strategies.zones.{Zones, ZoneId}
 
 trait SimpleTrendEntryStrategy {
-    final val entryStrategy = EntryStrategy("SimpleTrendEntryStrategy")
-    final val exitStrategy = new SimpleExitStrategy()
+    private final val exitStrategy = new SimpleExitStrategy()
 
-    def isSimpleTrendTriggered(state: SystemState): Option[(OrderType, EntryStrategy)] = {
+    def isSimpleTrendTriggered(state: SystemState): Option[(OrderType, EntryStrategy, (SystemState, OrderType, EntryStrategy) => Order)] = {
         val lastThreeMinutes = state.recentTrendAnalysis.takeRight(3)
         val shortTerms = lastThreeMinutes.map(_.shortTermMA)
         val longTerms = lastThreeMinutes.map(_.longTermMA)
@@ -34,9 +34,16 @@ trait SimpleTrendEntryStrategy {
                 }
         }
 
+        // Apply zone bounds: don't go long at new highs, don't go short at new lows
+        val zones = Zones.fromState(state)
+        val currentZone = zones.zoneId(state.tradingCandles.last.close)
+        val entryStrategy = EntryStrategy(s"SimpleTrendEntryStrategy:${ZoneId.fromId(currentZone)}")
+
         direction match {
-            case Some(Direction.Up) => Some((OrderType.Long, entryStrategy))
-            case Some(Direction.Down) => Some((OrderType.Short, entryStrategy))
+            case Some(Direction.Up) if currentZone != ZoneId.NewHigh && currentZone != ZoneId.Short => 
+                Some((OrderType.Long, entryStrategy, balancedATRSetup))
+            case Some(Direction.Down) if currentZone != ZoneId.NewLow && currentZone != ZoneId.Long => 
+                Some((OrderType.Short, entryStrategy, balancedATRSetup))
             case _ => None
         }
     }
@@ -53,7 +60,7 @@ trait SimpleTrendEntryStrategy {
         }
 
         Order(
-            timestamp = lastCandle.timestamp,
+            timestamp = lastCandle.endTime,
             orderType = orderType,
             status = OrderStatus.PlaceNow,
             contractType = ContractType.ES,
@@ -63,7 +70,7 @@ trait SimpleTrendEntryStrategy {
             exitStrategy = exitStrategy,
             entryPrice = entry,
             stopLoss = stop,
-            trailStop = false,
+            trailStop = None,
             takeProfit = profit,
         )
     }

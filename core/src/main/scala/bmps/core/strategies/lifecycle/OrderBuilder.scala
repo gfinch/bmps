@@ -1,13 +1,19 @@
 package bmps.core.strategies.lifecycle
 
 import bmps.core.strategies.entrance.SimpleTrendEntryStrategy
+import bmps.core.strategies.entrance.ConsolidationFadeEntryStrategy
+import bmps.core.strategies.entrance.ZoneTrendEntryStrategy
+import bmps.core.strategies.entrance.MomentumCrossoverEntryStrategy
+import bmps.core.strategies.entrance.SqueezeEntryStrategy
 import bmps.core.strategies.exit.SimpleExitStrategy
 import bmps.core.models.Order
 import bmps.core.models.SystemState
 import bmps.core.strategies.rules.OrderEntryRules
 import bmps.core.strategies.rules.TimeEntryRules
 
-trait OrderBuilder extends SimpleTrendEntryStrategy with OrderEntryRules with TimeEntryRules {
+trait OrderBuilder extends SimpleTrendEntryStrategy with ConsolidationFadeEntryStrategy
+    with ZoneTrendEntryStrategy with MomentumCrossoverEntryStrategy 
+    with SqueezeEntryStrategy with OrderEntryRules with TimeEntryRules {
 
     lazy val entryRules = Seq(
         noActiveOrder(_, _),
@@ -15,7 +21,11 @@ trait OrderBuilder extends SimpleTrendEntryStrategy with OrderEntryRules with Ti
     )
 
     lazy val entries = Seq(
-        isSimpleTrendTriggered(_)
+        // isMomentumCrossoverTriggered(_),
+        // isZoneTrendTriggered(_),
+        // isConsolidationFadeTriggered(_),
+        // isSimpleTrendTriggered(_),
+        isSqueezeTriggered(_),
     )
 
     def buildOrders(state: SystemState): Option[Order] = {
@@ -25,8 +35,8 @@ trait OrderBuilder extends SimpleTrendEntryStrategy with OrderEntryRules with Ti
                 orderOption match {
                     case None => entryStrategy(state) match {
                         case None => orderOption
-                        case Some((orderType, entryStrategy)) => 
-                            Some(balancedATRSetup(state, orderType, entryStrategy))
+                        case Some((orderType, strategy, orderFn)) => 
+                            Some(orderFn(state, orderType, strategy))
                     }
                     case _ => orderOption
                 }

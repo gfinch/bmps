@@ -186,10 +186,10 @@ class ChartRenderingService {
         // Special handling for Order events: split into Order vs TrailingOrder
         if (eventType === 'Order') {
           const actualEvent = event.event || event
-          // New structure: Order fields may be flat on the event (trailStop instead of isTrailing)
+          // New structure: Order fields may be flat on the event (trailStop is now a number/null instead of boolean)
           // Legacy structure: order nested in sub-field (isTrailing)
           const order = actualEvent.entryPrice !== undefined ? actualEvent : actualEvent.order
-          if (order && (order.trailStop === true || order.isTrailing === true)) {
+          if (order && (order.trailStop != null || order.isTrailing === true)) {
             eventType = 'TrailingOrder'
           }
         }

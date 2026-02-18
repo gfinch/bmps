@@ -140,7 +140,7 @@ class CSVFileOrderSink(filePath: String) extends OrderSink {
             order.exitStrategy.getClass.getSimpleName.stripSuffix("$"),
             order.entryPrice.toString,
             order.stopLoss.toString,
-            order.trailStop.toString,
+            order.trailStop.map(_.toString).getOrElse(""),
             order.takeProfit.toString,
             order.exitPrice.map(_.toString).getOrElse(""),
             order.placedTimestamp.map(_.toString).getOrElse(""),
@@ -178,7 +178,7 @@ class CSVFileOrderSink(filePath: String) extends OrderSink {
             val exitStrategy = createExitStrategy(parts(8))
             val entryPrice = parts(9).toDouble
             val stopLoss = parts(10).toDouble
-            val trailStop = if (parts(11).isEmpty) false else parts(11).toBoolean
+            val trailStop = if (parts(11).isEmpty) None else Some(parts(11).toDouble)
             val takeProfit = parts(12).toDouble
             val exitPrice = if (parts(13).isEmpty) None else Some(parts(13).toDouble)
             val placedTimestamp = if (parts(14).isEmpty) None else Some(parts(14).toLong)

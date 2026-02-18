@@ -88,7 +88,7 @@ trait AccountBroker {
     def placeOrder(order: Order, candle: Candle): Order
     def fillOrder(order: Order, candle: Candle): Order
     def resetStop(order: Order, stop: Double, candle: Candle): Order
-    def exitOrder(order: Order, candle: Candle): Order
+    def exitOrder(order: Order, candle: Candle, exitPrice: Double): Order
     def cancelOrder(order: Order, candle: Candle): Order
     def reconcileOrder(order: Order): Order
 }
@@ -101,7 +101,7 @@ class LeadAccountBroker(val brokers: List[AccountBroker]) extends AccountBroker 
     def placeOrder(order: Order, candle: Candle): Order = brokers.map(_.placeOrder(order, candle)).head
     def fillOrder(order: Order, candle: Candle): Order = brokers.map(_.fillOrder(order, candle)).head
     def resetStop(order: Order, stop: Double, candle: Candle): Order = brokers.map(_.resetStop(order, stop, candle)).head
-    def exitOrder(order: Order, candle: Candle): Order = brokers.map(_.exitOrder(order, candle)).head
+    def exitOrder(order: Order, candle: Candle, exitPrice: Double): Order = brokers.map(_.exitOrder(order, candle, exitPrice)).head
     def cancelOrder(order: Order, candle: Candle): Order = brokers.map(_.cancelOrder(order, candle)).head
 
     def reconcileOrder(order: Order): Order = brokers.map(_.reconcileOrder(order)).head
