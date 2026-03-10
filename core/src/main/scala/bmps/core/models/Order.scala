@@ -8,6 +8,7 @@ import bmps.core.models.OrderStatus._
 import cats.instances.order
 import io.circe.{Encoder, Decoder, Json, HCursor}
 import bmps.core.utils.TimestampUtils
+import bmps.core.brokers.AccountBroker
 
 sealed trait OrderStatus
 object OrderStatus {
@@ -35,7 +36,7 @@ object ContractType {
 case class EntryStrategy(description: String)
 
 trait ExitStrategy {
-    def adjustOrder(state: SystemState, order: Order): Seq[Order] = Seq(order)
+    def adjustOrder(leadAccountBroker: AccountBroker, state: SystemState, order: Order): Seq[Order] = Seq(order)
 }
 
 object ExitStrategy {

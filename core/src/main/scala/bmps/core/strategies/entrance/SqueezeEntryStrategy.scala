@@ -137,7 +137,7 @@ trait SqueezeEntryStrategy {
             exitStrategy = exitStrategy,
             entryPrice = entry,
             stopLoss = stop,
-            trailStop = Some(trailDistance),
+            trailStop = None,//Some(trailDistance),
             takeProfit = profit
         )
     }

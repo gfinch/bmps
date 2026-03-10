@@ -58,6 +58,10 @@ object TimestampUtils {
     def newYorkQuiet(localDate: LocalDate) = { //After volatile opening - 10:00 am
         localDate.atTime(10, 0).atZone(NewYorkZone).toInstant().toEpochMilli
     }
+    
+    def nineFortyFiveAM(localDate: LocalDate) = { // 9:45 am ET
+        localDate.atTime(9, 45).atZone(NewYorkZone).toInstant().toEpochMilli
+    }
 
     def londonOpen(localDate: LocalDate) = {
         localDate.atTime(8, 0).atZone(LondonZone).toInstant.toEpochMilli
@@ -105,6 +109,15 @@ object TimestampUtils {
     def isInEarlyOpen(timestamp: Long): Boolean = {
         val tradingDate = toNewYorkLocalDate(timestamp)
         timestamp <= newYorkVeryUncertain(tradingDate)
+    }
+    
+    /**
+     * Check if timestamp is in the first 15 minutes of trading (9:30-9:45 ET).
+     * This window is historically unprofitable and should be skipped for entries.
+     */
+    def isInFirstFifteenMinutes(timestamp: Long): Boolean = {
+        val tradingDate = toNewYorkLocalDate(timestamp)
+        timestamp >= newYorkOpen(tradingDate) && timestamp < nineFortyFiveAM(tradingDate)
     }
 
     def isInQuiet(timestamp: Long): Boolean = {

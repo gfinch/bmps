@@ -7,6 +7,7 @@ import bmps.core.models.Candle
 import bmps.core.strategies.rules.OrderLifecycleRules
 import bmps.core.utils.TimestampUtils
 import bmps.core.models.OrderType
+import bmps.core.models.SystemState
 
 trait OrderLifecycle extends OrderLifecycleRules {
 
@@ -81,13 +82,21 @@ trait OrderLifecycle extends OrderLifecycleRules {
         placeLimitOrder(_,_),
         resetStop(_,_),
         cancelUnfilled(_,_),
-        cancelLateInDay(_,_)
+        cancelLateInDay(_,_),
     )
 
     def manageLifecycle(order: Order, candle: Candle): Order = {
         lifecycleRules.foldLeft(order) { (updatedOrder, next) =>
             next(updatedOrder, candle)
         }
+    }
+
+    def executeExitStrategies(state: SystemState, candle: Candle): SystemState = {
+        val newOrders = state.orders.flatMap { order => order.status match {
+            case Filled => order.exitStrategy.adjustOrder(leadAccountBroker, state, order)
+            case _ => Seq(order)
+        }}
+        state.copy(orders = newOrders)
     }
 
 }

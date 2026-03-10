@@ -41,8 +41,8 @@ class TradingEventGenerator(orderManager: OrderManager,
     }
 
     def process(state: SystemState, candle: Candle): (SystemState, List[Event]) = {
-        if (candle.timestamp <= state.tradingCandles.last.timestamp) {
-            //Candles came out of order, so discard. Cna happen during catchup.
+        if (state.tradingCandles.nonEmpty && candle.timestamp <= state.tradingCandles.last.timestamp) {
+            //Candles came out of order, so discard. Can happen during catchup.
             (state, List.empty[Event])
         } else candle.duration match {
             case CandleDuration.OneSecond => processOneSecond(state, candle)
@@ -58,7 +58,7 @@ class TradingEventGenerator(orderManager: OrderManager,
             } else state.recentOneSecondCandles :+ candle
         )
 
-        val withUpdatedOrderState = orderManager.manageOrders(newState, candle)
+        val withUpdatedOrderState = orderManager.manageOrdersOneSecond(newState, candle)
         val withTechAnalysis = techAnalysisService.processOneSecondState(withUpdatedOrderState)
 
         val changedOrders = withTechAnalysis.orders.filterNot(state.orders.contains)
@@ -78,7 +78,8 @@ class TradingEventGenerator(orderManager: OrderManager,
         val withTechAnalysis = techAnalysisService.processOneMinuteState(withSwings)
 
         //Order processing
-        val withNewOrders = orderManager.buildAndPlaceOrders(withTechAnalysis, candle)
+        val withUpdatedOrderState = orderManager.manageOrdersOneMinute(withTechAnalysis, candle)
+        val withNewOrders = orderManager.buildAndPlaceOrders(withUpdatedOrderState, candle)
         
         //Event processing
         val newSwingPoints = withNewOrders.tradingSwingPoints.drop(state.tradingSwingPoints.length)

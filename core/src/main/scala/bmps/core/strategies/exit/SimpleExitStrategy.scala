@@ -7,5 +7,6 @@ import bmps.core.models.ExitStrategy
 import bmps.core.models.Order
 import bmps.core.models.OrderStatus
 import bmps.core.models.ContractType
+import bmps.core.brokers.AccountBroker
 
 class SimpleExitStrategy extends ExitStrategy

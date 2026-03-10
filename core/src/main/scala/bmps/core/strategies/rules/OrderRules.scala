@@ -6,10 +6,15 @@ import bmps.core.models.OrderStatus._
 import bmps.core.models.Order
 import bmps.core.models.OrderType
 import java.time.Duration
+import bmps.core.models.EntryStrategy
 
 trait OrderEntryRules {
     def noActiveOrder(state: SystemState, candle: Candle): Boolean = {
         !state.orders.exists(_.isActive)
+    }
+
+    def activeEntryStrategies(state: SystemState): List[EntryStrategy] = {
+        state.orders.filter(_.isActive).map(_.entryStrategy).distinct
     }
 }
 

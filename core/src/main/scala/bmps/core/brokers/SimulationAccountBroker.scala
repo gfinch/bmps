@@ -20,7 +20,7 @@ trait SimulationAccountBroker extends AccountBroker {
     }
 
     def cancelOrder(order: Order, candle: Candle): Order = {
-        require(order.status == Placed, s"Can't cancel an order in state ${order.status}")
+        require(order.status == Placed || order.status == Planned, s"Can't cancel an order in state ${order.status}")
         val cancelledOrder = order.copy(status = Cancelled, closeTimestamp = Some(candle.endTime))
         println(cancelledOrder.log(candle))
         cancelledOrder

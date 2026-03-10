@@ -208,6 +208,7 @@ class OrderRenderer extends BaseRenderer {
       entryPoint: order.entryPrice,      // Was entryPoint, now entryPrice
       takeProfit: order.takeProfit,
       stopLoss: order.stopLoss,
+      exitPrice: order.exitPrice ?? null, // Actual exit price for closed orders
       timestamp: actualEvent.timestamp + newYorkOffset,
       placedTimestamp: order.placedTimestamp ? order.placedTimestamp + newYorkOffset : null,
       filledTimestamp: order.filledTimestamp ? order.filledTimestamp + newYorkOffset : null,

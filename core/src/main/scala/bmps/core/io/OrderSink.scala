@@ -2,6 +2,7 @@ package bmps.core.io
 
 import bmps.core.models._
 import bmps.core.strategies.exit.SimpleExitStrategy
+import bmps.core.strategies.exit.IceInVeinsExitStrategy
 import java.time.LocalDate
 import java.nio.file.{Files, Paths, StandardOpenOption}
 import java.net.URI
@@ -265,6 +266,7 @@ class CSVFileOrderSink(filePath: String) extends OrderSink {
     private def createExitStrategy(className: String): ExitStrategy = {
         className match {
             case "SimpleExitStrategy" => new SimpleExitStrategy()
+            case "IceInVeinsExitStrategy" => new IceInVeinsExitStrategy()
             case _ => new SimpleExitStrategy() // Default fallback
         }
     }

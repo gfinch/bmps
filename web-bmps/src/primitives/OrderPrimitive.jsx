@@ -541,19 +541,26 @@ class OrderPaneRenderer {
       })
 
       if (closeX !== null) {
-        // Finite boxes: filled -> closed
-        // Winner: profit box (green), Loser: loss box (grey)
+        // Get exit price Y coordinate for actual exit level
+        const exitPriceY = order.exitPrice !== null 
+          ? getPriceCoordinate(order.exitPrice, this.series, this.chart) 
+          : takeProfitY
+        
+        // Green box from entry to exit price (actual profit)
+        const profitTop = Math.min(entryY, exitPriceY)
+        const profitBottom = Math.max(entryY, exitPriceY)
         drawRectangle(ctx, {
           startX: filledX,
           endX: closeX,
-          topY: profitBoxTop,
-          bottomY: profitBoxBottom,
+          topY: profitTop,
+          bottomY: profitBottom,
           fillColor: this.options.profitBoxFill,
           strokeColor: this.options.profitBoxStroke,
           strokeWidth: 1,
           canvasWidth: scope.mediaSize.width
         })
 
+        // Grey rectangle on loss side (entry to stop loss - unreached)
         drawRectangle(ctx, {
           startX: filledX,
           endX: closeX,
@@ -563,6 +570,19 @@ class OrderPaneRenderer {
           strokeColor: this.options.greyBoxStroke,
           strokeWidth: 1,
           canvasWidth: scope.mediaSize.width
+        })
+
+        // Grey triangle showing missed profit: entry → take profit line → exit price
+        drawTriangle(ctx, {
+          x1: filledX,
+          y1: entryY,
+          x2: filledX,
+          y2: takeProfitY,
+          x3: closeX,
+          y3: exitPriceY,
+          fillColor: this.options.greyBoxFill,
+          strokeColor: this.options.greyBoxStroke,
+          strokeWidth: 1
         })
       }
     } else {
@@ -648,8 +668,12 @@ class OrderPaneRenderer {
       })
 
       if (closeX !== null) {
-        // Finite boxes: filled -> closed
-        // Winner: loss box (red), Loser: profit box (grey)
+        // Get exit price Y coordinate for actual exit level
+        const exitPriceY = order.exitPrice !== null 
+          ? getPriceCoordinate(order.exitPrice, this.series, this.chart) 
+          : stopLossY
+
+        // Grey rectangle on profit side (entry to take profit - unreached)
         drawRectangle(ctx, {
           startX: filledX,
           endX: closeX,
@@ -661,15 +685,31 @@ class OrderPaneRenderer {
           canvasWidth: scope.mediaSize.width
         })
 
+        // Red box from entry to exit price (actual loss)
+        const lossTop = Math.min(entryY, exitPriceY)
+        const lossBottom = Math.max(entryY, exitPriceY)
         drawRectangle(ctx, {
           startX: filledX,
           endX: closeX,
-          topY: lossBoxTop,
-          bottomY: lossBoxBottom,
+          topY: lossTop,
+          bottomY: lossBottom,
           fillColor: this.options.lossBoxFill,
           strokeColor: this.options.lossBoxStroke,
           strokeWidth: 1,
           canvasWidth: scope.mediaSize.width
+        })
+
+        // Grey triangle showing avoided further loss: entry → stop loss line → exit price
+        drawTriangle(ctx, {
+          x1: filledX,
+          y1: entryY,
+          x2: filledX,
+          y2: stopLossY,
+          x3: closeX,
+          y3: exitPriceY,
+          fillColor: this.options.greyBoxFill,
+          strokeColor: this.options.greyBoxStroke,
+          strokeWidth: 1
         })
       }
     } else {

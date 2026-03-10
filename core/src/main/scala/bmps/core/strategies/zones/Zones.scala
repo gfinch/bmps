@@ -53,8 +53,12 @@ case class Zones(high: Double, low: Double) {
 }
 
 object Zones {
-    def fromState(state: SystemState): Zones = {
-        val init = state.tradingCandles.init
+    def fromState(state: SystemState, useMinutes: Option[Int] = None): Zones = {
+        val init = useMinutes match {
+            case Some(minutes) => state.tradingCandles.init.takeRight(minutes)
+            case None => state.tradingCandles.init
+        }
+        
         val high = init.map(_.high).max
         val low = init.map(_.low).min
         Zones(high, low)
